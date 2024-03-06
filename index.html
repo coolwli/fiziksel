@@ -19,6 +19,7 @@
       flex-wrap: wrap;
       padding: 10px;
       gap: 10px;
+      width:70%;
       align-items: center;
 
     }
@@ -26,13 +27,12 @@
     .panel,
     .extra-panel {
       border: 1px solid #ddd;
-      padding: 15px;
+      padding: 5px;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       width: 160px;
       height: 180px;
-      text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       font-size: 10px;
 
 
@@ -47,7 +47,7 @@
       border-collapse: collapse;
       width: 80%;
       max-height: 300px;
-      overflow-y: visible;
+      overflow-y: auto;
       margin-bottom: 20px;
       font-size: 10px;
 
@@ -80,19 +80,21 @@
 
     h5 {
       margin: 0 0 10px;
-      font-size: 18px;
+      font-size: 12px;
       color: #333;
     }
 
     .search-input {
-      width: 80%;
-      padding: 10px;
-      margin: 10px 0;
+      width: 90%;
+      padding: 5px;
+      margin: 0;
+      font-size:10px;
       box-sizing: border-box;
     }
 
     .checkbox-content {
-      margin: 5px 0;
+      margin: 0;
+
     }
   </style>
   <title>Websitesi</title>
@@ -132,16 +134,22 @@
       <div class="checkbox-panel"></div>
     </div>
     <div class="extra-panel">
-      <h5>Filter by Column</h5>
+      <h5 style="display:none;">Filter by Column</h5>
       <select id="column-dropdown" class="search-input">
-        <option value="Name">Name</option>
-        <option value="Category">Category</option>
-        <option value="Price">Price</option>
-        <option value="Brand">Brand</option>
-        <option value="Availability">Availability</option>
-        <option value="Rating">Rating</option>
+        <option>Select Column</option>
+        <option>Additional1</option>
+        <option>Additional2</option>
+
+        
       </select>
       <div class="checkbox-panel"></div>
+    </div>
+    <div id="info-panel" class="extra-panel">
+        <h5>Row Count</h5>
+        <p id="row-count">0</p>
+        </br>
+        <button id="reset-button">Reset</button>
+
     </div>
   </div>
 
@@ -153,6 +161,8 @@
       <th>Brand</th>
       <th>Availability</th>
       <th>Rating</th>
+      <th>Additional1</th>
+      <th>Additional2</th>
     </tr>
     <tr>
       <td>Laptop</td>
@@ -161,6 +171,8 @@
       <td>Brand A</td>
       <td>In Stock</td>
       <td>4.5</td>
+      <td>Ultrabook</td>
+      <td>SSD Storage</td>
     </tr>
     <tr>
       <td>Smartphone</td>
@@ -169,22 +181,29 @@
       <td>Brand B</td>
       <td>In Stock</td>
       <td>4.0</td>
+      <td>High Resolution Camera</td>
+      <td>5G Connectivity</td>
     </tr>
+    <!-- Add more rows with realistic data -->
     <tr>
-      <td>Running Shoes</td>
+      <td>Running Watch</td>
       <td>Fashion</td>
-      <td>$100</td>
-      <td>Brand C</td>
+      <td>$80</td>
+      <td>Brand F</td>
       <td>Out of Stock</td>
-      <td>4.8</td>
+      <td>4.5</td>
+      <td>Waterproof</td>
+      <td>GPS Tracker</td>
     </tr>
     <tr>
-      <td>Laptop</td>
+      <td>Tablet</td>
       <td>Electronics</td>
-      <td>$1200</td>
-      <td>Brand A</td>
+      <td>$500</td>
+      <td>Brand G</td>
       <td>In Stock</td>
-      <td>4.5</td>
+      <td>4.0</td>
+      <td>10-inch Screen</td>
+      <td>Android OS</td>
     </tr>
     <tr>
       <td>Smartphone</td>
@@ -193,235 +212,205 @@
       <td>Brand B</td>
       <td>In Stock</td>
       <td>4.0</td>
+      <td>High Resolution Camera</td>
+      <td>5G Connectivity</td>
     </tr>
+    <!-- Add more rows with realistic data -->
     <tr>
-      <td>Laptop</td>
-      <td>Electronics</td>
-      <td>$1200</td>
-      <td>Brand A</td>
-      <td>In Stock</td>
-      <td>4.5</td>
-    </tr>
-    <tr>
-      <td>Smartphone</td>
-      <td>Electronics</td>
-      <td>$800</td>
-      <td>Brand B</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-    </tr>
-    <tr>
-      <td>Running Shoes</td>
+      <td>Running Watch</td>
       <td>Fashion</td>
-      <td>$100</td>
-      <td>Brand C</td>
+      <td>$80</td>
+      <td>Brand F</td>
       <td>Out of Stock</td>
-      <td>4.8</td>
-    </tr>
-    <tr>
-      <td>Laptop</td>
-      <td>Electronics</td>
-      <td>$1200</td>
-      <td>Brand A</td>
-      <td>In Stock</td>
       <td>4.5</td>
+      <td>Waterproof</td>
+      <td>GPS Tracker</td>
     </tr>
     <tr>
-      <td>Smartphone</td>
+      <td>Tablet</td>
       <td>Electronics</td>
-      <td>$800</td>
-      <td>Brand B</td>
+      <td>$500</td>
+      <td>Brand G</td>
       <td>In Stock</td>
       <td>4.0</td>
-    </tr>
-    <tr>
-      <td>Running Shoes</td>
-      <td>Fashion</td>
-      <td>$100</td>
-      <td>Brand C</td>
-      <td>Out of Stock</td>
-      <td>4.8</td>
-    </tr>
-    <tr>
-      <td>Laptop</td>
-      <td>Electronics</td>
-      <td>$1200</td>
-      <td>Brand A</td>
-      <td>In Stock</td>
-      <td>4.5</td>
-    </tr>
-    <tr>
-      <td>Smartphone</td>
-      <td>Electronics</td>
-      <td>$800</td>
-      <td>Brand B</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-    </tr>
-    <tr>
-      <td>Running Shoes</td>
-      <td>Fashion</td>
-      <td>$100</td>
-      <td>Brand C</td>
-      <td>Out of Stock</td>
-      <td>4.8</td>
+      <td>10-inch Screen</td>
+      <td>Android OS</td>
     </tr>
     <!-- Add more rows with realistic data -->
   </table>
 
   <button id="reset-button">Reset</button>
-
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       var panelContainer = document.getElementById("panel-container");
       var contentTable = document.getElementById("content-table");
       var resetButton = document.getElementById("reset-button");
+      var rowCountElement = document.getElementById("row-count");
+      var labels = [];
 
       function getColumnIndex(columnName) {
-        return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+          return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+      }
+
+      function updateRowCount() {
+          var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
+          rowCountElement.textContent = visibleRows.length - 1; // Exclude the header row
       }
 
       function createCheckbox(panel, labelFor, labelText) {
-        var cont = document.createElement("div");
-        cont.className = "checkbox-content";
+          var cont = document.createElement("div");
+          cont.className = "checkbox-content";
 
-        var checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          var checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
-        var label = document.createElement("label");
-        label.setAttribute("for", checkbox.id);
-        label.innerText = labelText;
+          var label = document.createElement("label");
+          label.setAttribute("for", checkbox.id);
+          label.innerText = labelText;
 
-        if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
+          if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
 
-        //cont.appendChild(document.createElement("br"));
-        cont.appendChild(checkbox);
-        cont.appendChild(label);
-        panel.querySelector('.checkbox-panel').appendChild(cont);
+          cont.appendChild(checkbox);
+          cont.appendChild(label);
+          panel.querySelector('.checkbox-panel').appendChild(cont);
       }
 
       function populatePanelCheckboxes(panel, columnIndex) {
-        var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
+          var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
 
-        panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
-          if (checkbox.checked) {
-            return;
-          }
-          checkbox.closest('.checkbox-content').innerHTML = "";
-        });
+          panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+              if (checkbox.checked) {
+                  return;
+              }
+              checkbox.closest('.checkbox-content').parentElement .removeChild(checkbox.closest('.checkbox-content'));
+          });
+          var uniqueValues = new Set(visibleRows.slice(1).map(row => row.cells[columnIndex].innerText.trim()));
 
-        var uniqueValues = new Set(visibleRows.slice(1).map(row => row.cells[columnIndex].innerText.trim()));
-
-        uniqueValues.forEach(function (cellContent, index) {
-          var checkboxId = "checkbox" + index + "-" + columnIndex;
-          createCheckbox(panel, checkboxId, cellContent);
-        });
+          uniqueValues.forEach(function (cellContent, index) {
+              var checkboxId = "checkbox" + index + "-" + columnIndex;
+              createCheckbox(panel, checkboxId, cellContent);
+          });
       }
 
       function getVisibleCheckboxes(panel) {
-        return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
-          return checkbox.id;
-        });
+          return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
+              return checkbox.id;
+          });
       }
 
-      function filterTable() {
-        var labels = [];
-        var selectedCheckboxIds = Array.from(panelContainer.querySelectorAll('.checkbox-panel')).flatMap(panel => getVisibleCheckboxes(panel));
+      function filterTable(isBack) {
+          console.log(labels);
 
-        selectedCheckboxIds.forEach(function (checkboxId) {
-          labels = [...labels, document.querySelector('label[for="' + checkboxId + '"]')];
-        });
+          Array.from(document.querySelectorAll('h5')).forEach(function (h5) {
+              h5.classList.remove('filtered');
+          });
 
-        labels.forEach(function (label) {
-          label.closest(".panel").querySelector("h5").classList.remove('filtred');
-        });
-
-        if (labels.length > 0) {
           labels.forEach(function (label) {
-            var checkbox = document.querySelector('#' + label.getAttribute("for"));
-            if (!checkbox) return;
+              //var checkbox = document.querySelector('#' + label.getAttribute("for"));
+              var panelH5 = label.closest(".panel").querySelector("h5");
+              if (panelH5.classList.contains('filtered')) {
+                  contentTable.querySelectorAll('tr').forEach(function (row) {
+                      if (row == contentTable.rows[0] || row.style.display == "table-row") return;
+                      var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                      row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+                  });
+              } else {
+                  panelH5.classList.add('filtered');
+                  contentTable.querySelectorAll('tr').forEach(function (row) {
+                      if (row == contentTable.rows[0] || (row.style.display == "none"&&!isBack)) return;
+                      var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                      row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+                  });
+              }
+              updatePanelCheckboxes(panelH5.innerText.trim());
+          });
 
-            var panelH5 = checkbox.closest(".panel").querySelector("h5");
-            if (panelH5.classList.contains('filtred')) {
+          if (labels.length === 0) {
               contentTable.querySelectorAll('tr').forEach(function (row) {
-                if (row == contentTable.rows[0] || row.style.display == "table-row") return;
-                var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+                  row.style.display = "table-row";
               });
-            } else {
-              panelH5.classList.add('filtred');
-              contentTable.querySelectorAll('tr').forEach(function (row) {
-                if (row == contentTable.rows[0] || row.style.display == "none") return;
-                var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-              });
-            }
-            updatePanelCheckboxes(panelH5.innerText.trim());
-          });
-        } else {
-          contentTable.querySelectorAll('tr').forEach(function (row) {
-            row.style.display = "table-row";
-          });
-          updatePanelCheckboxes(null);
-        }
+              updatePanelCheckboxes(null);
+          }
+          updateRowCount(); // Update row count after filtering
       }
 
       function updatePanelCheckboxes(column) {
-        panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-          var columnName = panel.querySelector('h5').innerText.trim();
-          var columnIndex = getColumnIndex(columnName);
-          if (columnName !== column) {
-            populatePanelCheckboxes(panel, columnIndex);
-          }
-        });
+          panelContainer.querySelectorAll('.panel').forEach(function (panel) {
+              var columnName = panel.querySelector('h5').innerText.trim();
+              var columnIndex = getColumnIndex(columnName);
+              if (columnName !== column) {
+                  populatePanelCheckboxes(panel, columnIndex);
+              }
+          });
+          handleDropdownChange(true);
       }
 
       function handleCheckboxChange(event) {
-        if (event.target.type === "checkbox") {
-          filterTable();
-        }
+          if (event.target.type === "checkbox") {
+            var label=document.querySelector('label[for="' + event.target.id+ '"]');
+            if(event.target.checked){
+              labels=[...labels,label];
+              filterTable();
+            }
+            else{
+              labels = labels.filter(item => item !== label);
+              filterTable(true);
+
+            }
+          }
       }
 
       function resetCheckboxes() {
-        panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(function (checkbox) {
-          checkbox.checked = false;
-        });
-        filterTable(); // Call filterTable after resetting checkboxes
-        console.log("Tüm Checkbox'lar sıfırlandı.");
+          labels = [];
+          panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(function (checkbox) {
+              checkbox.checked = false;
+          });
+          filterTable(); // Call filterTable after resetting checkboxes
+          updateRowCount();
+          console.log("Tüm Checkbox'lar sıfırlandı.");
       }
 
       function handleSearchInput(event) {
-        var panel = event.currentTarget.parentNode;
-        var columnName = panel.querySelector('h5').innerText.trim();
-        var columnIndex = getColumnIndex(columnName);
-        var searchText = event.target.value.trim().toLowerCase();
-        filterCheckboxes(panel, columnIndex, searchText);
+          var panel = event.currentTarget.parentNode;
+          var columnName = panel.querySelector('h5').innerText.trim();
+          var columnIndex = getColumnIndex(columnName);
+          var searchText = event.target.value.trim().toLowerCase();
+          filterCheckboxes(panel, columnIndex, searchText);
       }
 
       function filterCheckboxes(panel, columnIndex, searchText) {
-        var checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
-        var lowerCaseSearchText = searchText.toLowerCase();
+          var checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
+          var lowerCaseSearchText = searchText.toLowerCase();
 
-        checkboxes.forEach(function (checkbox) {
-          var label = checkbox.querySelector('label');
-          var labelText = label.innerText.toLowerCase();
-          var cont = checkbox.closest('.checkbox-content');
-          cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
-        });
+          checkboxes.forEach(function (checkbox) {
+              var label = checkbox.querySelector('label');
+              var labelText = label.innerText.toLowerCase();
+              var cont = checkbox.closest('.checkbox-content');
+              cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
+          });
       }
 
-      function handleDropdownChange() {
-        console.log(document.getElementById('column-dropdown'));
+      function handleDropdownChange(isHandle) {
+        dropdown=document.getElementById('column-dropdown');
+        dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML="";
+
+        if(dropdown.value!="Select Column"){
+          
+          panel=dropdown.closest(".extra-panel");
+          var columnIndex = getColumnIndex(dropdown.value);
+          populatePanelCheckboxes(panel, columnIndex);
+
+        }
+        if(!isHandle)filterTable();
       }
 
       // Event listener for dropdown change
       document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
 
-
       panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-        var searchInput = panel.querySelector('.search-input');
-        searchInput.addEventListener('input', handleSearchInput);
+          var searchInput = panel.querySelector('.search-input');
+          searchInput.addEventListener('input', handleSearchInput);
       });
 
       panelContainer.addEventListener("change", handleCheckboxChange);
@@ -429,7 +418,8 @@
 
       // Initial filter to display all rows
       filterTable();
-    });
+  });
+
   </script>
 
 </body>
