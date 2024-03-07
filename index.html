@@ -3,7 +3,6 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -19,7 +18,7 @@
       flex-wrap: wrap;
       padding: 10px;
       gap: 10px;
-      width:70%;
+      width: 50%;
       align-items: center;
 
     }
@@ -30,8 +29,8 @@
       padding: 5px;
       border-radius: 10px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      width: 160px;
-      height: 180px;
+      width: 150px;
+      height: 160px;
       margin-bottom: 10px;
       font-size: 10px;
 
@@ -43,11 +42,15 @@
       overflow-y: auto;
     }
 
+    .table-container {
+      height: 300px;
+      width: 90%;
+      overflow-y: auto;
+    }
+
     .content-table {
       border-collapse: collapse;
-      width: 80%;
-      max-height: 300px;
-      overflow-y: auto;
+      width: 100%;
       margin-bottom: 20px;
       font-size: 10px;
 
@@ -56,11 +59,12 @@
     th,
     td {
       border: 1px solid #ddd;
-      padding: 12px;
+      padding: 8px;
       text-align: left;
     }
 
     th {
+      min-width: 90px;
       background-color: #f2f2f2;
     }
 
@@ -88,7 +92,15 @@
       width: 90%;
       padding: 5px;
       margin: 0;
-      font-size:10px;
+      font-size: 10px;
+      box-sizing: border-box;
+    }
+
+    .dropdown {
+      width: 90%;
+      padding: 5px;
+      margin: 10px;
+      font-size: 10px;
       box-sizing: border-box;
     }
 
@@ -135,111 +147,222 @@
     </div>
     <div class="extra-panel">
       <h5 style="display:none;">Filter by Column</h5>
-      <select id="column-dropdown" class="search-input">
+      <select id="column-dropdown" class="dropdown">
         <option>Select Column</option>
         <option>Additional1</option>
         <option>Additional2</option>
 
-        
+
       </select>
       <div class="checkbox-panel"></div>
     </div>
     <div id="info-panel" class="extra-panel">
-        <h5>Row Count</h5>
-        <p id="row-count">0</p>
-        </br>
-        <button id="reset-button">Reset</button>
+      <h5>Row Count</h5>
+      <p id="row-count">0</p>
+      </br>
+      <button id="reset-button">Reset</button>
 
     </div>
   </div>
-
-  <table id="content-table" class="content-table">
-    <tr>
-      <th>Name</th>
-      <th>Category</th>
-      <th>Price</th>
-      <th>Brand</th>
-      <th>Availability</th>
-      <th>Rating</th>
-      <th>Additional1</th>
-      <th>Additional2</th>
-    </tr>
-    <tr>
-      <td>Laptop</td>
-      <td>Electronics</td>
-      <td>$1200</td>
-      <td>Brand A</td>
-      <td>In Stock</td>
-      <td>4.5</td>
-      <td>Ultrabook</td>
-      <td>SSD Storage</td>
-    </tr>
-    <tr>
-      <td>Smartphone</td>
-      <td>Electronics</td>
-      <td>$800</td>
-      <td>Brand B</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-      <td>High Resolution Camera</td>
-      <td>5G Connectivity</td>
-    </tr>
-    <!-- Add more rows with realistic data -->
-    <tr>
-      <td>Running Watch</td>
-      <td>Fashion</td>
-      <td>$80</td>
-      <td>Brand F</td>
-      <td>Out of Stock</td>
-      <td>4.5</td>
-      <td>Waterproof</td>
-      <td>GPS Tracker</td>
-    </tr>
-    <tr>
-      <td>Tablet</td>
-      <td>Electronics</td>
-      <td>$500</td>
-      <td>Brand G</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-      <td>10-inch Screen</td>
-      <td>Android OS</td>
-    </tr>
-    <tr>
-      <td>Smartphone</td>
-      <td>Electronics</td>
-      <td>$800</td>
-      <td>Brand B</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-      <td>High Resolution Camera</td>
-      <td>5G Connectivity</td>
-    </tr>
-    <!-- Add more rows with realistic data -->
-    <tr>
-      <td>Running Watch</td>
-      <td>Fashion</td>
-      <td>$80</td>
-      <td>Brand F</td>
-      <td>Out of Stock</td>
-      <td>4.5</td>
-      <td>Waterproof</td>
-      <td>GPS Tracker</td>
-    </tr>
-    <tr>
-      <td>Tablet</td>
-      <td>Electronics</td>
-      <td>$500</td>
-      <td>Brand G</td>
-      <td>In Stock</td>
-      <td>4.0</td>
-      <td>10-inch Screen</td>
-      <td>Android OS</td>
-    </tr>
-    <!-- Add more rows with realistic data -->
-  </table>
-
-  <button id="reset-button">Reset</button>
+  <div class="table-container">
+    <table id="content-table" class="content-table">
+      <tr>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Price</th>
+        <th>Brand</th>
+        <th>Availability</th>
+        <th>Rating</th>
+        <th>Additional1</th>
+        <th>Additional2</th>
+        <th>Brand</th>
+        <th>Availability</th>
+        <th>Rating</th>
+        <th>Additional1</th>
+        <th>Additional2</th>
+        <th>Brand</th>
+        <th>Availability</th>
+        <th>Rating</th>
+        <th>Additional1</th>
+        <th>Additional2</th>
+      </tr>
+      <tr>
+        <td>Laptop</td>
+        <td>Electronics</td>
+        <td>$1200</td>
+        <td>Brand A</td>
+        <td>In Stock</td>
+        <td>4.5</td>
+        <td>Ultrabook</td>
+        <td>SSD Storage</td>
+      </tr>
+      <tr>
+        <td>Smartphone</td>
+        <td>Electronics</td>
+        <td>$800</td>
+        <td>Brand B</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>High Resolution Camera</td>
+        <td>5G Connectivity</td>
+      </tr>
+      <!-- Add more rows with realistic data -->
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <tr>
+        <td>Smartphone</td>
+        <td>Electronics</td>
+        <td>$800</td>
+        <td>Brand B</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>High Resolution Camera</td>
+        <td>5G Connectivity</td>
+      </tr>
+      <!-- Add more rows with realistic data -->
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <tr>
+        <td>Smartphone</td>
+        <td>Electronics</td>
+        <td>$800</td>
+        <td>Brand B</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>High Resolution Camera</td>
+        <td>5G Connectivity</td>
+      </tr>
+      <!-- Add more rows with realistic data -->
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <tr>
+        <td>Smartphone</td>
+        <td>Electronics</td>
+        <td>$800</td>
+        <td>Brand B</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>High Resolution Camera</td>
+        <td>5G Connectivity</td>
+      </tr>
+      <!-- Add more rows with realistic data -->
+      <tr>
+        <td>Running Watch</td>
+        <td>Fashion</td>
+        <td>$80</td>
+        <td>Brand F</td>
+        <td>Out of Stock</td>
+        <td>4.5</td>
+        <td>Waterproof</td>
+        <td>GPS Tracker</td>
+      </tr>
+      <tr>
+        <td>Tablet</td>
+        <td>Electronics</td>
+        <td>$500</td>
+        <td>Brand G</td>
+        <td>In Stock</td>
+        <td>4.0</td>
+        <td>10-inch Screen</td>
+        <td>Android OS</td>
+      </tr>
+      <!-- Add more rows with realistic data -->
+    </table>
+  </div>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       var panelContainer = document.getElementById("panel-container");
@@ -249,168 +372,183 @@
       var labels = [];
 
       function getColumnIndex(columnName) {
-          return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+        return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
       }
 
       function updateRowCount() {
-          var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
-          rowCountElement.textContent = visibleRows.length - 1; // Exclude the header row
+        var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
+        rowCountElement.textContent = visibleRows.length - 1; // Exclude the header row
       }
 
       function createCheckbox(panel, labelFor, labelText) {
-          var cont = document.createElement("div");
-          cont.className = "checkbox-content";
+        var cont = document.createElement("div");
+        cont.className = "checkbox-content";
 
-          var checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        var checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
-          var label = document.createElement("label");
-          label.setAttribute("for", checkbox.id);
-          label.innerText = labelText;
+        var label = document.createElement("label");
+        label.setAttribute("for", checkbox.id);
+        label.innerText = labelText;
 
-          if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
+        if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
 
-          cont.appendChild(checkbox);
-          cont.appendChild(label);
-          panel.querySelector('.checkbox-panel').appendChild(cont);
+        cont.appendChild(checkbox);
+        cont.appendChild(label);
+        panel.querySelector('.checkbox-panel').appendChild(cont);
       }
 
       function populatePanelCheckboxes(panel, columnIndex) {
-          var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
+        var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
 
-          panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
-              if (checkbox.checked) {
-                  return;
-              }
-              checkbox.closest('.checkbox-content').parentElement .removeChild(checkbox.closest('.checkbox-content'));
-          });
-          var uniqueValues = new Set(visibleRows.slice(1).map(row => row.cells[columnIndex].innerText.trim()));
+        panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+          if (checkbox.checked) {
+            return;
+          }
+          checkbox.closest('.checkbox-content').parentElement.removeChild(checkbox.closest('.checkbox-content'));
+        });
 
-          uniqueValues.forEach(function (cellContent, index) {
-              var checkboxId = "checkbox" + index + "-" + columnIndex;
-              createCheckbox(panel, checkboxId, cellContent);
-          });
+        var uniqueValues = new Set(visibleRows.slice(1).map(row => row.cells[columnIndex].innerText.trim()));
+        uniqueValues.forEach(function (cellContent, index) {
+          var checkboxId = "checkbox" + index + "-" + columnIndex;
+          createCheckbox(panel, checkboxId, cellContent);
+        });
       }
 
       function getVisibleCheckboxes(panel) {
-          return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
-              return checkbox.id;
-          });
+        return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
+          return checkbox;
+        });
       }
 
       function filterTable(isBack) {
-          console.log(labels);
+        console.log(labels);
 
-          Array.from(document.querySelectorAll('h5')).forEach(function (h5) {
-              h5.classList.remove('filtered');
-          });
+        Array.from(document.querySelectorAll('h5')).forEach(function (h5) {
+          h5.classList.remove('filtered');
+        });
 
-          labels.forEach(function (label) {
-              //var checkbox = document.querySelector('#' + label.getAttribute("for"));
-              var panelH5 = label.closest(".panel").querySelector("h5");
-              if (panelH5.classList.contains('filtered')) {
-                  contentTable.querySelectorAll('tr').forEach(function (row) {
-                      if (row == contentTable.rows[0] || row.style.display == "table-row") return;
-                      var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                      row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-                  });
-              } else {
-                  panelH5.classList.add('filtered');
-                  contentTable.querySelectorAll('tr').forEach(function (row) {
-                      if (row == contentTable.rows[0] || (row.style.display == "none"&&!isBack)) return;
-                      var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                      row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-                  });
-              }
-              updatePanelCheckboxes(panelH5.innerText.trim());
-          });
+        labels.forEach(function (label, index) {
+          var panelH5 = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
 
-          if (labels.length === 0) {
-              contentTable.querySelectorAll('tr').forEach(function (row) {
-                  row.style.display = "table-row";
-              });
-              updatePanelCheckboxes(null);
+          if (panelH5.classList.contains('filtered')) {
+            contentTable.querySelectorAll('tr').forEach(function (row) {
+              if (row == contentTable.rows[0] || row.style.display == "table-row") return;
+              var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+              row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+            });
           }
-          updateRowCount(); // Update row count after filtering
+          else {
+            panelH5.classList.add('filtered');
+            contentTable.querySelectorAll('tr').forEach(function (row) {
+              if (row == contentTable.rows[0] || (row.style.display == "none" && !isBack)) return;
+              var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+              row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+            });
+          }
+          if (index > labels.length - 2)
+            updatePanelCheckboxes(panelH5.innerText.trim());
+        });
+
+        if (labels.length === 0) {
+          contentTable.querySelectorAll('tr').forEach(function (row) {
+            row.style.display = "table-row";
+          });
+          updatePanelCheckboxes(null);
+        }
+        updateRowCount(); // Update row count after filtering
       }
 
       function updatePanelCheckboxes(column) {
-          panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-              var columnName = panel.querySelector('h5').innerText.trim();
-              var columnIndex = getColumnIndex(columnName);
-              if (columnName !== column) {
-                  populatePanelCheckboxes(panel, columnIndex);
-              }
-          });
-          handleDropdownChange(true);
+
+        panelContainer.querySelectorAll('.panel').forEach(function (panel) {
+          var columnName = panel.querySelector('h5').innerText.trim();
+          var columnIndex = getColumnIndex(columnName);
+          if (columnName !== column) {
+            populatePanelCheckboxes(panel, columnIndex);
+          }
+        });
+        if (column != document.getElementById("column-dropdown").closest(".extra-panel").querySelector("h5").innerText) {
+          updateExtraPanel();
+
+        }
       }
 
       function handleCheckboxChange(event) {
-          if (event.target.type === "checkbox") {
-            var label=document.querySelector('label[for="' + event.target.id+ '"]');
-            if(event.target.checked){
-              labels=[...labels,label];
-              filterTable();
-            }
-            else{
-              labels = labels.filter(item => item !== label);
-              filterTable(true);
-
-            }
+        if (event.target.type === "checkbox") {
+          var label = document.querySelector('label[for="' + event.target.id + '"]');
+          if (event.target.checked) {
+            labels = [...labels, label];
+            filterTable();
+          } else {
+            labels = labels.filter(item => item !== label);
+            filterTable(true);
           }
+        }
       }
 
       function resetCheckboxes() {
-          labels = [];
-          panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(function (checkbox) {
-              checkbox.checked = false;
-          });
-          filterTable(); // Call filterTable after resetting checkboxes
-          updateRowCount();
-          console.log("Tüm Checkbox'lar sıfırlandı.");
+        labels = [];
+        panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(function (checkbox) {
+          checkbox.checked = false;
+        });
+        filterTable(); // Call filterTable after resetting checkboxes
+        updateRowCount();
+        console.log("Tüm Checkbox'lar sıfırlandı.");
       }
 
       function handleSearchInput(event) {
-          var panel = event.currentTarget.parentNode;
-          var columnName = panel.querySelector('h5').innerText.trim();
-          var columnIndex = getColumnIndex(columnName);
-          var searchText = event.target.value.trim().toLowerCase();
-          filterCheckboxes(panel, columnIndex, searchText);
+        var panel = event.currentTarget.parentNode;
+        var columnName = panel.querySelector('h5').innerText.trim();
+        var columnIndex = getColumnIndex(columnName);
+        var searchText = event.target.value.trim().toLowerCase();
+        filterCheckboxes(panel, columnIndex, searchText);
       }
 
       function filterCheckboxes(panel, columnIndex, searchText) {
-          var checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
-          var lowerCaseSearchText = searchText.toLowerCase();
+        var checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
+        var lowerCaseSearchText = searchText.toLowerCase();
 
-          checkboxes.forEach(function (checkbox) {
-              var label = checkbox.querySelector('label');
-              var labelText = label.innerText.toLowerCase();
-              var cont = checkbox.closest('.checkbox-content');
-              cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
-          });
+        checkboxes.forEach(function (checkbox) {
+          var label = checkbox.querySelector('label');
+          var labelText = label.innerText.toLowerCase();
+          var cont = checkbox.closest('.checkbox-content');
+          cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
+        });
       }
 
-      function handleDropdownChange(isHandle) {
-        dropdown=document.getElementById('column-dropdown');
-        dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML="";
+      function handleDropdownChange() {
+        dropdown = document.getElementById('column-dropdown');
+        var extraCbs = getVisibleCheckboxes(dropdown.closest(".extra-panel"));
+        extraCbs.forEach(function (checkbox) {
+          label = checkbox.closest('.checkbox-content').querySelector('label');
+          console.log(labels[0] == label);
+          labels = labels.filter(item => item !== label);
+        });
+        dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML = "";
+        dropdown.closest(".extra-panel").querySelector("h5").innerText = dropdown.value;
+        filterTable();
 
-        if(dropdown.value!="Select Column"){
-          
-          panel=dropdown.closest(".extra-panel");
+
+      }
+
+      function updateExtraPanel() {
+        dropdown = document.getElementById('column-dropdown');
+        if (dropdown.value != "Select Column") {
+          panel = dropdown.closest(".extra-panel");
           var columnIndex = getColumnIndex(dropdown.value);
-          populatePanelCheckboxes(panel, columnIndex);
 
+          populatePanelCheckboxes(panel, columnIndex);
         }
-        if(!isHandle)filterTable();
       }
 
       // Event listener for dropdown change
       document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
 
       panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-          var searchInput = panel.querySelector('.search-input');
-          searchInput.addEventListener('input', handleSearchInput);
+        var searchInput = panel.querySelector('.search-input');
+        searchInput.addEventListener('input', handleSearchInput);
       });
 
       panelContainer.addEventListener("change", handleCheckboxChange);
@@ -418,9 +556,9 @@
 
       // Initial filter to display all rows
       filterTable();
-  });
-
+    });
   </script>
+
 
 </body>
 
