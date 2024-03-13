@@ -1,423 +1,517 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="fizkselArayuz._default" %>
 <!DOCTYPE html>
 <html lang="tr">
 
 <head>
-    <meta charset="UTF-8">
-    <style>
+  <meta charset="UTF-8">
+  <style>
     body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
     }
 
     #panel-container {
-        display: flex;
-        flex-wrap: wrap;
-        padding: 10px;
-        gap: 5px;
-        width: 100%;
-        align-items: center;
-        justify-content:center;
-
-
-
+      display: flex;
+      flex-wrap: wrap;
+      padding: 10px;
+      gap: 5px;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
     }
 
     .panel,
     .extra-panel {
-        border: 1px solid #ddd;
-        padding: 5px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        width: 190px;
-        height: 170px;
-        margin-bottom: 10px;
-        font-size: 10px;
-
-
+      border: 1px solid #ddd;
+      padding: 2px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 190px;
+      height: 170px;
+      margin-bottom: 10px;
+      font-size: 10px;
     }
 
     .checkbox-panel {
-        max-height: 120px;
-        overflow-y: auto;
+      max-height: 120px;
+      overflow-y: auto;
     }
 
     .table-container {
-        height: 300px;
-        width: 90%;
-        overflow-y: auto;
-        align-items: center;
-        justify-content:center;
-        margin:auto;
+      height: 300px;
+      width: 90%;
+      overflow-y: auto;
+      align-items: center;
+      justify-content: center;
+      margin: auto;
     }
 
     .content-table {
-        border-collapse: collapse;
-        width: 1000px;
-        font-size: 10px;
-
+      border-collapse: collapse;
+      width: 1000px;
+      font-size: 10px;
     }
 
     th,
     td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
     }
 
     th {
-        width:auto;
-        min-width:170px;
-        background-color: #f2f2f2;
+      width: auto;
+      min-width: 170px;
+      background-color: #f2f2f2;
     }
 
     #reset-button {
-        padding: 10px;
-        background-color: #3f403f;
-        color: white;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-        font-size: 14px;
+      padding: 10px;
+      background-color: #3f403f;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 14px;
     }
 
     #reset-button:hover {
-        background-color: #48464e;
+      background-color: #48464e;
     }
 
     h5 {
-        margin: 0 0 10px;
-        font-size: 12px;
-        color: #333;
+      margin: 0 0 10px;
+      font-size: 10px;
+      color: #333;
     }
 
     .search-input {
-        width: 90%;
-        padding: 5px;
-        margin: 0;
-        font-size: 10px;
-        box-sizing: border-box;
+      width: 90%;
+      padding: 5px;
+      margin: 0;
+      font-size: 10px;
+      box-sizing: border-box;
     }
 
     .dropdown {
-        width: 90%;
-        padding: 5px;
-        margin: 10px;
-        font-size: 10px;
-        box-sizing: border-box;
+      width: 90%;
+      padding: 5px;
+      margin: 10px;
+      font-size: 10px;
+      box-sizing: border-box;
     }
 
     .checkbox-content {
-        margin: 0;
-
+      margin: 0;
     }
-    </style>
-    <title>Websitesi</title>
+
+    #score-table {
+      border: none;
+      border-collapse: collapse;
+      margin-top: 5px;
+      font-size: 12px;
+      width: 100%;
+    }
+
+    #score-table td {
+      font-weight: bold;
+      padding: 8px;
+      text-align: left;
+      border: none;
+    }
+  </style>
+  <title>Websitesi</title>
 </head>
 
 <body>
-    <form id="form1" runat="server">
+  <form id="form1" runat="server">
 
     <div id="panel-container" class="panel-container">
-    <div class="panel">
+      <div class="panel">
         <h5>Adı</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="panel">
+      </div>
+      <div class="panel">
         <h5>Üretici Firma</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="panel">
+      </div>
+      <div class="panel">
         <h5>Model</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="panel">
+      </div>
+      <div class="panel">
         <h5>Kapsam-BBVA Metrics</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="panel">
+      </div>
+      <div class="panel">
         <h5>İşletim Sistemi</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="panel">
+      </div>
+      <div class="panel">
         <h5>Açıklama</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
-    </div>
-    <div class="extra-panel">
+      </div>
+      <div class="extra-panel">
         <h5 style="display:none;">Select Extra Column</h5>
         <select id="column-dropdown" class="dropdown">
-            <option>Select Extra Column</option>
+          <option>Select Extra Column</option>
         </select>
         <div class="checkbox-panel"></div>
-    </div>
-    <div id="info-panel" class="extra-panel">
+      </div>
+      <div id="score-panel" class="extra-panel">
+        <table id="score-table">
+          <tr>
+            <td>Total Cpu Soket</td>
+            <td id="soket-count">0</td>
+          </tr>
+
+          <tr>
+            <td>Total Core</td>
+            <td id="core-count">0</td>
+          </tr>
+          <tr>
+            <td>Total Memory</td>
+            <td id="memory-count">0</td>
+          </tr>
+        </table>
+      </div>
+      <div id="info-panel" class="extra-panel">
         <h2>Row Count</h2>
         <h5 id="row-count">0</h5>
         </br>
-        <button id="reset-button">Reset</button>
+        <button id="reset-button" type="button">Reset</button>
+      </div>
 
-    </div>
     </div>
     <div class="table-container">
-    <table id="contentTable" class="content-table" runat="server">
+      <table id="contentTable" class="content-table" runat="server">
         <tr>
-            <th>Adı</th>
-            <th>Seri NO</th>
-            <th>Açıklama</th>
-            <th>Üretici Firma</th>
-            <th>Model</th>
-            <th>CPU Soket</th>
-            <th>CPU Core</th>
-            <th>Toplam Core</th>
-            <th>Memory</th>
-            <th>Cihaz Tipi</th>
-            <th>Hall</th>
-            <th>Row</th>
-            <th>Rack</th>
-            <th>Blade Şasi</th>
-            <th>Domain Bilgisi</th>
-            <th>Enviroment</th>
-            <th>Firma</th>
-            <th>Sahiplik</th>
-            <th>Lokasyon</th>
-            <th>Kapsam-BBVA Metrics</th>
-            <th>Cluster</th>
-            <th>İşletim Sistemi</th>
-            <th>Sorumlu Grup</th>
-            <th>Satın Alma Tarihi</th>
-            <th>Planlanan Devreden Çıkarma Tarihi</th>
-            <th>Bakım Başlangıç Tarihi</th>
-            <th>Bakım Bitiş Tarihi</th>
-            <th>2017 Bakım Çalısması</th>
-            <th>2018 Bakım Çalısması</th>
-            <th>2019 Bakım Çalısması</th>
-            <th>2020 Bakım Çalısması</th>
-            <th>Özel Durumu</th>
-            <th>Support</th>
+          <th>Adı</th>
+          <th>Seri NO</th>
+          <th>Açıklama</th>
+          <th>Üretici Firma</th>
+          <th>Model</th>
+          <th>CPU Soket</th>
+          <th>CPU Core</th>
+          <th>Toplam Core</th>
+          <th>Memory</th>
+          <th>Cihaz Tipi</th>
+          <th>Hall</th>
+          <th>Row</th>
+          <th>Rack</th>
+          <th>Blade Şasi</th>
+          <th>Domain Bilgisi</th>
+          <th>Enviroment</th>
+          <th>Firma</th>
+          <th>Sahiplik</th>
+          <th>Lokasyon</th>
+          <th>Kapsam-BBVA Metrics</th>
+          <th>Cluster</th>
+          <th>İşletim Sistemi</th>
+          <th>Sorumlu Grup</th>
+          <th>Satın Alma Tarihi</th>
+          <th>Planlanan Devreden Çıkarma Tarihi</th>
+          <th>Bakım Başlangıç Tarihi</th>
+          <th>Bakım Bitiş Tarihi</th>
+          <th>2017 Bakım Çalısması</th>
+          <th>2018 Bakım Çalısması</th>
+          <th>2019 Bakım Çalısması</th>
+          <th>2020 Bakım Çalısması</th>
+          <th>Özel Durumu</th>
+          <th>Support</th>
         </tr>
-        
-    </table>
+
+        <tr>
+          <td>Örnek Adı 1</td>
+          <td>Seri Numarası 1</td>
+          <td>Örnek Açıklama 1</td>
+          <td>Örnek Üretici Firma 1</td>
+          <td>Örnek Model 1</td>
+          <td>2</td>
+          <td>4</td>
+          <td>5</td>
+          <td>6</td>
+          <td>Örnek Cihaz Tipi 1</td>
+          <td>Örnek Hall 1</td>
+          <td>Örnek Row 1</td>
+          <td>Örnek Rack 1</td>
+          <td>Örnek Blade Şasi 1</td>
+          <td>Örnek Domain Bilgisi 1</td>
+          <td>Örnek Enviroment 1</td>
+          <td>Örnek Firma 1</td>
+          <td>Örnek Sahiplik 1</td>
+          <td>Örnek Lokasyon 1</td>
+          <td>Örnek Kapsam-BBVA Metrics 1</td>
+          <td>Örnek Cluster 1</td>
+          <td>Örnek İşletim Sistemi 1</td>
+          <td>Örnek Sorumlu Grup 1</td>
+          <td>Örnek Satın Alma Tarihi 1</td>
+          <td>Örnek Planlanan Devreden Çıkarma Tarihi 1</td>
+          <td>Örnek Bakım Başlangıç Tarihi 1</td>
+          <td>Örnek Bakım Bitiş Tarihi 1</td>
+          <td>Örnek 2017 Bakım Çalısması 1</td>
+          <td>Örnek 2018 Bakım Çalısması 1</td>
+          <td>Örnek 2019 Bakım Çalısması 1</td>
+          <td>Örnek 2020 Bakım Çalısması 1</td>
+          <td>Örnek Özel Durumu 1</td>
+          <td>Örnek Support 1</td>
+        </tr>
+        <tr>
+          <td>Örnek Adı 2</td>
+          <td>Seri Numarası 2</td>
+          <td>Örnek Açıklama 2</td>
+          <td>Örnek Üretici Firma 2</td>
+          <td>Örnek Model 2</td>
+          <td>2</td>
+          <td>5</td>
+          <td>2</td>
+          <td>1</td>
+          <td>Örnek Cihaz Tipi 2</td>
+          <td>Örnek Hall 2</td>
+          <td>Örnek Row 2</td>
+          <td>Örnek Rack 2</td>
+          <td>Örnek Blade Şasi 2</td>
+          <td>Örnek Domain Bilgisi 2</td>
+          <td>Örnek Enviroment 2</td>
+          <td>Örnek Firma 2</td>
+          <td>Örnek Sahiplik 2</td>
+          <td>Örnek Lokasyon 2</td>
+          <td>Örnek Kapsam-BBVA Metrics 2</td>
+          <td>Örnek Cluster 2</td>
+          <td>Örnek İşletim Sistemi 2</td>
+          <td>Örnek Sorumlu Grup 2</td>
+          <td>Örnek Satın Alma Tarihi 2</td>
+          <td>Örnek Planlanan Devreden Çıkarma Tarihi 2</td>
+          <td>Örnek Bakım Başlangıç Tarihi 2</td>
+          <td>Örnek Bakım Bitiş Tarihi 2</td>
+          <td>Örnek 2017 Bakım Çalısması 2</td>
+          <td>Örnek 2018 Bakım Çalısması 2</td>
+          <td>Örnek 2019 Bakım Çalısması 2</td>
+          <td>Örnek 2020 Bakım Çalısması 2</td>
+          <td>Örnek Özel Durumu 2</td>
+          <td>Örnek Support 2</td>
+        </tr>
+      </table>
     </div>
     <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        var panelContainer = document.getElementById("panel-container");
-        var contentTable = document.getElementById("contentTable");
-        var resetButton = document.getElementById("reset-button");
-        var rowCountElement = document.getElementById("row-count");
-        var labels = [];
+      document.addEventListener("DOMContentLoaded", function () {
+        const panelContainer = document.getElementById("panel-container");
+        const contentTable = document.getElementById("contentTable");
+        const resetButton = document.getElementById("reset-button");
+        const rowCountElement = document.getElementById("row-count");
+        const tableRows = Array.from(contentTable.querySelectorAll('tr')).slice(1);
+        let labels = [];
 
         function getColumnIndex(columnName) {
-            return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+          return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
         }
 
         function updateRowCount() {
-            var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
-            rowCountElement.textContent = visibleRows.length - 1; // Exclude the header row
+          const visibleRows = tableRows.filter(row => row.style.display !== "none");
+          rowCountElement.textContent = visibleRows.length;
         }
 
         function createCheckbox(panel, labelFor, labelText) {
-            var cont = document.createElement("div");
-            cont.className = "checkbox-content";
-            var checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+          const cont = document.createElement("div");
+          cont.className = "checkbox-content";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
-            var label = document.createElement("label");
-            label.setAttribute("for", checkbox.id);
-            label.innerText = labelText;
+          const label = document.createElement("label");
+          label.setAttribute("for", checkbox.id);
+          label.innerText = labelText;
 
-            if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
+          if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
 
-            cont.appendChild(checkbox);
-            cont.appendChild(label);
-            panel.querySelector('.checkbox-panel').appendChild(cont);
+          cont.appendChild(checkbox);
+          cont.appendChild(label);
+          panel.querySelector('.checkbox-panel').appendChild(cont);
+        }
+
+        function calculateTotalValues(columnIndex) {
+          const visibleRows = tableRows.filter(row => window.getComputedStyle(row).display === 'table-row');
+
+          let totalValue = 0;
+
+          visibleRows.forEach(row => {
+            const cellValue = parseInt(row.cells[columnIndex].innerText.trim()) || 0;
+            totalValue += cellValue;
+          });
+
+          return totalValue;
         }
 
         function populatePanelCheckboxes(panel, columnIndex) {
-            var visibleRows = Array.from(contentTable.querySelectorAll('tr')).filter(row => row.style.display !== "none");
+          const visibleRows = tableRows.filter(row => row.style.display !== "none");
 
-            panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
-                if (checkbox.checked) {
-                return;
-                }
-                checkbox.closest('.checkbox-content').parentElement.removeChild(checkbox.closest('.checkbox-content'));
-            });
+          panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+            if (checkbox.checked) {
+              return;
+            }
+            checkbox.closest('.checkbox-content').parentElement.removeChild(checkbox.closest('.checkbox-content'));
+          });
 
-            var uniqueValues = new Set(visibleRows.slice(1).map(row => row.cells[columnIndex].innerText.trim()));
-            uniqueValues.forEach(function (cellContent, index) {
-                var checkboxId = "checkbox" + index + "-" + columnIndex;
-                createCheckbox(panel, checkboxId, cellContent);
-            });
-
+          const uniqueValues = new Set(visibleRows.map(row => row.cells[columnIndex].innerText.trim()));
+          uniqueValues.forEach(function (cellContent, index) {
+            const checkboxId = "checkbox" + index + "-" + columnIndex;
+            createCheckbox(panel, checkboxId, cellContent);
+          });
         }
 
         function getVisibleCheckboxes(panel) {
-            return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(function (checkbox) {
-                return checkbox;
-            });
+          return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox);
         }
 
         function filterTable(isBack) {
-            console.log(labels);
+          Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
 
-            Array.from(document.querySelectorAll('h5')).forEach(function (h5) {
-                h5.classList.remove('filtered');
-            });
+          labels.forEach(function (label, index) {
+            const panelH5 = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
 
-            labels.forEach(function (label, index) {
-
-                var panelH5 = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
-
-                if (panelH5.classList.contains('filtered')) {
-                contentTable.querySelectorAll('tr').forEach(function (row) {
-                    if (row == contentTable.rows[0] || row.style.display == "table-row") return;
-                    var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                    row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-                });
-                }
-                else {
-                panelH5.classList.add('filtered');
-                contentTable.querySelectorAll('tr').forEach(function (row) {
-                    if (row == contentTable.rows[0] || (row.style.display == "none" && !isBack)) return;
-                    var cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
-                    row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-                });
-                }
-                if (index > labels.length - 2)updatePanelCheckboxes(panelH5.innerText.trim());
-            });
-
-            if (labels.length === 0) {
-                contentTable.querySelectorAll('tr').forEach(function (row) {
-                    row.style.display = "table-row";
-                });
-                updatePanelCheckboxes(null);
+            if (panelH5.classList.contains('filtered')) {
+              tableRows.forEach(row => {
+                if (row.style.display == "table-row") return;
+                const cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+              });
+            } else {
+              panelH5.classList.add('filtered');
+              tableRows.forEach(row => {
+                if (row.style.display == "none" && !isBack) return;
+                const cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+              });
             }
-            updateRowCount();
-            
+            if (index > labels.length - 2) updatePanelCheckboxes(panelH5.innerText.trim());
+          });
+
+          if (labels.length === 0) {
+            tableRows.forEach(row => row.style.display = "table-row");
+            updatePanelCheckboxes(null);
+          }
+          updateRowCount();
+          updateScorePanel();
         }
 
         function updatePanelCheckboxes(column) {
-
-            panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-                var columnName = panel.querySelector('h5').innerText.trim();
-                var columnIndex = getColumnIndex(columnName);
-                if (columnName !== column) {
-                populatePanelCheckboxes(panel, columnIndex);
-                }
-            });
-            if (column != document.getElementById("column-dropdown").closest(".extra-panel").querySelector("h5").innerText) {
-                updateExtraPanel();
-
+          panelContainer.querySelectorAll('.panel').forEach(panel => {
+            const columnName = panel.querySelector('h5').innerText.trim();
+            const columnIndex = getColumnIndex(columnName);
+            if (columnName !== column) {
+              populatePanelCheckboxes(panel, columnIndex);
             }
+          });
+          if (column != document.getElementById("column-dropdown").closest(".extra-panel").querySelector("h5").innerText) {
+            updateExtraPanel();
+          }
         }
 
         function handleCheckboxChange(event) {
-        if (event.target.type === "checkbox") {
-            var label = document.querySelector('label[for="' + event.target.id + '"]');
+          if (event.target.type === "checkbox") {
+            const label = document.querySelector('label[for="' + event.target.id + '"]');
             if (event.target.checked) {
-                labels = [...labels, label];
-                filterTable();
+              labels = [...labels, label];
+              filterTable();
             } else {
-                labels = labels.filter(item => item !== label);
-                filterTable(true);
+              labels = labels.filter(item => item !== label);
+              filterTable(true);
             }
-        }
+          }
         }
 
         function resetCheckboxes() {
-            labels = [];
-            panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(function (checkbox) {
-                checkbox.checked = false;
-            });
-            filterTable(); 
-            updateRowCount();
-            console.log("Tüm Checkbox'lar sıfırlandı.");
+          labels = [];
+          panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(checkbox => checkbox.checked = false);
+          filterTable();
+          updateRowCount();
         }
 
         function handleSearchInput(event) {
-            var panel = event.currentTarget.parentNode;
-            var columnName = panel.querySelector('h5').innerText.trim();
-            var columnIndex = getColumnIndex(columnName);
-            var searchText = event.target.value.trim().toLowerCase();
-            filterCheckboxes(panel, columnIndex, searchText);
+          const panel = event.currentTarget.parentNode;
+          const columnName = panel.querySelector('h5').innerText.trim();
+          const columnIndex = getColumnIndex(columnName);
+          const searchText = event.target.value.trim().toLowerCase();
+          filterCheckboxes(panel, columnIndex, searchText);
         }
 
         function filterCheckboxes(panel, columnIndex, searchText) {
-            var checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
-            var lowerCaseSearchText = searchText.toLowerCase();
+          const checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
+          const lowerCaseSearchText = searchText.toLowerCase();
 
-            checkboxes.forEach(function (checkbox) {
-                var label = checkbox.querySelector('label');
-                var labelText = label.innerText.toLowerCase();
-                var cont = checkbox.closest('.checkbox-content');
-                cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
-            });
+          checkboxes.forEach(function (checkbox) {
+            const label = checkbox.querySelector('label');
+            const labelText = label.innerText.toLowerCase();
+            const cont = checkbox.closest('.checkbox-content');
+            cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
+          });
         }
 
         function handleDropdownChange() {
-            dropdown = document.getElementById('column-dropdown');
-            var extraCbs = getVisibleCheckboxes(dropdown.closest(".extra-panel"));
-            extraCbs.forEach(function (checkbox) {
-                label = checkbox.closest('.checkbox-content').querySelector('label');
-                console.log(labels[0] == label);
-                labels = labels.filter(item => item !== label);
-            });
+          const dropdown = document.getElementById('column-dropdown');
+          const extraCbs = getVisibleCheckboxes(dropdown.closest(".extra-panel"));
+          extraCbs.forEach(function (checkbox) {
+            const label = checkbox.closest('.checkbox-content').querySelector('label');
+            labels = labels.filter(item => item !== label);
+          });
 
-            dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML = "";
-            dropdown.closest(".extra-panel").querySelector("h5").innerText = dropdown.value;
-            filterTable();
+          dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML = "";
+          dropdown.closest(".extra-panel").querySelector("h5").innerText = dropdown.value;
+          filterTable();
         }
 
         function updateExtraPanel() {
-            dropdown = document.getElementById('column-dropdown');
-            if (dropdown.value != "Select Extra Column") {
-                panel = dropdown.closest(".extra-panel");
-                var columnIndex = getColumnIndex(dropdown.value);
-
-                populatePanelCheckboxes(panel, columnIndex);
-            }
+          const dropdown = document.getElementById('column-dropdown');
+          if (dropdown.value != "Select Extra Column") {
+            const panel = dropdown.closest(".extra-panel");
+            const columnIndex = getColumnIndex(dropdown.value);
+            populatePanelCheckboxes(panel, columnIndex);
+          }
         }
 
+        function updateScorePanel() {
+          document.getElementById("soket-count").innerText = calculateTotalValues(5);
+          document.getElementById("core-count").innerText = calculateTotalValues(7);
+          document.getElementById("memory-count").innerText = calculateTotalValues(8);
+        }
         function addOptionsDropdown() {
-            dropdown = document.getElementById('column-dropdown');
-            dropdown.innerHTML = '';
-            const firstOption = document.createElement('option');
-            firstOption.value = "Select Extra Column";
-            firstOption.textContent = "Select Extra Column";
-            dropdown.appendChild(firstOption);
-            contentTable.querySelectorAll('th').forEach(function (column) {
-                if (column.innerText == "Adı" || column.innerText == "Üretici Firma" || column.innerText == "Kapsam-BBVA Metrics" || column.innerText == "İşletim Sistemi" || column.innerText == "Açıklama" || column.innerText == "Model") return;
-                const option = document.createElement('option');
-                option.value = column.innerText;
-                option.textContent = column.innerText;
-                dropdown.appendChild(option);
-            });
-
+          const dropdown = document.getElementById('column-dropdown');
+          dropdown.innerHTML = '';
+          const firstOption = document.createElement('option');
+          firstOption.value = "Select Extra Column";
+          firstOption.textContent = "Select Extra Column";
+          dropdown.appendChild(firstOption);
+          contentTable.querySelectorAll('th').forEach(column => {
+            if (["Adı", "Üretici Firma", "Kapsam-BBVA Metrics", "İşletim Sistemi", "Açıklama", "Model"].includes(column.innerText)) return;
+            const option = document.createElement('option');
+            option.value = column.innerText;
+            option.textContent = column.innerText;
+            dropdown.appendChild(option);
+          });
         }
-        // Event listener for dropdown change
+
+        // Event listeners
         document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
-
-        panelContainer.querySelectorAll('.panel').forEach(function (panel) {
-        var searchInput = panel.querySelector('.search-input');
-        searchInput.addEventListener('input', handleSearchInput);
+        panelContainer.querySelectorAll('.panel').forEach(panel => {
+          const searchInput = panel.querySelector('.search-input');
+          searchInput.addEventListener('input', handleSearchInput);
         });
-
         panelContainer.addEventListener("change", handleCheckboxChange);
         resetButton.addEventListener("click", resetCheckboxes);
 
-        // Initial filter to display all rows
+        // Initial filter
         filterTable();
         addOptionsDropdown();
-    });
+      });
+
     </script>
-    </form>
+  </form>
 
 </body>
 
