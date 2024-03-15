@@ -299,6 +299,16 @@
         </tr>
       </table>
     </div>
+
+    <script>
+      const maxRow = 100;
+      function displayRows() {
+        const tableRows = Array.from(contentTable.querySelectorAll('tr')).slice(1).filter(row => row.style.display !== "none");
+        console.log(tableRows);
+      }
+
+    </script>
+
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         const panelContainer = document.getElementById("panel-container");
@@ -310,20 +320,6 @@
 
         function getColumnIndex(columnName) {
           return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
-        }
-
-        function tabloyuDiziyeDonustur() {
-          const headers = Array.from(contentTable.rows[0].cells).map(cell => cell.textContent.trim());
-          const data = [];
-
-          for (let i = 0; i < tableRows.length; i++) {
-            const rowData = {};
-            for (let j = 0; j < headers.length; j++) {
-              rowData[headers[j]] = tableRows[i].cells[j].textContent.trim();
-            }
-            data.push(rowData);
-          }
-          console.log(data);
         }
 
 
@@ -397,23 +393,23 @@
           Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
 
           labels.forEach(function (label, index) {
-            const panelH5 = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
+            const columnName = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
 
-            if (panelH5.classList.contains('filtered')) {
+            if (columnName.classList.contains('filtered')) {
               tableRows.forEach(row => {
                 if (row.style.display == "table-row") return;
-                const cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
                 row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
               });
             } else {
-              panelH5.classList.add('filtered');
+              columnName.classList.add('filtered');
               tableRows.forEach(row => {
                 if (row.style.display == "none" && !isBack) return;
-                const cellValue = row.cells[getColumnIndex(panelH5.innerText)].innerText;
+                const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
                 row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
               });
             }
-            if (index > labels.length - 2) updatePanelCheckboxes(panelH5.innerText.trim());
+            if (index > labels.length - 2) updatePanelCheckboxes(columnName.innerText.trim());
           });
 
           if (labels.length === 0) {
@@ -422,6 +418,7 @@
           }
           updateRowCount();
           updateScorePanel();
+          displayRows();
         }
 
         function updatePanelCheckboxes(column) {
@@ -511,7 +508,6 @@
           });
         }
 
-        // Event listeners
         document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
         panelContainer.querySelectorAll('.panel').forEach(panel => {
           const searchInput = panel.querySelector('.search-input');
@@ -520,10 +516,8 @@
         panelContainer.addEventListener("change", handleCheckboxChange);
         resetButton.addEventListener("click", resetCheckboxes);
 
-        // Initial filter
         filterTable();
         addOptionsDropdown();
-        tabloyuDiziyeDonustur();
       });
 
     </script>
