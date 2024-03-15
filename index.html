@@ -312,9 +312,42 @@
           return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
         }
 
+        function tabloyuDiziyeDonustur() {
+          const headers = Array.from(contentTable.rows[0].cells).map(cell => cell.textContent.trim());
+          const data = [];
+
+          for (let i = 0; i < tableRows.length; i++) {
+            const rowData = {};
+            for (let j = 0; j < headers.length; j++) {
+              rowData[headers[j]] = tableRows[i].cells[j].textContent.trim();
+            }
+            data.push(rowData);
+          }
+          console.log(data);
+        }
+
+
         function updateRowCount() {
           const visibleRows = tableRows.filter(row => row.style.display !== "none");
           rowCountElement.textContent = visibleRows.length;
+        }
+        function calculateTotalValues(columnIndex) {
+          const visibleRows = tableRows.filter(row => window.getComputedStyle(row).display === 'table-row');
+
+          let totalValue = 0;
+
+          visibleRows.forEach(row => {
+            const cellValue = parseInt(row.cells[columnIndex].innerText.trim()) || 0;
+            totalValue += cellValue;
+          });
+
+          return totalValue;
+        }
+
+        function updateScorePanel() {
+          document.getElementById("soket-count").innerText = calculateTotalValues(5);
+          document.getElementById("core-count").innerText = calculateTotalValues(7);
+          document.getElementById("memory-count").innerText = calculateTotalValues(8);
         }
 
         function createCheckbox(panel, labelFor, labelText) {
@@ -335,18 +368,7 @@
           panel.querySelector('.checkbox-panel').appendChild(cont);
         }
 
-        function calculateTotalValues(columnIndex) {
-          const visibleRows = tableRows.filter(row => window.getComputedStyle(row).display === 'table-row');
 
-          let totalValue = 0;
-
-          visibleRows.forEach(row => {
-            const cellValue = parseInt(row.cells[columnIndex].innerText.trim()) || 0;
-            totalValue += cellValue;
-          });
-
-          return totalValue;
-        }
 
         function populatePanelCheckboxes(panel, columnIndex) {
           const visibleRows = tableRows.filter(row => row.style.display !== "none");
@@ -365,10 +387,12 @@
           });
         }
 
-        function getVisibleCheckboxes(panel) {
-          return Array.from(panel.querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox);
+        function resetCheckboxes() {
+          labels = [];
+          panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(checkbox => checkbox.checked = false);
+          filterTable();
+          updateRowCount();
         }
-
         function filterTable(isBack) {
           Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
 
@@ -426,12 +450,7 @@
           }
         }
 
-        function resetCheckboxes() {
-          labels = [];
-          panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(checkbox => checkbox.checked = false);
-          filterTable();
-          updateRowCount();
-        }
+
 
         function handleSearchInput(event) {
           const panel = event.currentTarget.parentNode;
@@ -455,7 +474,7 @@
 
         function handleDropdownChange() {
           const dropdown = document.getElementById('column-dropdown');
-          const extraCbs = getVisibleCheckboxes(dropdown.closest(".extra-panel"));
+          const extraCbs = Array.from(dropdown.closest(".extra-panel").querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox);
           extraCbs.forEach(function (checkbox) {
             const label = checkbox.closest('.checkbox-content').querySelector('label');
             labels = labels.filter(item => item !== label);
@@ -475,11 +494,7 @@
           }
         }
 
-        function updateScorePanel() {
-          document.getElementById("soket-count").innerText = calculateTotalValues(5);
-          document.getElementById("core-count").innerText = calculateTotalValues(7);
-          document.getElementById("memory-count").innerText = calculateTotalValues(8);
-        }
+
         function addOptionsDropdown() {
           const dropdown = document.getElementById('column-dropdown');
           dropdown.innerHTML = '';
@@ -508,6 +523,7 @@
         // Initial filter
         filterTable();
         addOptionsDropdown();
+        tabloyuDiziyeDonustur();
       });
 
     </script>
