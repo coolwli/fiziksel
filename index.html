@@ -65,6 +65,28 @@
       background-color: #f2f2f2;
     }
 
+    .pagination {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .page-link {
+      display: inline-block;
+      padding: 8px;
+      margin: 0 4px;
+      text-decoration: none;
+      cursor: pointer;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .page-link.active {
+      background-color: #54AFE4;
+      color: white;
+    }
+
     #reset-button {
       padding: 10px;
       background-color: #3f403f;
@@ -299,12 +321,75 @@
         </tr>
       </table>
     </div>
+    <div class="pagination" id="pagination"></div>
 
     <script>
-      const maxRow = 100;
+      const maxPage = 10;
+      const rowsPerPage = 1;
+      let currentPage = 1;
+      let tableRows = [];
+      paginationElement = document.getElementById('pagination');
+
       function displayRows() {
-        const tableRows = Array.from(contentTable.querySelectorAll('tr')).slice(1).filter(row => row.style.display !== "none");
+        tableRows = Array.from(contentTable.querySelectorAll('tr.visible'));
+        let length = currentPage * rowsPerPage;
+        if (length > tableRows.length) length = tableRows.length;
+        console.log(length - (currentPage - 1) * rowsPerPage);
+
+        for (let i = 1; i < document.getElementById("contentTable").rows.length; i++) {
+          document.getElementById("contentTable").rows[i].style.display = 'none';
+
+        }
         console.log(tableRows);
+        for (let i = (currentPage - 1) * rowsPerPage; i < length; i++) {
+          tableRows[i].style.display = '';
+        }
+        setupPagination(1, Math.ceil(tableRows.length / rowsPerPage));
+
+
+      }
+
+      function setupPagination(start, end) {
+        paginationElement.innerHTML = '';
+        if ((end - start) >= (maxPage - 1)) end = maxPage + start - 1;
+        for (let i = start; i <= end; i++) {
+          const pageLink = document.createElement('a');
+          pageLink.href = '#';
+          pageLink.innerText = i;
+
+          if (i === currentPage) {
+            pageLink.classList.add('page-link', 'active');
+          } else {
+            pageLink.classList.add('page-link');
+          }
+
+          pageLink.addEventListener('click', function () {
+            currentPage = i;
+            displayRows();
+            updatePagination();
+          });
+
+          paginationElement.appendChild(pageLink);
+        }
+      }
+      function updatePagination() {
+        const pageLinks = document.querySelectorAll('.page-link');
+        pageLinks.forEach(link => link.classList.remove('active'));
+        if (Math.ceil(tableRows.length / rowsPerPage) > maxPage) {
+          if (currentPage > (maxPage / 2)) {
+            setupPagination(currentPage - (maxPage / 2), Math.ceil(tableRows.length / rowsPerPage));
+            pageLinks[maxPage / 2].classList.add('active');
+
+          }
+          else {
+            setupPagination(1, Math.ceil(filtredRows.length / rowsPerPage));
+            pageLinks[currentPage - 1].classList.add('active');
+          }
+        }
+        else {
+          pageLinks[currentPage - 1].classList.add('active');
+
+        }
       }
 
     </script>
@@ -324,11 +409,13 @@
 
 
         function updateRowCount() {
-          const visibleRows = tableRows.filter(row => row.style.display !== "none");
+          const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+
           rowCountElement.textContent = visibleRows.length;
         }
         function calculateTotalValues(columnIndex) {
-          const visibleRows = tableRows.filter(row => window.getComputedStyle(row).display === 'table-row');
+          const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+
 
           let totalValue = 0;
 
@@ -367,7 +454,8 @@
 
 
         function populatePanelCheckboxes(panel, columnIndex) {
-          const visibleRows = tableRows.filter(row => row.style.display !== "none");
+          const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+
 
           panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
             if (checkbox.checked) {
@@ -390,6 +478,8 @@
           updateRowCount();
         }
         function filterTable(isBack) {
+          currentPage = 1;
+
           Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
 
           labels.forEach(function (label, index) {
@@ -397,23 +487,29 @@
 
             if (columnName.classList.contains('filtered')) {
               tableRows.forEach(row => {
-                if (row.style.display == "table-row") return;
+                if (row.classList.contains('visible')) return;
                 const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
-                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
-              });
-            } else {
-              columnName.classList.add('filtered');
-              tableRows.forEach(row => {
-                if (row.style.display == "none" && !isBack) return;
-                const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
-                row.style.display = (cellValue == label.innerText) ? "table-row" : "none";
+                if (cellValue == label.innerText) row.classList.add('visible');
+                else row.classList.remove('visible');
+
               });
             }
+
+            else {
+              columnName.classList.add('filtered');
+              tableRows.forEach(row => {
+                if (!row.classList.contains('visible')) return;
+                const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
+                if (cellValue == label.innerText) row.classList.add('visible');
+                else row.classList.remove('visible');
+              });
+            }
+
             if (index > labels.length - 2) updatePanelCheckboxes(columnName.innerText.trim());
           });
 
           if (labels.length === 0) {
-            tableRows.forEach(row => row.style.display = "table-row");
+            tableRows.forEach(row => row.classList.add('visible'));
             updatePanelCheckboxes(null);
           }
           updateRowCount();
@@ -437,6 +533,7 @@
         function handleCheckboxChange(event) {
           if (event.target.type === "checkbox") {
             const label = document.querySelector('label[for="' + event.target.id + '"]');
+
             if (event.target.checked) {
               labels = [...labels, label];
               filterTable();
