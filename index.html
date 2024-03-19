@@ -1,4 +1,3 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="fizkselArayuz._default" %>
 <!DOCTYPE html>
 <html lang="tr">
 
@@ -48,8 +47,16 @@
 
     .content-table {
       border-collapse: collapse;
-      width: 1000px;
       font-size: 10px;
+    }
+
+    .edit-icon {
+      min-width: 16px;
+      background-image: url('edit.png');
+      background-repeat: no-repeat;
+      background-size: 80%;
+      background-position: 5px 5px;
+      cursor: pointer;
     }
 
     th,
@@ -60,9 +67,12 @@
     }
 
     th {
+      background-color: #f2f2f2;
+    }
+
+    th:not(:first-child) {
       width: auto;
       min-width: 170px;
-      background-color: #f2f2f2;
     }
 
     .pagination {
@@ -108,11 +118,11 @@
     }
 
     p {
-        display: block;
-        margin-left:70px;
-        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        font-size: 14px;
-        color: #333;
+      display: block;
+      margin-left: 70px;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      color: #333;
     }
 
     .search-input {
@@ -149,16 +159,16 @@
       text-align: left;
       border: none;
     }
+
     #logo {
       background-image: url('logo.png');
       background-repeat: no-repeat;
-      background-size:cover;
+      background-size: cover;
       width: 60px;
       height: 80px;
       margin-left: 70px;
       margin-top: -44px;
     }
-
   </style>
   <title>fiziksel</title>
 </head>
@@ -188,6 +198,16 @@
         <div class="checkbox-panel"></div>
       </div>
       <div class="panel">
+        <h5>Enviroment</h5>
+        <input type="text" placeholder="Search for Filtering" class="search-input">
+        <div class="checkbox-panel"></div>
+      </div>
+      <div class="panel">
+        <h5>Özel Durumu</h5>
+        <input type="text" placeholder="Search for Filtering" class="search-input">
+        <div class="checkbox-panel"></div>
+      </div>
+      <div class="panel">
         <h5>İşletim Sistemi</h5>
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
@@ -207,7 +227,7 @@
       <div id="score-panel" class="extra-panel">
         <table id="score-table">
           <tr>
-            <td>Total Cpu Soket</td>
+            <td>Total Cpu Socket</td>
             <td id="soket-count">0</td>
           </tr>
 
@@ -232,6 +252,7 @@
     <div class="table-container">
       <table id="contentTable" class="content-table" runat="server">
         <tr>
+          <th></th>
           <th>Adı</th>
           <th>Seri NO</th>
           <th>Açıklama</th>
@@ -262,6 +283,71 @@
           <th>Özel Durumu</th>
           <th>Support</th>
         </tr>
+
+        <tr>
+          <td class="edit-icon"></td>
+          <td>Örnek Adı 1</td>
+          <td>Seri Numarası 1</td>
+          <td>Örnek Açıklama 1</td>
+          <td>Örnek Üretici Firma 1</td>
+          <td>Örnek Model 1</td>
+          <td>2</td>
+          <td>4</td>
+          <td>5</td>
+          <td>6</td>
+          <td>Örnek Cihaz Tipi 1</td>
+          <td>Örnek Hall 1</td>
+          <td>Örnek Row 1</td>
+          <td>Örnek Rack 1</td>
+          <td>Örnek Blade Şasi 1</td>
+          <td>Örnek Domain Bilgisi 1</td>
+          <td>Örnek Enviroment 1</td>
+          <td>Örnek Firma 1</td>
+          <td>Örnek Sahiplik 1</td>
+          <td>Örnek Lokasyon 1</td>
+          <td>Örnek Kapsam-BBVA Metrics 1</td>
+          <td>Örnek Cluster 1</td>
+          <td>Örnek İşletim Sistemi 1</td>
+          <td>Örnek Sorumlu Grup 1</td>
+          <td>Örnek Satın Alma Tarihi 1</td>
+          <td>Örnek Planlanan Devreden Çıkarma Tarihi 1</td>
+          <td>Örnek Bakım Başlangıç Tarihi 1</td>
+          <td>Örnek Bakım Bitiş Tarihi 1</td>
+          <td>Örnek Özel Durumu 1</td>
+          <td>Örnek Support 1</td>
+        </tr>
+        <tr>
+          <td class="edit-icon"></td>
+          <td>Örnek Adı 2</td>
+          <td>Seri Numarası 2</td>
+          <td>Örnek Açıklama 2</td>
+          <td>Örnek Üretici Firma 2</td>
+          <td>Örnek Model 2</td>
+          <td>2</td>
+          <td>5</td>
+          <td>2</td>
+          <td>1</td>
+          <td>Örnek Cihaz Tipi 2</td>
+          <td>Örnek Hall 2</td>
+          <td>Örnek Row 2</td>
+          <td>Örnek Rack 2</td>
+          <td>Örnek Blade Şasi 2</td>
+          <td>Örnek Domain Bilgisi 2</td>
+          <td>Örnek Enviroment 2</td>
+          <td>Örnek Firma 2</td>
+          <td>Örnek Sahiplik 2</td>
+          <td>Örnek Lokasyon 2</td>
+          <td>Örnek Kapsam-BBVA Metrics 2</td>
+          <td>Örnek Cluster 2</td>
+          <td>Örnek İşletim Sistemi 2</td>
+          <td>Örnek Sorumlu Grup 2</td>
+          <td>Örnek Satın Alma Tarihi 2</td>
+          <td>Örnek Planlanan Devreden Çıkarma Tarihi 2</td>
+          <td>Örnek Bakım Başlangıç Tarihi 2</td>
+          <td>Örnek Bakım Bitiş Tarihi 2</td>
+          <td>Örnek Özel Durumu 2</td>
+          <td>Örnek Support 2</td>
+        </tr>
       </table>
     </div>
     <div class="pagination" id="pagination"></div>
@@ -278,13 +364,11 @@
         tableRows = Array.from(contentTable.querySelectorAll('tr.visible'));
         let length = currentPage * rowsPerPage;
         if (length > tableRows.length) length = tableRows.length;
-        console.log(length - (currentPage - 1) * rowsPerPage);
 
         for (let i = 1; i < document.getElementById("contentTable").rows.length; i++) {
           document.getElementById("contentTable").rows[i].style.display = 'none';
 
         }
-        console.log(tableRows);
         for (let i = (currentPage - 1) * rowsPerPage; i < length; i++) {
           tableRows[i].style.display = '';
         }
@@ -292,7 +376,6 @@
 
 
       }
-
       function setupPagination(start, end) {
         paginationElement.innerHTML = '';
         if ((end - start) >= (maxPage - 1)) end = maxPage + start - 1;
@@ -368,15 +451,14 @@
             totalValue += cellValue;
           });
 
-            return totalValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g,".");
+          return totalValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
         }
 
         function updateScorePanel() {
-          document.getElementById("soket-count").innerText = calculateTotalValues(5);
-          document.getElementById("core-count").innerText = calculateTotalValues(7);
-          document.getElementById("memory-count").innerText = calculateTotalValues(8);
+          document.getElementById("soket-count").innerText = calculateTotalValues(6);
+          document.getElementById("core-count").innerText = calculateTotalValues(8);
+          document.getElementById("memory-count").innerText = calculateTotalValues(9);
         }
-
         function createCheckbox(panel, labelFor, labelText) {
           const cont = document.createElement("div");
           cont.className = "checkbox-content";
@@ -394,8 +476,6 @@
           cont.appendChild(label);
           panel.querySelector('.checkbox-panel').appendChild(cont);
         }
-
-
 
         function populatePanelCheckboxes(panel, columnIndex) {
           const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
@@ -488,8 +568,6 @@
           }
         }
 
-
-
         function handleSearchInput(event) {
           const panel = event.currentTarget.parentNode;
           const columnName = panel.querySelector('h5').innerText.trim();
@@ -532,7 +610,6 @@
           }
         }
 
-
         function addOptionsDropdown() {
           const dropdown = document.getElementById('column-dropdown');
           dropdown.innerHTML = '';
@@ -541,7 +618,7 @@
           firstOption.textContent = "Select Extra Column";
           dropdown.appendChild(firstOption);
           contentTable.querySelectorAll('th').forEach(column => {
-            if (["Adı", "Üretici Firma", "Kapsam-BBVA Metrics", "İşletim Sistemi", "Açıklama", "Model"].includes(column.innerText)) return;
+            if (["", "Adı", "Üretici Firma", "Kapsam-BBVA Metrics", "İşletim Sistemi", "Açıklama", "Model"].includes(column.innerText)) return;
             const option = document.createElement('option');
             option.value = column.innerText;
             option.textContent = column.innerText;
@@ -549,6 +626,16 @@
           });
         }
 
+        function editRow(rowName) {
+          console.log(rowName);
+        }
+        function setEditIcons() {
+          document.querySelectorAll(".edit-icon").forEach(icon => {
+            icon.addEventListener('click', function () {
+              editRow(icon.closest('tr').querySelectorAll('td')[1].innerText);
+            });
+          });
+        }
         document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
         panelContainer.querySelectorAll('.panel').forEach(panel => {
           const searchInput = panel.querySelector('.search-input');
@@ -558,6 +645,7 @@
         resetButton.addEventListener("click", resetCheckboxes);
 
         filterTable();
+        setEditIcons();
         addOptionsDropdown();
       });
 
