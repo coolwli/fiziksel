@@ -1,42 +1,5 @@
-nav {
-            background-color: #212529;
-            display: flex;
-            align-items: center;
-        }
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True");
+SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
 
-        nav a {
-            color: white;
-            text-decoration: none;
-            float:left;
-            text-transform: uppercase;
-            padding: 10px 15px;
-            position: relative;
-            text-align: center;
-            line-height: 10px;
-            border-radius: 4px;
-        }
-
-        nav a:hover {
-            background-color:  #383d42;
-        }
-
-        nav a.active {
-            background-color: #383d42;
-            color: white;
-        }
-
-        #navbar a:not(:last-child)::after {
-            content: '|';
-            position: absolute;
-            right: -10px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        .logo {
-          background-image: url('logo.png');
-          background-repeat: no-repeat;
-          background-size: cover;
-          float:right;
-          width: 45px;
-          height: 60px;
-        }
+            cmd.CommandText = "SELECT * FROM fiziksel ORDER BY Adı ASC";
