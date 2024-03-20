@@ -1,5 +1,55 @@
-        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True");
-SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
+using System;
+using System.Data;
+using System.Data.SqlClient;
 
+public class DatabaseOperations
+{
+    private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True";
+
+    public DataTable GetRecords()
+    {
+        DataTable dataTable = new DataTable();
+        using (SqlConnection con = new SqlConnection(connectionString))
+        {
+            con.Open();
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
             cmd.CommandText = "SELECT * FROM fiziksel ORDER BY Adı ASC";
+            SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+            adapter.Fill(dataTable);
+        }
+        return dataTable;
+    }
+
+    public void EditRecord(int id, string[] parameters)
+    {
+        using (SqlConnection con = new SqlConnection(connectionString))
+        {
+            con.Open();
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            // Örnek olarak parametreleri kullanarak güncelleme sorgusu oluşturulması
+            cmd.CommandText = "UPDATE fiziksel SET Column1 = @param1, Column2 = @param2, ... WHERE ID = @id";
+            // Örnek olarak parametrelerin atanması
+            cmd.Parameters.AddWithValue("@param1", parameters[0]);
+            cmd.Parameters.AddWithValue("@param2", parameters[1]);
+            // Diğer parametrelerin eklenmesi gereklidir.
+
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    public void DeleteRecord(int id)
+    {
+        using (SqlConnection con = new SqlConnection(connectionString))
+        {
+            con.Open();
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "DELETE FROM fiziksel WHERE ID = @id";
+            cmd.Parameters.AddWithValue("@id", id);
+            cmd.ExecuteNonQuery();
+        }
+    }
+}
