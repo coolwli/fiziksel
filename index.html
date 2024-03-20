@@ -1,3 +1,4 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="fizkselArayuz._default" %>
 <!DOCTYPE html>
 <html lang="tr">
 
@@ -5,9 +6,24 @@
   <meta charset="UTF-8">
   <style>
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      padding: 0;
+        font-family: Verdana;
+        margin: 0;
+        padding: 0;
+    }
+    .header {
+        overflow: hidden;
+        background-color: #212529;
+        padding: 10px 10px;
+    }
+
+    .header h1 {
+        margin: 20px;
+        float: left;
+        text-align: center;
+        text-decoration: none;
+        line-height: 10px;
+        border-radius: 4px;
+        color: #F8F9FA;
     }
 
     #panel-container {
@@ -54,8 +70,8 @@
       min-width: 16px;
       background-image: url('edit.png');
       background-repeat: no-repeat;
-      background-size: 80%;
-      background-position: 5px 5px;
+      background-size: 70%;
+      background-position: center;
       cursor: pointer;
     }
 
@@ -120,7 +136,6 @@
     p {
       display: block;
       margin-left: 70px;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
       font-size: 14px;
       color: #333;
     }
@@ -163,11 +178,9 @@
     #logo {
       background-image: url('logo.png');
       background-repeat: no-repeat;
-      background-size: cover;
-      width: 60px;
-      height: 80px;
-      margin-left: 70px;
-      margin-top: -44px;
+      background-size: cover;float:right;
+      width: 45px;
+      height: 60px;
     }
   </style>
   <title>fiziksel</title>
@@ -175,7 +188,13 @@
 
 <body>
   <form id="form1" runat="server">
+    <div class="header">
+        <div>
+            <h1 class="baslik" id="baslik" runat="server">Fiziksel Envanter</h1>
+        </div>
+        <div id="logo"></div>
 
+    </div>
     <div id="panel-container" class="panel-container">
       <div class="panel">
         <h5>Adı</h5>
@@ -212,11 +231,7 @@
         <input type="text" placeholder="Search for Filtering" class="search-input">
         <div class="checkbox-panel"></div>
       </div>
-      <div class="panel">
-        <h5>Açıklama</h5>
-        <input type="text" placeholder="Search for Filtering" class="search-input">
-        <div class="checkbox-panel"></div>
-      </div>
+
       <div class="extra-panel">
         <h5 style="display:none;">Select Extra Column</h5>
         <select id="column-dropdown" class="dropdown">
@@ -284,74 +299,10 @@
           <th>Support</th>
         </tr>
 
-        <tr>
-          <td class="edit-icon"></td>
-          <td>Örnek Adı 1</td>
-          <td>Seri Numarası 1</td>
-          <td>Örnek Açıklama 1</td>
-          <td>Örnek Üretici Firma 1</td>
-          <td>Örnek Model 1</td>
-          <td>2</td>
-          <td>4</td>
-          <td>5</td>
-          <td>6</td>
-          <td>Örnek Cihaz Tipi 1</td>
-          <td>Örnek Hall 1</td>
-          <td>Örnek Row 1</td>
-          <td>Örnek Rack 1</td>
-          <td>Örnek Blade Şasi 1</td>
-          <td>Örnek Domain Bilgisi 1</td>
-          <td>Örnek Enviroment 1</td>
-          <td>Örnek Firma 1</td>
-          <td>Örnek Sahiplik 1</td>
-          <td>Örnek Lokasyon 1</td>
-          <td>Örnek Kapsam-BBVA Metrics 1</td>
-          <td>Örnek Cluster 1</td>
-          <td>Örnek İşletim Sistemi 1</td>
-          <td>Örnek Sorumlu Grup 1</td>
-          <td>Örnek Satın Alma Tarihi 1</td>
-          <td>Örnek Planlanan Devreden Çıkarma Tarihi 1</td>
-          <td>Örnek Bakım Başlangıç Tarihi 1</td>
-          <td>Örnek Bakım Bitiş Tarihi 1</td>
-          <td>Örnek Özel Durumu 1</td>
-          <td>Örnek Support 1</td>
-        </tr>
-        <tr>
-          <td class="edit-icon"></td>
-          <td>Örnek Adı 2</td>
-          <td>Seri Numarası 2</td>
-          <td>Örnek Açıklama 2</td>
-          <td>Örnek Üretici Firma 2</td>
-          <td>Örnek Model 2</td>
-          <td>2</td>
-          <td>5</td>
-          <td>2</td>
-          <td>1</td>
-          <td>Örnek Cihaz Tipi 2</td>
-          <td>Örnek Hall 2</td>
-          <td>Örnek Row 2</td>
-          <td>Örnek Rack 2</td>
-          <td>Örnek Blade Şasi 2</td>
-          <td>Örnek Domain Bilgisi 2</td>
-          <td>Örnek Enviroment 2</td>
-          <td>Örnek Firma 2</td>
-          <td>Örnek Sahiplik 2</td>
-          <td>Örnek Lokasyon 2</td>
-          <td>Örnek Kapsam-BBVA Metrics 2</td>
-          <td>Örnek Cluster 2</td>
-          <td>Örnek İşletim Sistemi 2</td>
-          <td>Örnek Sorumlu Grup 2</td>
-          <td>Örnek Satın Alma Tarihi 2</td>
-          <td>Örnek Planlanan Devreden Çıkarma Tarihi 2</td>
-          <td>Örnek Bakım Başlangıç Tarihi 2</td>
-          <td>Örnek Bakım Bitiş Tarihi 2</td>
-          <td>Örnek Özel Durumu 2</td>
-          <td>Örnek Support 2</td>
-        </tr>
+
       </table>
     </div>
     <div class="pagination" id="pagination"></div>
-    <div id="logo"></div>
     <p>© 2024 - Cloud United Team</p>
     <script>
       const maxPage = 10;
@@ -626,15 +577,18 @@
           });
         }
 
-        function editRow(rowName) {
-          console.log(rowName);
+          function editRow(rowName) {
+              window.location.href = "editScreen.aspx?name=" + rowName;
+
         }
         function setEditIcons() {
-          document.querySelectorAll(".edit-icon").forEach(icon => {
-            icon.addEventListener('click', function () {
-              editRow(icon.closest('tr').querySelectorAll('td')[1].innerText);
-            });
-          });
+            tableRows.forEach(row => {
+                icon = row.querySelectorAll('td')[0];
+                icon.classList.add('edit-icon');
+                icon.addEventListener('click', function () {
+                    editRow(row.querySelectorAll('td')[1].innerText);
+                });
+              });
         }
         document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
         panelContainer.querySelectorAll('.panel').forEach(panel => {
