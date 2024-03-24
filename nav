@@ -1,55 +1,97 @@
-using System;
-using System.Data;
-using System.Data.SqlClient;
-
-public class DatabaseOperations
-{
-    private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True";
-
-    public DataTable GetRecords()
-    {
-        DataTable dataTable = new DataTable();
-        using (SqlConnection con = new SqlConnection(connectionString))
-        {
-            con.Open();
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            cmd.CommandText = "SELECT * FROM fiziksel ORDER BY Adı ASC";
-            SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-            adapter.Fill(dataTable);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Port Forwarding</title>
+    <style>
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
         }
-        return dataTable;
-    }
 
-    public void EditRecord(int id, string[] parameters)
-    {
-        using (SqlConnection con = new SqlConnection(connectionString))
-        {
-            con.Open();
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            // Örnek olarak parametreleri kullanarak güncelleme sorgusu oluşturulması
-            cmd.CommandText = "UPDATE fiziksel SET Column1 = @param1, Column2 = @param2, ... WHERE ID = @id";
-            // Örnek olarak parametrelerin atanması
-            cmd.Parameters.AddWithValue("@param1", parameters[0]);
-            cmd.Parameters.AddWithValue("@param2", parameters[1]);
-            // Diğer parametrelerin eklenmesi gereklidir.
-
-            cmd.Parameters.AddWithValue("@id", id);
-            cmd.ExecuteNonQuery();
+        label {
+            display: block;
+            margin-bottom: 5px;
         }
-    }
 
-    public void DeleteRecord(int id)
-    {
-        using (SqlConnection con = new SqlConnection(connectionString))
-        {
-            con.Open();
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            cmd.CommandText = "DELETE FROM fiziksel WHERE ID = @id";
-            cmd.Parameters.AddWithValue("@id", id);
-            cmd.ExecuteNonQuery();
+        input[type="text"],
+        input[type="number"],
+        button {
+            width: 100%;
+            margin-bottom: 10px;
         }
-    }
-}
+
+        button {
+            padding: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        #responseMessage {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Port Forwarding</h1>
+        <form id="portForwardForm">
+            <label for="host">Destination Host:</label>
+            <input type="text" id="host" name="host" required>
+            <label for="port">Destination Port:</label>
+            <input type="number" id="port" name="port" required>
+            <button type="submit">Forward</button>
+        </form>
+        <div id="responseMessage"></div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('portForwardForm');
+            var responseMessage = document.getElementById('responseMessage');
+
+            form.addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                var host = document.getElementById('host').value;
+                var port = document.getElementById('port').value;
+
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/PortForward/Forward?host=' + host + '&port=' + port, true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === XMLHttpRequest.DONE) {
+                        if (xhr.status === 200) {
+                            responseMessage.textContent = 'Port forwarded successfully!';
+                            responseMessage.style.backgroundColor = '#d4edda';
+                            responseMessage.style.borderColor = '#c3e6cb';
+                            responseMessage.style.color = '#155724';
+                        } else {
+                            responseMessage.textContent = 'Error: ' + xhr.responseText;
+                            responseMessage.style.backgroundColor = '#f8d7da';
+                            responseMessage.style.borderColor = '#f5c6cb';
+                            responseMessage.style.color = '#721c24';
+                        }
+                    }
+                };
+                xhr.send();
+            });
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
