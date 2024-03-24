@@ -1,0 +1,69 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="PortForward.aspx.cs" Inherits="YourNamespace.PortForward" %>
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Port Forwarding</title>
+</head>
+<body>
+    <form id="portForwardForm" runat="server">
+        <div>
+            <label for="host">Destination Host:</label>
+            <asp:TextBox ID="host" runat="server" required="true"></asp:TextBox>
+            <label for="port">Destination Port:</label>
+            <asp:TextBox ID="port" runat="server" required="true"></asp:TextBox>
+            <asp:Button ID="forwardButton" runat="server" Text="Forward" OnClick="Forward_Click" />
+        </div>
+    </form>
+    <div id="responseMessage" runat="server"></div>
+</body>
+</html>
+
+using System;
+using System.Net;
+using System.Net.Sockets;
+
+namespace YourNamespace
+{
+    public partial class PortForward : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+        }
+
+        protected void Forward_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string destinationHost = host.Text;
+                int destinationPort = Convert.ToInt32(port.Text);
+
+                using (var listener = new TcpListener(IPAddress.Any, destinationPort))
+                {
+                    listener.Start();
+                    responseMessage.InnerText = $"Listening on port {destinationPort}...";
+
+                    while (true)
+                    {
+                        var client = listener.AcceptTcpClient();
+                        var destinationClient = new TcpClient(destinationHost, destinationPort);
+                        var clientStream = client.GetStream();
+                        var destinationStream = destinationClient.GetStream();
+
+                        clientStream.CopyTo(destinationStream);
+                        destinationStream.CopyTo(clientStream);
+
+                        client.Close();
+                        destinationClient.Close();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                responseMessage.InnerText = "Error: " + ex.Message;
+            }
+        }
+    }
+}
+
