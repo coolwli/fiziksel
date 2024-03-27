@@ -1,97 +1,121 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Port Forwarding</title>
-    <style>
-        .container {
-            max-width: 400px;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
+body {
+    font-family: Verdana;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
 
-        label {
-            display: block;
-            margin-bottom: 5px;
-        }
+.header {
+    overflow: hidden;
+    background-color: #212529;
+}
 
-        input[type="text"],
-        input[type="number"],
-        button {
-            width: 100%;
-            margin-bottom: 10px;
-        }
+    .header h1 {
+        float: left;
+        text-align: center;
+        text-decoration: none;
+        line-height: 10px;
+        border-radius: 4px;
+        color: #F8F9FA;
+        margin-top: 30px;
+        margin-left: 10px;
+    }
 
-        button {
-            padding: 10px;
-            background-color: #007bff;
-            color: #fff;
-            border: none;
-            cursor: pointer;
-        }
+#logo {
+    background-image: url('logo.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    float: right;
+    width: 55px;
+    height: 70px;
+    margin-right: 10px;
+}
 
-        #responseMessage {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Port Forwarding</h1>
-        <form id="portForwardForm">
-            <label for="host">Destination Host:</label>
-            <input type="text" id="host" name="host" required>
-            <label for="port">Destination Port:</label>
-            <input type="number" id="port" name="port" required>
-            <button type="submit">Forward</button>
-        </form>
-        <div id="responseMessage"></div>
-    </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var form = document.getElementById('portForwardForm');
-            var responseMessage = document.getElementById('responseMessage');
+.container{
+    display:flex;
+    justify-content:center;
+}
 
-            form.addEventListener('submit', function(event) {
-                event.preventDefault();
-                
-                var host = document.getElementById('host').value;
-                var port = document.getElementById('port').value;
-
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', '/PortForward/Forward?host=' + host + '&port=' + port, true);
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === XMLHttpRequest.DONE) {
-                        if (xhr.status === 200) {
-                            responseMessage.textContent = 'Port forwarded successfully!';
-                            responseMessage.style.backgroundColor = '#d4edda';
-                            responseMessage.style.borderColor = '#c3e6cb';
-                            responseMessage.style.color = '#155724';
-                        } else {
-                            responseMessage.textContent = 'Error: ' + xhr.responseText;
-                            responseMessage.style.backgroundColor = '#f8d7da';
-                            responseMessage.style.borderColor = '#f5c6cb';
-                            responseMessage.style.color = '#721c24';
-                        }
-                    }
-                };
-                xhr.send();
-            });
-        });
-    </script>
-</body>
-</html>
+.services {
+    background-color: #ffffff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width: 22%;
+    margin: 10px;
+    padding:10px;
+    overflow-y:auto;
+    height: 650px;
+}
+.others {
+    min-width: 32%;
+    background-color: #ffffff;
+    height: 200px;
+    margin: 10px;
+    height: 650px;
+}
+.wrapper {
+    width: 37%;
+    background-color: #ffffff;
+    margin: 10px;
+    padding: 0 30px;
+    height: 650px;
+}
+.service-panel {
+    width: 90%;
+    margin:10px;
+    border: 1px solid #ddd;
+    background-color: rgba(255, 255, 255, 0.49);
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    height: 100px;
+    cursor: pointer;
+}
+h3 {
+    margin: 5px 0 0 5px;
+}
 
 
+.search-input {
+    width: 80%;
+    float:left;
+    margin-left: 15px;
+    border: 0.1px solid #ddd;
+    border-radius: 5px;
+    padding: 5px;
+    font-size: 18px;
+}
 
+.city {
+    fill: #CCCCCC;
+    fill-opacity: 1;
+    stroke: white;
+    stroke-opacity: 1;
+    stroke-width: 0.5;
+    transition: all .3s ease-out;
+    cursor: pointer;
+}
+.active-city {
+    fill: #a9a9a9;
+    fill-opacity: 1;
+    stroke: white;
+    stroke-opacity: 1;
+    stroke-width: 0.5;
+    transition: all .3s ease-out;
+    cursor: pointer;
+}
+.city:hover, .active-city:hover{
+    fill: #5c5555;
+}
 
+footer {
+    text-align: center;
+    background-color: #f2f2f2;
+    padding: 10px;
+}
 
-
-
-
-
+.footer {
+    display: block;
+    font-size: 14px;
+    color: #888;
+}
