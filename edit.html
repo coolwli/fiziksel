@@ -1,21 +1,64 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="Default.aspx.cs" Inherits="PieChartGenerator._Default" %>
+using System;
+using System.Data;
+using System.Linq;
+using System.Web.UI;
+using System.Web.UI.HtmlControls;
+using System.Data.SqlClient;
 
-<!DOCTYPE html>
+namespace fizkselArayuz
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True");
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            if (con.State == ConnectionState.Open)
+            {
+                con.Close();
+            }
+            con.Open();
+            showList();
+        }
+        public void showList()
+        {
 
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title>Pie Chart Generator</title>
-</head>
-<body>
-    <form id="form1" runat="server">
-        <div>
-            <h2>Enter Values and Parameters</h2>
-            <asp:TextBox ID="txtInput" runat="server" TextMode="MultiLine"></asp:TextBox>
-            <asp:Button ID="btnGenerate" runat="server" Text="Generate Chart" OnClick="btnGenerate_Click" />
-            <hr />
-            <asp:Literal ID="ltChart" runat="server"></asp:Literal>
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
 
-        </div>
-    </form>
-</body>
-</html>
+            cmd.CommandText = "SELECT * FROM fiziksel ORDER BY Adı ASC";
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+
+
+
+
+            if (contentTable != null )
+            {
+                foreach (DataRow row in dt.Rows)
+                {
+                    HtmlTableRow newRow = new HtmlTableRow();
+                    newRow.Cells.Add(new HtmlTableCell());
+                    for (int j = 0; j < 35; j++)
+                    {
+                        if (j == 0 || j == 2 ) j++;
+                        if(j == 29 ) j=33;
+                        HtmlTableCell newCell = new HtmlTableCell();
+                        newCell.InnerText = row[j].ToString();
+                        newRow.Cells.Add(newCell);
+                    }
+                    
+                    newRow.Style["display"] = "none";
+                    contentTable.Rows.Add(newRow);
+                }
+
+            }
+        }
+
+        protected void chartButton_Click(object sender, EventArgs e)
+        {
+
+        }
+    }
+}
