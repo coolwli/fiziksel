@@ -1,69 +1,65 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="PortForward.aspx.cs" Inherits="YourNamespace.PortForward" %>
-
-<!DOCTYPE html>
-
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title>Port Forwarding</title>
-</head>
-<body>
-    <form id="portForwardForm" runat="server">
-        <div>
-            <label for="host">Destination Host:</label>
-            <asp:TextBox ID="host" runat="server" required="true"></asp:TextBox>
-            <label for="port">Destination Port:</label>
-            <asp:TextBox ID="port" runat="server" required="true"></asp:TextBox>
-            <asp:Button ID="forwardButton" runat="server" Text="Forward" OnClick="Forward_Click" />
-        </div>
-    </form>
-    <div id="responseMessage" runat="server"></div>
-</body>
-</html>
-
 using System;
-using System.Net;
-using System.Net.Sockets;
+using System.Web.UI.DataVisualization.Charting;
+using System.IO;
+using System.Collections.Generic;
+using System.Web.UI.WebControls;
+using System.Web.UI.HtmlControls;
 
-namespace YourNamespace
+namespace PieChartGenerator
 {
-    public partial class PortForward : System.Web.UI.Page
+    public partial class _Default : System.Web.UI.Page
     {
         protected void Page_Load(object sender, EventArgs e)
         {
         }
-
-        protected void Forward_Click(object sender, EventArgs e)
+        protected void btnGenerate_Click(object sender, EventArgs e)
         {
-            try
+            Dictionary<string, int> arabaRenkleri = new Dictionary<string, int>();
+            arabaRenkleri["Mavi"] = 5;
+            arabaRenkleri["Sarı"] = 3;
+
+            Dictionary<string, int> kiyafetRenkleri = new Dictionary<string, int>();
+            kiyafetRenkleri["Kırmızı"] = 7;
+            kiyafetRenkleri["Yeşil"] = 4;
+
+            WriteChartToDiv(arabaRenkleri, chartContainer1);
+            WriteChartToDiv(kiyafetRenkleri, chartContainer2);
+        }
+
+
+        private void WriteChartToDiv(Dictionary<string, int> renkler, HtmlGenericControl divContainer)
+        {
+            Chart chart = new Chart();
+            chart.Width = 400;
+            chart.Height = 300;
+
+            ChartArea chartArea = new ChartArea();
+            chart.ChartAreas.Add(chartArea);
+
+            Series series = new Series();
+            series.ChartType = SeriesChartType.Pie;
+
+            foreach (var kvp in renkler)
             {
-                string destinationHost = host.Text;
-                int destinationPort = Convert.ToInt32(port.Text);
-
-                using (var listener = new TcpListener(IPAddress.Any, destinationPort))
-                {
-                    listener.Start();
-                    responseMessage.InnerText = $"Listening on port {destinationPort}...";
-
-                    while (true)
-                    {
-                        var client = listener.AcceptTcpClient();
-                        var destinationClient = new TcpClient(destinationHost, destinationPort);
-                        var clientStream = client.GetStream();
-                        var destinationStream = destinationClient.GetStream();
-
-                        clientStream.CopyTo(destinationStream);
-                        destinationStream.CopyTo(clientStream);
-
-                        client.Close();
-                        destinationClient.Close();
-                    }
-                }
+                DataPoint point = new DataPoint();
+                point.SetValueY(kvp.Value);
+                point.Label = $"{kvp.Key} ({kvp.Value})"; // Include count in the label
+                series.Points.Add(point);
             }
-            catch (Exception ex)
+
+            chart.Series.Add(series);
+
+            Legend legend = new Legend();
+            legend.Docking = Docking.Bottom;
+            chart.Legends.Add(legend);
+
+            using (MemoryStream ms = new MemoryStream())
             {
-                responseMessage.InnerText = "Error: " + ex.Message;
+                chart.SaveImage(ms, ChartImageFormat.Png);
+                string imageBase64 = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+                divContainer.InnerHtml = $"<img src='{imageBase64}' alt='Chart' />";
             }
         }
+
     }
 }
-
