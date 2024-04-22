@@ -1,65 +1,7 @@
-using System;
-using System.Web.UI.DataVisualization.Charting;
-using System.IO;
-using System.Collections.Generic;
-using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
-
-namespace PieChartGenerator
-{
-    public partial class _Default : System.Web.UI.Page
-    {
-        protected void Page_Load(object sender, EventArgs e)
-        {
-        }
-        protected void btnGenerate_Click(object sender, EventArgs e)
-        {
-            Dictionary<string, int> arabaRenkleri = new Dictionary<string, int>();
-            arabaRenkleri["Mavi"] = 5;
-            arabaRenkleri["Sarı"] = 3;
-
-            Dictionary<string, int> kiyafetRenkleri = new Dictionary<string, int>();
-            kiyafetRenkleri["Kırmızı"] = 7;
-            kiyafetRenkleri["Yeşil"] = 4;
-
-            WriteChartToDiv(arabaRenkleri, chartContainer1);
-            WriteChartToDiv(kiyafetRenkleri, chartContainer2);
-        }
-
-
-        private void WriteChartToDiv(Dictionary<string, int> renkler, HtmlGenericControl divContainer)
-        {
-            Chart chart = new Chart();
-            chart.Width = 400;
-            chart.Height = 300;
-
-            ChartArea chartArea = new ChartArea();
-            chart.ChartAreas.Add(chartArea);
-
-            Series series = new Series();
-            series.ChartType = SeriesChartType.Pie;
-
-            foreach (var kvp in renkler)
-            {
-                DataPoint point = new DataPoint();
-                point.SetValueY(kvp.Value);
-                point.Label = $"{kvp.Key} ({kvp.Value})"; // Include count in the label
-                series.Points.Add(point);
-            }
-
-            chart.Series.Add(series);
-
-            Legend legend = new Legend();
-            legend.Docking = Docking.Bottom;
-            chart.Legends.Add(legend);
-
-            using (MemoryStream ms = new MemoryStream())
-            {
-                chart.SaveImage(ms, ChartImageFormat.Png);
-                string imageBase64 = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
-                divContainer.InnerHtml = $"<img src='{imageBase64}' alt='Chart' />";
-            }
-        }
-
-    }
-}
+<!-- Yeni eklenecek kısım -->
+<system.webServer>
+	<handlers>
+		<remove name="ChartImageHandler" />
+		<add name="ChartImageHandler" preCondition="integratedMode" verb="GET,HEAD,POST" path="ChartImg.axd" type="System.Web.UI.DataVisualization.Charting.ChartHttpHandler, System.Web.DataVisualization, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" />
+	</handlers>
+</system.webServer>
