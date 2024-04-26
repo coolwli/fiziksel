@@ -4,7 +4,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>fiziksel envanter</title>
+    <title>Fiziksel Envanter</title>
     <style>
         body {
             font-family: Verdana;
@@ -35,6 +35,16 @@
             justify-content: center;
         }
 
+        .panel {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 190px;
+            margin: 10px 5px 0 0;
+            font-size: 10px;
+        }
+
         .left-panel {
             display: flex;
             flex-wrap: wrap;
@@ -47,27 +57,7 @@
             padding-top: 5px;
         }
 
-        .panel,
-        .left-panel .extra-panel {
-            border: 1px solid #ddd;
-            padding: 2px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 190px;
-            height: 170px;
-            margin: 10px 5px 0 0;
-            font-size: 10px;
-        }
-
-        .buttons-panel {
-            padding-top: 10px;
-            width: 190px;
-            height: 170px;
-            margin-bottom: 10px;
-            font-size: 10px;
-        }
-
-        .right-panel .extra-panel {
+        .extra-panel {
             border: 1px solid #ddd;
             border-radius: 10px;
             padding: 0 5px 0 0;
@@ -81,11 +71,6 @@
         .checkbox-panel {
             max-height: 120px;
             overflow-y: auto;
-        }
-
-        .extra-panel .checkbox-panel {
-            max-height: 290px;
-            margin-left:10px;
         }
 
         .panel-button {
@@ -166,7 +151,6 @@
             color: white;
         }
 
-
         h5 {
             margin: 0 0 10px;
             font-size: 10px;
@@ -177,22 +161,14 @@
             margin-bottom: 5px;
         }
 
-
         .search-input {
             width: 90%;
             padding: 5px;
             margin: 0;
             margin-bottom: 2px;
-
             font-size: 10px;
             box-sizing: border-box;
         }
-
-        .extra-panel .search-input {
-            margin-top: 5px;
-            margin-bottom: 5px;
-            margin-left:10px;        
-            }
 
         .dropdown {
             width: 90%;
@@ -201,10 +177,6 @@
             margin-left: 10px;
             font-size: 10px;
             box-sizing: border-box;
-        }
-
-        .checkbox-content {
-            margin: 0;
         }
 
         #score-table {
@@ -243,6 +215,8 @@
             font-size: 14px;
             color: #888;
         }
+
+
     </style>
 </head>
 
@@ -376,7 +350,6 @@
             </table>
         </div>
         <div class="pagination" id="pagination"></div>
-
         <footer>
             <p class="footer">© 2024 - Cloud United Team</p>
         </footer>
