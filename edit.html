@@ -1,28 +1,83 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="Default.aspx.cs" Inherits="PieChartGenerator._Default" %>
-
 <!DOCTYPE html>
 
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head runat="server">
-    <title>Pie Chart Generator</title>
-    <style>
-        /* CSS stillemesi isteğe bağlı olarak eklenebilir */
-        .chartContainer {
-            margin-bottom: 20px;
-            border: 1px solid #ccc;
-            padding: 10px;
+    <title></title>
+    <script>
+        function openPieChartPage() {
+            var uniqueValues = [
+                {
+                    column: "",
+                    values: [
+                        { value: "", count: 1 }
+                    ]
+                },
+                {
+                    column: "ali",
+                    values: [
+                        { value: "cndr", count: 1 }
+                    ]
+                }
+            ];
+            var queryString = "?data=" + encodeURIComponent(JSON.stringify(uniqueValues));
+            window.open("piechart.aspx" + queryString, "_blank");
         }
-    </style>
+    </script>
 </head>
 <body>
     <form id="form1" runat="server">
         <div>
-            <h2>Enter Values and Parameters</h2>
-            <asp:Button ID="btnGenerate" runat="server" Text="Generate Chart" OnClick="btnGenerate_Click" />
-            <div id="chartContainer1" runat="server"></div>
-            <div id="chartContainer2" runat="server"></div>
-
+            <input type="button" value="Pie Chart Sayfasını Aç" onclick="openPieChartPage()" />
         </div>
     </form>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Script.Serialization;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+
+namespace officetoWeb
+{
+    public partial class piechart : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(Request.QueryString["data"]))
+            {
+                Response.Write("values\n");
+
+                string jsonData = Request.QueryString["data"];
+
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                Dictionary<string,List<KeyValuePair<string,int>>> data = serializer.Deserialize<Dictionary<string, List<KeyValuePair<string, int>>>>(jsonData);
+                foreach (var value in data)
+                {
+                    Response.Write(value+"\n");
+                }
+            }
+        }
+    }
+}
