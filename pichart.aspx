@@ -1,45 +1,24 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="pichart.aspx.cs" Inherits="fizkselArayuz.pichart" %>
-<!DOCTYPE html>
+Runtime Error
+Description: An application error occurred on the server. The current custom error settings for this application prevent the details of the application error from being viewed remotely (for security reasons). It could, however, be viewed by browsers running on the local server machine.
 
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title>Pie Chart Generator</title>
-    <style>
-        #chartContainer {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-bottom: 20px;
-            border-top: 1px solid #ccc;
-            padding: 10px;
-        }
-        #chartContainer div{
-            margin:20px;
-        } 
-    </style>
-    
-</head>
+Details: To enable the details of this specific error message to be viewable on remote machines, please create a <customErrors> tag within a "web.config" configuration file located in the root directory of the current web application. This <customErrors> tag should then have its "mode" attribute set to "Off".
 
-<body>
-    <form id="form1" runat="server">
 
-    <div>
-        <asp:HiddenField ID="HiddenField1" runat="server" Value="of"/>
-        <h1 style="text-align:center">Pi Charts</h1>
-        <div id="chartContainer" runat="server"></div>
-    </div>
-    <script>
-        document.getElementById('HiddenField1').value = localStorage.getItem('dizi');
+<!-- Web.Config Configuration File -->
 
-        var uniqueValues = JSON.parse(localStorage.getItem('dizi'));
+<configuration>
+    <system.web>
+        <customErrors mode="Off"/>
+    </system.web>
+</configuration>
 
-        Array.from(uniqueValues).forEach(values => {
-            console.log(values.column);
-            console.log(values.values);
-        });
-    </script>
+Notes: The current error page you are seeing can be replaced by a custom error page by modifying the "defaultRedirect" attribute of the application's <customErrors> configuration tag to point to a custom error page URL.
 
-    </form>
-</body>
 
-</html>
+<!-- Web.Config Configuration File -->
+
+<configuration>
+    <system.web>
+        <customErrors mode="RemoteOnly" defaultRedirect="mycustompage.htm"/>
+    </system.web>
+</configuration>
