@@ -1,28 +1,25 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Web.UI;
 using System.Web.UI.DataVisualization.Charting;
 using System.Web.UI.HtmlControls;
-//using OfficeOpenXml;
-//using OfficeOpenXml.Drawing;
-//using OfficeOpenXml.Drawing.Chart;
 
 namespace fizkselArayuz
 {
     public partial class pichart : System.Web.UI.Page
     {
         Dictionary<string, Dictionary<string, int>> columnUniqueValues;
+
         protected void Page_Load(object sender, EventArgs e)
         {
-
             if (IsPostBack)
             {
                 Response.Write("");
             }
             else
                 Response.Write(Request["hdnTestControl"]);
-
         }
 
         private void WriteChartToDiv()
@@ -48,6 +45,17 @@ namespace fizkselArayuz
 
                     point.SetValueY(valueCount.Value);
                     point.LegendText = $"{valueCount.Key} ({valueCount.Value})";
+
+                    // Dilimin boyutunu kontrol edip etiketi gösterme kararını alın
+                    if (ShouldShowLabel((double)valueCount.Value / column.Value.Values.Sum()))
+                    {
+                        point.IsValueShownAsLabel = true;
+                    }
+                    else
+                    {
+                        point.IsValueShownAsLabel = false;
+                    }
+
                     series.Points.Add(point);
                 }
 
@@ -61,17 +69,13 @@ namespace fizkselArayuz
 
                 chartsContainer.Controls.Add(divChart);
             }
-            /*            
-            using (MemoryStream ms = new MemoryStream())
-            {
-                chart.SaveImage(ms, ChartImageFormat.Png);
-                string imageBase64 = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
-                HtmlGenericControl nevDiv = new HtmlGenericControl("div");
-                nevDiv.InnerHtml = $"<img src='{imageBase64}' alt='Chart' />";
-                
-                chartContainer.Controls.Add(nevDiv);
-            }
-            */
+        }
+
+        private bool ShouldShowLabel(double value)
+        {
+            // İstenilen eşik değeri burada belirleyin
+            double threshold = 0.1; // Örneğin, dilimin yüzde 10'unun altındaysa etiketi gösterme
+            return value >= threshold;
         }
 
         protected void btnFoo_Click(object sender, EventArgs e)
@@ -82,20 +86,19 @@ namespace fizkselArayuz
 
             foreach (string value in vs)
             {
-                if (value.Length==0) continue;
+                if (value.Length == 0) continue;
 
                 string columName = value.Split('~')[0];
                 string[] values = value.Split('~')[1].Split('%');
 
                 columnUniqueValues.Add(columName, new Dictionary<string, int>());
-                foreach(string opp in values)
+                foreach (string opp in values)
                 {
                     if (opp.Length == 0) continue;
                     string key = opp.Split('!')[0];
                     int count = Convert.ToInt32(opp.Split('!')[1]);
                     columnUniqueValues[columName].Add(key, count);
                 }
-
             }
 
             WriteChartToDiv();
