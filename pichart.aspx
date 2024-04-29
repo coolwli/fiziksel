@@ -1,9 +1,61 @@
-Server Error in '/fiziksel' Application.
-Invalid temp images directory in chart handler configuration [c:\TempImageFiles\]. Please edit the web.config file. The CharImageHandler key, Dir value must point to a valid directory. The directory is required for temporary image storage when storage mode equals file system.
-Description: An unhandled exception occurred during the execution of the current web request. Please review the stack trace for more information about the error and where it originated in the code.
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="pichart.aspx.cs" Inherits="fizkselArayuz.pichart" %>
+<!DOCTYPE html>
 
-Exception Details: System.IO.DirectoryNotFoundException: Invalid temp images directory in chart handler configuration [c:\TempImageFiles\]. Please edit the web.config file. The CharImageHandler key, Dir value must point to a valid directory. The directory is required for temporary image storage when storage mode equals file system.
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Pie Chart Generator</title>
+    <style>
+        #chartsContainer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+            border-top: 1px solid #ccc;
+            padding: 10px;
+        }
+        #chartsContainer div{
+            margin:20px;
+        } 
+    </style>
+    
+</head>
 
-Source Error:
+<body>
+    <form id="form1" runat="server">
+        <div>
+            <input type="hidden" value="some hidden controls value" id="hdnTestControl" runat="server" name="hdnTestControl"/>
+            <h1 style="text-align:center">Pi Charts</h1>
+            <asp:Button ID="btnFoo" Text="Get Charts" runat="server" OnClick="btnFoo_Click" />
 
-An unhandled exception was generated during the execution of the current web request. Information regarding the origin and location of the exception can be identified using the exception stack trace below.
+            <div id="chartsContainer" runat="server"></div>
+        </div>
+    <script>
+        var isReloaded = false;
+        window.onload = function () {
+            isReloaded = true;
+        };
+
+        var uniqueValues = JSON.parse(localStorage.getItem('dizi'));
+        hdnInput = document.getElementById('hdnTestControl');
+        hdnInput.value = null;
+        
+        Array.from(uniqueValues).forEach(values => {
+            hdnInput.value += values.column + "~";
+            Array.from(values.values).forEach(row => {
+                hdnInput.value += row.value +"!"+row.count+"%" ;
+            });
+            hdnInput.value += "\n"
+        });
+        if (!isReloaded) {
+            console.log("ilk");
+            //Page.ClientScript.GetPostBackEventReference(new PostBackOptions(this)) %>
+        }
+        else {
+            console.log("son");
+        }
+    </script>
+
+    </form>
+</body>
+
+</html>
