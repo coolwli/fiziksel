@@ -1,83 +1,106 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="FileName.aspx.cs" Inherits="WebApplication1.FileName" %>
+
 <!DOCTYPE html>
 
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head runat="server">
     <title></title>
-    <script>
-        function openPieChartPage() {
-            var uniqueValues = [
-                {
-                    column: "",
-                    values: [
-                        { value: "", count: 1 }
-                    ]
-                },
-                {
-                    column: "ali",
-                    values: [
-                        { value: "cndr", count: 1 }
-                    ]
-                }
-            ];
-            var queryString = "?data=" + encodeURIComponent(JSON.stringify(uniqueValues));
-            window.open("piechart.aspx" + queryString, "_blank");
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
-    </script>
+        th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #chartsContainer{
+            display:flex;
+            flex-wrap:wrap;
+        }
+        .chart-container {
+            margin: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 <body>
     <form id="form1" runat="server">
         <div>
-            <input type="button" value="Pie Chart Sayfasını Aç" onclick="openPieChartPage()" />
+            <table id="dataTable" runat="server">
+                <tr>
+                    <th>Sütun1</th>
+                    <th>Sütun2</th>
+                    <th>Sütun3</th>
+                    <th>Sütun4</th>
+                    <th>Sütun5</th>
+                </tr>
+                <tr>
+                    <td>Veri1</td>
+                    <td>Veri2</td>
+                    <td>Veri2</td>
+                    <td>Veri4</td>
+                    <td>Veri5</td>
+                </tr>
+                <tr>
+                    <td>Veri3</td>
+                    <td>Veri3</td>
+                    <td>Veri4</td>
+                    <td>Veri3</td>
+                    <td>Veri4</td>
+                </tr>
+                <tr>
+                    <td>Veri4</td>
+                    <td>Veri4</td>
+                    <td>Veri4</td>
+                    <td>Veri2</td>
+                    <td>Veri3</td>
+                </tr>
+                <tr>
+                    <td>Veri3</td>
+                    <td>Veri5</td>
+                    <td>Veri4</td>
+                    <td>Veri2</td>
+                    <td>Veri3</td>
+                </tr>
+            </table>
+            <br />
+            <input type="hidden" value="some hidden controls value" id="hdnTestControl" runat="server" name="hdnTestControl"/>
+
+            <asp:Button ID="btnCreateCharts" runat="server" Style="display: none;" OnClick="btnCreateCharts_Click" />
+            <div id="chartsContainer" runat="server"></div>
         </div>
+
+
+        <script>
+            window.onload = function () {
+                if (!sessionStorage.getItem('firstLoad')) {
+                    console.log("First load");
+                    var uniqueValues = JSON.parse(localStorage.getItem('dizi'));
+                    hdnInput = document.getElementById('hdnTestControl');
+                    hdnInput.value = null;
+                    if (uniqueValues) {
+                        Array.from(uniqueValues).forEach(values => {
+                            hdnInput.value += values.column + "~";
+                            Array.from(values.values).forEach(row => {
+                                hdnInput.value += row.value + "!" + row.count + "%";
+                            });
+                            hdnInput.value += "\n"
+                        });
+                    }
+                    document.getElementById('<%= btnCreateCharts.ClientID %>').click();
+                    sessionStorage.setItem('firstLoad', 'true');
+                } else {
+                    console.log("Subsequent load");
+                }
+            };
+        </script>
     </form>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-using System.Web.Script.Serialization;
-using System.Web.UI;
-using System.Web.UI.WebControls;
-
-namespace officetoWeb
-{
-    public partial class piechart : System.Web.UI.Page
-    {
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            if (!string.IsNullOrEmpty(Request.QueryString["data"]))
-            {
-                Response.Write("values\n");
-
-                string jsonData = Request.QueryString["data"];
-
-                JavaScriptSerializer serializer = new JavaScriptSerializer();
-                Dictionary<string,List<KeyValuePair<string,int>>> data = serializer.Deserialize<Dictionary<string, List<KeyValuePair<string, int>>>>(jsonData);
-                foreach (var value in data)
-                {
-                    Response.Write(value+"\n");
-                }
-            }
-        }
-    }
-}
