@@ -1,39 +1,37 @@
+using DocumentFormat.OpenXml.Math;
+using OfficeOpenXml;
+using OfficeOpenXml.Drawing;
+using OfficeOpenXml.Drawing.Chart;
 using System;
-using System.Data;
-using System.Data.OleDb;
-using System.Web.UI.WebControls;
+using System.IO;
+using System.Web.UI;
 
-public partial class ExcelRead : System.Web.UI.Page
+namespace WebApplication1
 {
-    protected void Page_Load(object sender, EventArgs e)
+    public partial class _default : System.Web.UI.Page
     {
-        if (!IsPostBack)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            // Excel dosyasının yolunu belirtin
-            string excelFilePath = Server.MapPath("~/App_Data/veriler.xlsx");
-
-            // Excel dosyasını okumak için bağlantı dizesi oluşturun
-            string excelConnString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + excelFilePath + ";Extended Properties=\"Excel 12.0;HDR=YES;IMEX=2\";";
-
-            // Excel dosyasına bağlanın ve veri okuyun
-            using (OleDbConnection excelConn = new OleDbConnection(excelConnString))
+            // Assuming you want to call the function when the page loads
+            if (!IsPostBack)
             {
-                excelConn.Open();
-                DataTable dtExcelSchema;
-                dtExcelSchema = excelConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
-                string sheetName = dtExcelSchema.Rows[0]["TABLE_NAME"].ToString();
-                OleDbCommand cmd = new OleDbCommand("SELECT * FROM [" + sheetName + "]", excelConn);
-                OleDbDataAdapter oda = new OleDbDataAdapter();
-                oda.SelectCommand = cmd;
-                DataTable dt = new DataTable();
-                oda.Fill(dt);
-
-                // DataTable'daki verileri GridView'e bağlayın
-                GridView1.DataSource = dt;
-                GridView1.DataBind();
-
-                excelConn.Close();
+                // Add elements to the array and call the JavaScript function
+                string script = @"<script>printArray('element1');</script>"; // Add more elements if needed
+                ClientScript.RegisterStartupScript(this.GetType(), "CallMyFunction", script);
             }
         }
+
+
+
+
     }
 }
+        < script >
+            var myArray = ["s"];
+
+function printArray(asm)
+{
+    myArray.push(asm);
+    console.log(myArray[1]);
+}
+        </ script >
