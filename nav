@@ -1,13 +1,52 @@
-The 'Microsoft.ACE.OLEDB.12.0' provider is not registered on the local machine.
-Description: An unhandled exception occurred during the execution of the current web request. Please review the stack trace for more information about the error and where it originated in the code.
+using Excel = Microsoft.Office.Interop.Excel;
+using System.Runtime.InteropServices;
 
-Exception Details: System.InvalidOperationException: The 'Microsoft.ACE.OLEDB.12.0' provider is not registered on the local machine.
+namespace ExcelReaderExample
+{
+    public class ExcelReader
+    {
+        public DataTable ReadExcel(string filePath)
+        {
+            Excel.Application excelApp = new Excel.Application();
+            Excel.Workbook excelWorkbook = excelApp.Workbooks.Open(filePath);
+            Excel._Worksheet excelWorksheet = excelWorkbook.Sheets[1];
+            Excel.Range excelRange = excelWorksheet.UsedRange;
 
-Source Error:
+            DataTable dataTable = new DataTable();
 
+            try
+            {
+                int rowCount = excelRange.Rows.Count;
+                int colCount = excelRange.Columns.Count;
 
-Line 21:             using (OleDbConnection excelConn = new OleDbConnection(memberConn))
-Line 22:             {
-Line 23:                 excelConn.Open();
-Line 24:                 DataTable dtExcelSchema;
-Line 25:                 dtExcelSchema = excelConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+                // Sütun başlıklarını ekleme
+                for (int j = 1; j <= colCount; j++)
+                {
+                    dataTable.Columns.Add((string)(excelRange.Cells[1, j] as Excel.Range).Value);
+                }
+
+                // Verileri ekleme
+                for (int i = 2; i <= rowCount; i++)
+                {
+                    DataRow dataRow = dataTable.NewRow();
+                    for (int j = 1; j <= colCount; j++)
+                    {
+                        dataRow[j - 1] = (excelRange.Cells[i, j] as Excel.Range).Value;
+                    }
+                    dataTable.Rows.Add(dataRow);
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(excelRange);
+                Marshal.ReleaseComObject(excelWorksheet);
+                excelWorkbook.Close();
+                Marshal.ReleaseComObject(excelWorkbook);
+                excelApp.Quit();
+                Marshal.ReleaseComObject(excelApp);
+            }
+
+            return dataTable;
+        }
+    }
+}
