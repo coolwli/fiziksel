@@ -1,37 +1,13 @@
-using DocumentFormat.OpenXml.Math;
-using OfficeOpenXml;
-using OfficeOpenXml.Drawing;
-using OfficeOpenXml.Drawing.Chart;
-using System;
-using System.IO;
-using System.Web.UI;
+The 'Microsoft.ACE.OLEDB.12.0' provider is not registered on the local machine.
+Description: An unhandled exception occurred during the execution of the current web request. Please review the stack trace for more information about the error and where it originated in the code.
 
-namespace WebApplication1
-{
-    public partial class _default : System.Web.UI.Page
-    {
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            // Assuming you want to call the function when the page loads
-            if (!IsPostBack)
-            {
-                // Add elements to the array and call the JavaScript function
-                string script = @"<script>printArray('element1');</script>"; // Add more elements if needed
-                ClientScript.RegisterStartupScript(this.GetType(), "CallMyFunction", script);
-            }
-        }
+Exception Details: System.InvalidOperationException: The 'Microsoft.ACE.OLEDB.12.0' provider is not registered on the local machine.
+
+Source Error:
 
 
-
-
-    }
-}
-        < script >
-            var myArray = ["s"];
-
-function printArray(asm)
-{
-    myArray.push(asm);
-    console.log(myArray[1]);
-}
-        </ script >
+Line 21:             using (OleDbConnection excelConn = new OleDbConnection(memberConn))
+Line 22:             {
+Line 23:                 excelConn.Open();
+Line 24:                 DataTable dtExcelSchema;
+Line 25:                 dtExcelSchema = excelConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
