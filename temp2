@@ -1,106 +1,415 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="FileName.aspx.cs" Inherits="WebApplication1.FileName" %>
+<html lang="en">
 
-<!DOCTYPE html>
-
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title></title>
+<head>
+    <meta charset="UTF-8" />
+    <title>Pie Chart Excel</title>
     <style>
         table {
-            width: 100%;
             border-collapse: collapse;
+            width: 100%;
         }
-        th, td {
-            border: 1px solid #dddddd;
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 12px;
             text-align: left;
-            padding: 8px;
         }
+
         th {
             background-color: #f2f2f2;
+            color: #333;
+            font-weight: bold;
+            cursor: pointer;
         }
-        #chartsContainer{
-            display:flex;
-            flex-wrap:wrap;
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
         }
-        .chart-container {
-            margin: 20px;
-            border: 1px solid #ddd;
-            padding: 10px;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #f9f9f9;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+            padding: 12px 16px;
+            z-index: 1;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #808080;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #a9a9a9;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        #rowCounter {
+            font-size: 20px;
+            font-weight: bold;
         }
     </style>
 </head>
+
 <body>
-    <form id="form1" runat="server">
-        <div>
-            <table id="dataTable" runat="server">
+    <div class="table-container">
+        <table>
+            <thead>
                 <tr>
-                    <th>Sütun1</th>
-                    <th>Sütun2</th>
-                    <th>Sütun3</th>
-                    <th>Sütun4</th>
-                    <th>Sütun5</th>
-                </tr>
-                <tr>
-                    <td>Veri1</td>
-                    <td>Veri2</td>
-                    <td>Veri2</td>
-                    <td>Veri4</td>
-                    <td>Veri5</td>
-                </tr>
-                <tr>
-                    <td>Veri3</td>
-                    <td>Veri3</td>
-                    <td>Veri4</td>
-                    <td>Veri3</td>
-                    <td>Veri4</td>
-                </tr>
-                <tr>
-                    <td>Veri4</td>
-                    <td>Veri4</td>
-                    <td>Veri4</td>
-                    <td>Veri2</td>
-                    <td>Veri3</td>
-                </tr>
-                <tr>
-                    <td>Veri3</td>
-                    <td>Veri5</td>
-                    <td>Veri4</td>
-                    <td>Veri2</td>
-                    <td>Veri3</td>
-                </tr>
-            </table>
-            <br />
-            <input type="hidden" value="some hidden controls value" id="hdnTestControl" runat="server" name="hdnTestControl"/>
+                    <th class="dropdown">
+                        Name
+                        <div class="dropdown-content" id="NameDropdown">
+                            <input type="text" id="NameSearch" placeholder="Search"
+                                onkeyup="searchCheckboxes('NameDropdown', 'NameSearch')" />
+                            <div class="checkboxes"></div>
+                        </div>
+                    </th>
+                    <th class="dropdown">
+                        Age
+                        <div class="dropdown-content" id="AgeDropdown">
+                            <input type="text" id="AgeSearch" placeholder="Search"
+                                onkeyup="searchCheckboxes('AgeDropdown', 'AgeSearch')" />
+                            <div class="checkboxes"></div>
 
-            <asp:Button ID="btnCreateCharts" runat="server" Style="display: none;" OnClick="btnCreateCharts_Click" />
-            <div id="chartsContainer" runat="server"></div>
-        </div>
+                        </div>
+                    </th>
+                    <th class="dropdown">
+                        Country
+                        <div class="dropdown-content" id="CountryDropdown">
+                            <input type="text" id="CountrySearch" placeholder="Search"
+                                onkeyup="searchCheckboxes('CountryDropdown', 'CountrySearch')" />
+                            <div class="checkboxes"></div>
+
+                        </div>
+                    </th>
+                    <th class="dropdown">
+                        Occupation
+                        <div class="dropdown-content" id="OccupationDropdown">
+                            <input type="text" id="OccupationSearch" placeholder="Search"
+                                onkeyup="searchCheckboxes('OccupationDropdown', 'OccupationSearch')" />
+                            <div class="checkboxes"></div>
+
+                        </div>
+                    </th>
+                    <th class="dropdown">
+                        Email
+                        <div class="dropdown-content" id="EmailDropdown">
+                            <input type="text" id="EmailSearch" placeholder="Search"
+                                onkeyup="searchCheckboxes('EmailDropdown', 'EmailSearch')" />
+                            <div class="checkboxes"></div>
+
+                        </div>
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <div id="topDiv" style="height: 0;"></div>
+                <!-- Rows will be added dynamically here -->
+            </tbody>
+        </table>
+    </div>
+    <button id="reset-button">Reset</button>
+    <p id="rowCounter"></p>
+    <script>
+        let rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
+        var tableContainer = document.getElementsByClassName("table-container")[0];
+        var filtredRows = Array.from(document.querySelectorAll("tbody tr:not([style='display: none;'])"));
 
 
-        <script>
-            window.onload = function () {
-                if (!sessionStorage.getItem('firstLoad')) {
-                    console.log("First load");
-                    var uniqueValues = JSON.parse(localStorage.getItem('dizi'));
-                    hdnInput = document.getElementById('hdnTestControl');
-                    hdnInput.value = null;
-                    if (uniqueValues) {
-                        Array.from(uniqueValues).forEach(values => {
-                            hdnInput.value += values.column + "~";
-                            Array.from(values.values).forEach(row => {
-                                hdnInput.value += row.value + "!" + row.count + "%";
-                            });
-                            hdnInput.value += "\n"
-                        });
-                    }
-                    document.getElementById('<%= btnCreateCharts.ClientID %>').click();
-                    sessionStorage.setItem('firstLoad', 'true');
-                } else {
-                    console.log("Subsequent load");
+        function add1000rowsTable() {
+            const tableBody = document.getElementById("tableBody");
+            const fragment = document.createDocumentFragment();
+            for (let i = 0; i < 1000; i++) {
+                const row = document.createElement("tr");
+                const name = document.createElement("td");
+                name.textContent = `Name ${i}`;
+                row.appendChild(name);
+
+                const age = document.createElement("td");
+                age.textContent = Math.floor(Math.random() * 100);
+                row.appendChild(age);
+
+                const country = document.createElement("td");
+                country.textContent = `Country ${Math.floor(Math.random() * 3)}`;
+                row.appendChild(country);
+
+                const occupation = document.createElement("td");
+                occupation.textContent = `Occupation ${Math.floor(Math.random() * 10)}`;
+                row.appendChild(occupation);
+
+                const email = document.createElement("td");
+                email.textContent = `Email ${Math.floor(Math.random() * 10)}`;
+                row.appendChild(email);
+
+                fragment.appendChild(row);
+            }
+            tableBody.appendChild(fragment);
+            const botDiv = document.createElement('div');
+            botDiv.id = 'botDiv';
+            botDiv.style.height = '0';
+            tableBody.appendChild(botDiv);
+        }
+        add1000rowsTable();
+
+        const resetButton = document.getElementById("reset-button");
+        resetButton.addEventListener("click", function () {
+            document
+                .querySelectorAll("input[type='checkbox']")
+                .forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            filterTable(null);
+        });
+
+        function generateCheckboxes() {
+            const columns = Array.from(
+                document.querySelectorAll("th.dropdown")
+            );
+            columns.forEach((column) => {
+                const dropdownContent = column.querySelector(".dropdown-content");
+                const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+                const columnName = dropdownContent.id.replace("Dropdown", "");
+
+                checkboxesDiv.innerHTML = "";
+                const selectAllCheckbox = document.createElement("input");
+                selectAllCheckbox.type = "checkbox";
+                selectAllCheckbox.addEventListener("change", function () {
+                    const checkboxes = checkboxesDiv.querySelectorAll(
+                        "input[type='checkbox']"
+                    );
+                    checkboxes.forEach((checkbox) => {
+                        checkbox.checked = selectAllCheckbox.checked;
+                    });
+                    filterTable(columnName);
+                });
+                const selectAllDiv = document.createElement("div");
+
+                selectAllDiv.appendChild(selectAllCheckbox);
+
+                const selectAllLabel = document.createElement("label");
+                selectAllLabel.textContent = "Select All";
+                selectAllDiv.appendChild(selectAllLabel);
+
+                const values = Array.from(
+                    new Set(
+                        Array.from(
+                            document.querySelectorAll(
+                                `td:nth-child(${columns.indexOf(column) + 1})`
+                            )
+                        ).map((td) => td.textContent)
+                    )
+                );
+                selectAllDiv.appendChild(document.createElement("br"));
+                checkboxesDiv.appendChild(selectAllDiv);
+
+                values.forEach((value) => {
+                    const div = document.createElement("div");
+                    const checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
+                    checkbox.value = value;
+                    checkbox.addEventListener("change", function () {
+                        selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
+                        if (!checkbox.checked && selectAll.checked) {
+                            selectAll.checked = false;
+                        }
+                        filterTable(columnName);
+                    });
+                    div.appendChild(checkbox);
+
+                    const label = document.createElement("label");
+                    label.textContent = value;
+                    div.appendChild(label);
+
+                    div.appendChild(document.createElement("br"));
+                    checkboxesDiv.appendChild(div);
+                });
+            });
+        }
+
+        function generateOneColumnCheckboxes(dropdownContent) {
+            const column = dropdownContent.parentElement;
+            const columnName = dropdownContent.id.replace("Dropdown", "");
+            const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+
+            const divs = checkboxesDiv.querySelectorAll("div");
+            divs.forEach((div) => {
+                const checkbox = div.querySelector("input");
+                const label = div.querySelector("label");
+                if (!checkbox.checked && label.textContent !== "Select All") {
+                    checkboxesDiv.removeChild(div);
                 }
-            };
-        </script>
-    </form>
+            });
+            const values = Array.from(
+                new Set(
+                    filtredRows.flatMap(row => Array.from(row.querySelectorAll(
+                        `td:nth-child(${Array.from(document.querySelectorAll("th.dropdown")).indexOf(column) + 1})`
+                    ))).map((td) => td.textContent)
+                )
+            );
+
+            values.forEach((value) => {
+                if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
+                    return;
+                }
+                const div = document.createElement("div");
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = value;
+                checkbox.addEventListener("change", function () {
+                    selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
+                    if (!checkbox.checked && selectAll.checked) {
+                        selectAll.checked = false;
+                    }
+                    filterTable(columnName);
+                });
+                div.appendChild(checkbox);
+
+                const label = document.createElement("label");
+                label.textContent = value;
+                div.appendChild(label);
+
+                div.appendChild(document.createElement("br"));
+                checkboxesDiv.appendChild(div);
+            });
+        }
+
+        function searchCheckboxes(dropdownId, searchId) {
+            const input = document.getElementById(searchId);
+            const filter = input.value.toUpperCase();
+            const checkboxesDiv = document.getElementById(dropdownId).querySelector(".checkboxes");
+            const divs = checkboxesDiv.getElementsByTagName("div");
+            for (let i = 0; i < divs.length; i++) {
+                const label = divs[i].getElementsByTagName("label")[0];
+                const txtValue = label.textContent || label.innerText;
+                if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                    divs[i].style.display = "";
+                } else {
+                    divs[i].style.display = "none";
+                }
+            }
+        }
+
+        function filterTable(columnName) {
+            const columns = Array.from(
+                document.querySelectorAll("th.dropdown")
+            );
+            const filters = {};
+
+            columns.forEach((column) => {
+                const columnName = column.textContent.trim();
+                const dropdownContent = column.querySelector(".dropdown-content");
+                const checkedValues = Array.from(
+                    dropdownContent.querySelectorAll("input:checked")
+                ).map((checkbox) => checkbox.value);
+                filters[columnName.toLowerCase()] = checkedValues;
+            });
+
+            const rows = Array.from(document.querySelectorAll("tbody tr"));
+            rows.forEach((row) => {
+                const cells = Array.from(row.querySelectorAll("td"));
+                const display = cells.every((cell, index) => {
+                    const columnName = columns[index].textContent
+                        .trim()
+                        .toLowerCase();
+                    const cellValue = cell.textContent;
+                    return (
+                        filters[columnName].length === 0 ||
+                        filters[columnName].includes(cellValue)
+                    );
+                })
+                    ? ""
+                    : "none";
+                row.style.display = display;
+            });
+
+            Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
+                if (column.id.replace("Dropdown", "") !== columnName || column.querySelectorAll("input:checked").length === 0) {
+                    generateOneColumnCheckboxes(column);
+                }
+            });
+            Array.from(document.querySelectorAll("tbody tr")).forEach((row) => {
+                row.style.visibility = "";
+            });
+            countDisplayedRows();
+
+        }
+
+        function countDisplayedRows() {
+            filtredRows = Array.from(document.querySelectorAll("tbody tr:not([style='display: none;'])"));
+            rowCounter = filtredRows.length;
+            const counterElement = document.getElementById("rowCounter");
+            counterElement.textContent = "Displayed Rows: " + rowCounter;
+            lazyLoading();
+        }
+
+        generateCheckboxes();
+        countDisplayedRows();
+
+        function lazyLoading() {
+            var tableHeight = document.getElementById('tableBody').clientHeight;
+            var topDiv = document.getElementById('topDiv');
+            var botDiv = document.getElementById('botDiv');
+            if (rowCounter < 50) {
+                return;
+            }
+            var containerHeight = tableContainer.clientHeight;
+            var scrollTop = tableContainer.scrollTop;
+            var scrollPercentage = ((scrollTop / (tableHeight - containerHeight)) * 100);
+            var inScreenRowsCount = parseInt(rowCounter * scrollPercentage / 100);
+            var minRow = inScreenRowsCount - 50;
+            if (minRow < 0) {
+                minRow = 0;
+            }
+            var maxRow = inScreenRowsCount + 50;
+            if (maxRow > rowCounter) {
+                maxRow = rowCounter;
+            }
+            var topHigh = minRow * (tableHeight / filtredRows.length);
+            var botHigh = tableHeight - 400 - topHigh;
+            console.log(scrollPercentage, botHigh, topHigh);
+            topDiv.style.height = topHigh + 'px';
+            botDiv.style.height = botHigh + 'px';
+            filtredRows.forEach((row, index) => {
+                if (index >= minRow && index <= maxRow) {
+                    row.style.display = "block";
+                } else {
+                    row.style.display = "none";
+                }
+            });
+        }
+
+        tableContainer.addEventListener('scroll', lazyLoading);
+    </script>
+
 </body>
+
 </html>
