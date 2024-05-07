@@ -2,16 +2,33 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Pie Chart Excel</title>
+    <title>Table Filter</title>
     <style>
+        body {
+            font-family: Graphik Cond Web, Graphik, Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
         table {
-            border-collapse: collapse;
-            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
         th,
         td {
-            border: 1px solid #ddd;
+            border: none;
             padding: 12px;
             text-align: left;
         }
@@ -47,37 +64,33 @@
             display: block;
         }
 
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 0;
+        .dropdown-arrow {
+            margin-left: 5px;
+            font-size: 10px;
         }
 
         button {
             padding: 10px 20px;
-            background-color: #808080;
+            background-color: black;
             color: white;
             border: none;
             cursor: pointer;
             font-size: 16px;
             border-radius: 4px;
+            transition: background-color 0.3s ease;
+            outline: none;
         }
 
         button:hover {
-            background-color: #a9a9a9;
-        }
-
-        .table-container {
-            max-height: 400px;
-            overflow-y: auto;
+            background-color: #484848;
         }
 
         #rowCounter {
-            font-size: 20px;
+            font-size: 15px;
             font-weight: bold;
         }
     </style>
+
 </head>
 
 <body>
@@ -86,45 +99,40 @@
             <thead>
                 <tr>
                     <th class="dropdown">
-                        Name
+                        Name <span class="dropdown-arrow">&#9660;</span>
                         <div class="dropdown-content" id="NameDropdown">
-                            <input type="text" id="NameSearch" placeholder="Search"
-                                onkeyup="searchCheckboxes('NameDropdown', 'NameSearch')" />
+                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
                             <div class="checkboxes"></div>
                         </div>
                     </th>
                     <th class="dropdown">
-                        Age
+                        Age<span class="dropdown-arrow">&#9660;</span>
                         <div class="dropdown-content" id="AgeDropdown">
-                            <input type="text" id="AgeSearch" placeholder="Search"
-                                onkeyup="searchCheckboxes('AgeDropdown', 'AgeSearch')" />
+                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
                             <div class="checkboxes"></div>
 
                         </div>
                     </th>
                     <th class="dropdown">
-                        Country
+                        Country <span class="dropdown-arrow">&#9660;</span>
                         <div class="dropdown-content" id="CountryDropdown">
-                            <input type="text" id="CountrySearch" placeholder="Search"
-                                onkeyup="searchCheckboxes('CountryDropdown', 'CountrySearch')" />
+                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
                             <div class="checkboxes"></div>
 
                         </div>
                     </th>
                     <th class="dropdown">
-                        Occupation
+                        Occupation <span class="dropdown-arrow">&#9660;</span>
                         <div class="dropdown-content" id="OccupationDropdown">
-                            <input type="text" id="OccupationSearch" placeholder="Search"
-                                onkeyup="searchCheckboxes('OccupationDropdown', 'OccupationSearch')" />
+                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
                             <div class="checkboxes"></div>
 
                         </div>
                     </th>
                     <th class="dropdown">
-                        Email
+                        Email <span class="dropdown-arrow">&#9660;</span>
                         <div class="dropdown-content" id="EmailDropdown">
-                            <input type="text" id="EmailSearch" placeholder="Search"
-                                onkeyup="searchCheckboxes('EmailDropdown', 'EmailSearch')" />
+                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
                             <div class="checkboxes"></div>
 
                         </div>
@@ -132,7 +140,6 @@
                 </tr>
             </thead>
             <tbody id="tableBody">
-                <div id="topDiv" style="height: 0;"></div>
                 <!-- Rows will be added dynamically here -->
             </tbody>
         </table>
@@ -141,15 +148,13 @@
     <p id="rowCounter"></p>
     <script>
         let rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
-        var tableContainer = document.getElementsByClassName("table-container")[0];
-        var filtredRows = Array.from(document.querySelectorAll("tbody tr:not([style='display: none;'])"));
-
-
+        var filtredRows;
         function add1000rowsTable() {
             const tableBody = document.getElementById("tableBody");
             const fragment = document.createDocumentFragment();
             for (let i = 0; i < 1000; i++) {
                 const row = document.createElement("tr");
+                row.classList.add('in-filter');
                 const name = document.createElement("td");
                 name.textContent = `Name ${i}`;
                 row.appendChild(name);
@@ -173,24 +178,10 @@
                 fragment.appendChild(row);
             }
             tableBody.appendChild(fragment);
-            const botDiv = document.createElement('div');
-            botDiv.id = 'botDiv';
-            botDiv.style.height = '0';
-            tableBody.appendChild(botDiv);
+
         }
-        add1000rowsTable();
 
-        const resetButton = document.getElementById("reset-button");
-        resetButton.addEventListener("click", function () {
-            document
-                .querySelectorAll("input[type='checkbox']")
-                .forEach((checkbox) => {
-                    checkbox.checked = false;
-                });
-            filterTable(null);
-        });
-
-        function generateCheckboxes() {
+        function generateTable() {
             const columns = Array.from(
                 document.querySelectorAll("th.dropdown")
             );
@@ -255,12 +246,12 @@
             });
         }
 
-        function generateOneColumnCheckboxes(dropdownContent) {
+        function generateColumnCheckboxes(dropdownContent) {
             const column = dropdownContent.parentElement;
             const columnName = dropdownContent.id.replace("Dropdown", "");
             const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-
             const divs = checkboxesDiv.querySelectorAll("div");
+
             divs.forEach((div) => {
                 const checkbox = div.querySelector("input");
                 const label = div.querySelector("label");
@@ -302,22 +293,6 @@
             });
         }
 
-        function searchCheckboxes(dropdownId, searchId) {
-            const input = document.getElementById(searchId);
-            const filter = input.value.toUpperCase();
-            const checkboxesDiv = document.getElementById(dropdownId).querySelector(".checkboxes");
-            const divs = checkboxesDiv.getElementsByTagName("div");
-            for (let i = 0; i < divs.length; i++) {
-                const label = divs[i].getElementsByTagName("label")[0];
-                const txtValue = label.textContent || label.innerText;
-                if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                    divs[i].style.display = "";
-                } else {
-                    divs[i].style.display = "none";
-                }
-            }
-        }
-
         function filterTable(columnName) {
             const columns = Array.from(
                 document.querySelectorAll("th.dropdown")
@@ -336,7 +311,7 @@
             const rows = Array.from(document.querySelectorAll("tbody tr"));
             rows.forEach((row) => {
                 const cells = Array.from(row.querySelectorAll("td"));
-                const display = cells.every((cell, index) => {
+                const inFilter = cells.every((cell, index) => {
                     const columnName = columns[index].textContent
                         .trim()
                         .toLowerCase();
@@ -346,68 +321,65 @@
                         filters[columnName].includes(cellValue)
                     );
                 })
-                    ? ""
-                    : "none";
-                row.style.display = display;
-            });
-
-            Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
-                if (column.id.replace("Dropdown", "") !== columnName || column.querySelectorAll("input:checked").length === 0) {
-                    generateOneColumnCheckboxes(column);
+                    ? true
+                    : false;
+                if (inFilter) {
+                    row.classList.add('in-filter');
+                }
+                else {
+                    row.classList.remove('in-filter');
                 }
             });
-            Array.from(document.querySelectorAll("tbody tr")).forEach((row) => {
-                row.style.visibility = "";
-            });
             countDisplayedRows();
+
+            Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
+                if (column.id !== columnName || column.querySelectorAll("input:checked").length === 0) {
+                    generateColumnCheckboxes(column);
+                }
+            });
 
         }
 
         function countDisplayedRows() {
-            filtredRows = Array.from(document.querySelectorAll("tbody tr:not([style='display: none;'])"));
+            filtredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
             rowCounter = filtredRows.length;
             const counterElement = document.getElementById("rowCounter");
             counterElement.textContent = "Displayed Rows: " + rowCounter;
-            lazyLoading();
         }
 
-        generateCheckboxes();
+        add1000rowsTable();
+        generateTable();
         countDisplayedRows();
 
-        function lazyLoading() {
-            var tableHeight = document.getElementById('tableBody').clientHeight;
-            var topDiv = document.getElementById('topDiv');
-            var botDiv = document.getElementById('botDiv');
-            if (rowCounter < 50) {
-                return;
-            }
-            var containerHeight = tableContainer.clientHeight;
-            var scrollTop = tableContainer.scrollTop;
-            var scrollPercentage = ((scrollTop / (tableHeight - containerHeight)) * 100);
-            var inScreenRowsCount = parseInt(rowCounter * scrollPercentage / 100);
-            var minRow = inScreenRowsCount - 50;
-            if (minRow < 0) {
-                minRow = 0;
-            }
-            var maxRow = inScreenRowsCount + 50;
-            if (maxRow > rowCounter) {
-                maxRow = rowCounter;
-            }
-            var topHigh = minRow * (tableHeight / filtredRows.length);
-            var botHigh = tableHeight - 400 - topHigh;
-            console.log(scrollPercentage, botHigh, topHigh);
-            topDiv.style.height = topHigh + 'px';
-            botDiv.style.height = botHigh + 'px';
-            filtredRows.forEach((row, index) => {
-                if (index >= minRow && index <= maxRow) {
-                    row.style.display = "block";
+    </script>
+    <script>
+        const resetButton = document.getElementById("reset-button");
+
+        function searchCheckboxes(searchInput) {
+            const filter = searchInput.value.toUpperCase();
+            const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
+            const divs = checkboxesDiv.getElementsByTagName("div");
+            for (let i = 0; i < divs.length; i++) {
+                const label = divs[i].getElementsByTagName("label")[0];
+                const txtValue = label.textContent || label.innerText;
+                if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                    divs[i].style.display = "";
                 } else {
-                    row.style.display = "none";
+                    divs[i].style.display = "none";
                 }
-            });
+            }
         }
 
-        tableContainer.addEventListener('scroll', lazyLoading);
+        resetButton.addEventListener("click", function () {
+            document
+                .querySelectorAll("input[type='checkbox']")
+                .forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+            filterTable(null);
+        });
+
+
     </script>
 
 </body>
