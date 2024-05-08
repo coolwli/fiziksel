@@ -1,52 +1,148 @@
+using OfficeOpenXml;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Web.UI.DataVisualization.Charting;
+using System.Web.UI.HtmlControls;
 using Excel = Microsoft.Office.Interop.Excel;
-using System.Runtime.InteropServices;
 
-namespace ExcelReaderExample
+namespace WebApplication1
 {
-    public class ExcelReader
+    public partial class _default : System.Web.UI.Page
     {
-        public DataTable ReadExcel(string filePath)
+        Dictionary<string, Dictionary<string, int>> columnUniqueValuesCount;
+
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            columnUniqueValuesCount = new Dictionary<string, Dictionary<string, int>>();
+
+            for (int rowIndex = 1; rowIndex < dataTable.Rows.Count; rowIndex++)
+            {
+                HtmlTableRow row = dataTable.Rows[rowIndex];
+                for (int i = 0; i < row.Cells.Count; i++)
+                {
+                    string columnName = dataTable.Rows[0].Cells[i].InnerText;
+                    string cellValue = row.Cells[i].InnerText;
+
+                    if (!columnUniqueValuesCount.ContainsKey(columnName))
+                    {
+                        columnUniqueValuesCount[columnName] = new Dictionary<string, int>();
+                    }
+
+                    if (!columnUniqueValuesCount[columnName].ContainsKey(cellValue))
+                    {
+                        columnUniqueValuesCount[columnName][cellValue] = 1;
+                    }
+                    else
+                    {
+                        columnUniqueValuesCount[columnName][cellValue]++;
+                    }
+                }
+            }
+            foreach (var column in columnUniqueValuesCount)
+            {
+                HtmlGenericControl divChart = new HtmlGenericControl("div");
+                divChart.Attributes["class"] = "chart-container";
+
+                Chart chart = new Chart();
+                chart.Width = 300;
+                chart.Height = 300;
+                chart.ChartAreas.Add(new ChartArea());
+                chart.Titles.Add(column.Key + " Grafiği");
+
+                Series series = new Series();
+                series.ChartType = SeriesChartType.Pie;
+                series.IsValueShownAsLabel = false;
+
+                foreach (var valueCount in column.Value)
+                {
+                    DataPoint point = new DataPoint();
+
+                    point.SetValueY(valueCount.Value);
+                    point.LegendText = $"{valueCount.Key} ({valueCount.Value})";
+                    series.Points.Add(point);
+                }
+
+                chart.Series.Add(series);
+
+                Legend legend = new Legend();
+                legend.Docking = Docking.Bottom;
+                chart.Legends.Add(legend);
+
+                divChart.Controls.Add(chart);
+
+                chartsContainer.Controls.Add(divChart);
+            }
+
+        }
+        protected void btnCreateCharts_Click(object sender, EventArgs e)
         {
             Excel.Application excelApp = new Excel.Application();
-            Excel.Workbook excelWorkbook = excelApp.Workbooks.Open(filePath);
-            Excel._Worksheet excelWorksheet = excelWorkbook.Sheets[1];
-            Excel.Range excelRange = excelWorksheet.UsedRange;
+            Excel.Workbook workbook = excelApp.Workbooks.Add();
+            Excel._Worksheet worksheet = workbook.ActiveSheet;
+            worksheet.Name = "Charts";
 
-            DataTable dataTable = new DataTable();
+            int startRow = 1;
 
-            try
+            foreach (var column in columnUniqueValuesCount)
             {
-                int rowCount = excelRange.Rows.Count;
-                int colCount = excelRange.Columns.Count;
+                int startColumn = 1;
+                Excel.Range target = worksheet.Cells[startRow, 5];
+                Excel.ChartObjects chartObjects = (Excel.ChartObjects)worksheet.ChartObjects(Type.Missing);
+                Excel.ChartObject chartObject = chartObjects.Add((int)target.Left, (int)target.Top, 300, 300);
 
-                // Sütun başlıklarını ekleme
-                for (int j = 1; j <= colCount; j++)
+                Excel.Chart chart = chartObject.Chart;
+                chart.ChartType = Excel.XlChartType.xlPie;
+                chart.HasTitle = true;
+                chart.ChartTitle.Text = column.Key;
+
+                worksheet.Cells[startRow, startColumn].Value = column.Key;
+                worksheet.Cells[startRow, startColumn + 1].Value = "Value";
+                worksheet.Cells[startRow, startColumn + 2].Value = "Percentage";
+
+                startRow++;
+                int dataStartRow = startRow;
+                int total = column.Value.Sum(x => x.Value);
+                foreach (var valueCount in column.Value)
                 {
-                    dataTable.Columns.Add((string)(excelRange.Cells[1, j] as Excel.Range).Value);
+                    worksheet.Cells[startRow, startColumn].Value = $"{valueCount.Key} ({valueCount.Value})"; 
+                    worksheet.Cells[startRow, startColumn + 1].Value = valueCount.Value;
+                    double percentage = (double)valueCount.Value / total * 100;
+                    worksheet.Cells[startRow, startColumn + 2].Value = $"%{percentage:F2}"; 
+                    startRow++;
                 }
 
-                // Verileri ekleme
-                for (int i = 2; i <= rowCount; i++)
-                {
-                    DataRow dataRow = dataTable.NewRow();
-                    for (int j = 1; j <= colCount; j++)
-                    {
-                        dataRow[j - 1] = (excelRange.Cells[i, j] as Excel.Range).Value;
-                    }
-                    dataTable.Rows.Add(dataRow);
-                }
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(excelRange);
-                Marshal.ReleaseComObject(excelWorksheet);
-                excelWorkbook.Close();
-                Marshal.ReleaseComObject(excelWorkbook);
-                excelApp.Quit();
-                Marshal.ReleaseComObject(excelApp);
+                Excel.Range chartDataRange = worksheet.Range[worksheet.Cells[dataStartRow, startColumn + 1], worksheet.Cells[dataStartRow + column.Value.Count - 1, startColumn + 1]];
+                Excel.Range chartLabelsRange = worksheet.Range[worksheet.Cells[dataStartRow, startColumn], worksheet.Cells[dataStartRow + column.Value.Count - 1, startColumn]];
+
+                Excel.SeriesCollection seriesCollection = chart.SeriesCollection();
+                Excel.Series series = seriesCollection.NewSeries();
+                series.XValues = chartLabelsRange;
+                series.Values = chartDataRange;
+
+                series.ApplyDataLabels(Excel.XlDataLabelsType.xlDataLabelsShowLabelAndPercent);
+                startRow = startRow + 20; // Space between charts
             }
 
-            return dataTable;
+            // Geçici dosya yolunu oluştur
+            string tempFilePath = Path.GetTempFileName();
+            string excelFilePath = Path.ChangeExtension(tempFilePath, "xlsx");
+
+            // Excel dosyasını kaydet
+            workbook.SaveAs(excelFilePath);
+
+            // Clean up
+            workbook.Close();
+            excelApp.Quit();
+
+            // Send the file to the browser
+            Response.Clear();
+            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            Response.AppendHeader("Content-Disposition", "attachment; filename=pieCharts.xlsx");
+            Response.TransmitFile(excelFilePath);
+            Response.End();
         }
+
     }
 }
