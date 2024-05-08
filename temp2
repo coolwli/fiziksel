@@ -1,19 +1,57 @@
-<html lang="en">
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="tableOrganizer._default" %>
+
+<!DOCTYPE html>
+<html lang="tr">
 
 <head>
-    <meta charset="UTF-8" />
-    <title>Table Filter</title>
+    <meta charset="UTF-8">
+    <title>Cloud United</title>
     <style>
         body {
-            font-family: Graphik Cond Web, Graphik, Arial, sans-serif;
-            background-color: #f5f5f5;
+            font-family: Verdana;
             margin: 0;
             padding: 0;
+            background-color: #f0f0f0;
         }
 
-        .table-container {
-            max-height: 600px;
-            overflow-y: auto;
+        .header {
+            overflow: hidden;
+            background-color: black;
+        }
+
+            .header h1 {
+                float: left;
+                text-align: center;
+                text-decoration: none;
+                line-height: 10px;
+                border-radius: 4px;
+                color: #F8F9FA;
+                margin-top: 30px;
+                margin-left: 10px;
+            }
+
+        #logo {
+            background-image: url('logo.png');
+            background-repeat: no-repeat;
+            background-size: cover;
+            float: right;
+            width: 55px;
+            height: 70px;
+            margin-right: 10px;
+        }
+
+
+
+        footer {
+            text-align: center;
+            background-color: #f2f2f2;
+            padding: 10px;
+        }
+
+        .footer {
+            display: block;
+            font-size: 14px;
+            color: #888;
         }
 
         table {
@@ -24,6 +62,7 @@
             margin: 20px auto;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            font-size:12px;
         }
 
         th,
@@ -89,140 +128,294 @@
             font-size: 15px;
             font-weight: bold;
         }
-    </style>
 
-</head>
-
-<body>
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th class="dropdown">
-                        Name <span class="dropdown-arrow">&#9660;</span>
-                        <div class="dropdown-content" id="NameDropdown">
-                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                            <div class="checkboxes"></div>
-                        </div>
-                    </th>
-                    <th class="dropdown">
-                        Age<span class="dropdown-arrow">&#9660;</span>
-                        <div class="dropdown-content" id="AgeDropdown">
-                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                            <div class="checkboxes"></div>
-
-                        </div>
-                    </th>
-                    <th class="dropdown">
-                        Country <span class="dropdown-arrow">&#9660;</span>
-                        <div class="dropdown-content" id="CountryDropdown">
-                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                            <div class="checkboxes"></div>
-
-                        </div>
-                    </th>
-                    <th class="dropdown">
-                        Occupation <span class="dropdown-arrow">&#9660;</span>
-                        <div class="dropdown-content" id="OccupationDropdown">
-                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                            <div class="checkboxes"></div>
-
-                        </div>
-                    </th>
-                    <th class="dropdown">
-                        Email <span class="dropdown-arrow">&#9660;</span>
-                        <div class="dropdown-content" id="EmailDropdown">
-                            <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                            <div class="checkboxes"></div>
-
-                        </div>
-                    </th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <!-- Rows will be added dynamically here -->
-            </tbody>
-        </table>
-    </div>
-    <button id="reset-button">Reset</button>
-    <p id="rowCounter"></p>
-    <script>
-        let rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
-        var filtredRows;
-        function add1000rowsTable() {
-            const tableBody = document.getElementById("tableBody");
-            const fragment = document.createDocumentFragment();
-            for (let i = 0; i < 1000; i++) {
-                const row = document.createElement("tr");
-                row.classList.add('in-filter');
-                const name = document.createElement("td");
-                name.textContent = `Name ${i}`;
-                row.appendChild(name);
-
-                const age = document.createElement("td");
-                age.textContent = Math.floor(Math.random() * 100);
-                row.appendChild(age);
-
-                const country = document.createElement("td");
-                country.textContent = `Country ${Math.floor(Math.random() * 3)}`;
-                row.appendChild(country);
-
-                const occupation = document.createElement("td");
-                occupation.textContent = `Occupation ${Math.floor(Math.random() * 10)}`;
-                row.appendChild(occupation);
-
-                const email = document.createElement("td");
-                email.textContent = `Email ${Math.floor(Math.random() * 10)}`;
-                row.appendChild(email);
-
-                fragment.appendChild(row);
-            }
-            tableBody.appendChild(fragment);
-
+                .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom:20px;
         }
 
-        function generateTable() {
-            const columns = Array.from(
-                document.querySelectorAll("th.dropdown")
-            );
-            columns.forEach((column) => {
-                const dropdownContent = column.querySelector(".dropdown-content");
-                const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-                const columnName = dropdownContent.id.replace("Dropdown", "");
+        .page-link {
+            display: inline-block;
+            padding: 8px;
+            margin: 0 4px;
+            text-decoration: none;
+            cursor: pointer;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
 
-                checkboxesDiv.innerHTML = "";
-                const selectAllCheckbox = document.createElement("input");
-                selectAllCheckbox.type = "checkbox";
-                selectAllCheckbox.addEventListener("change", function () {
-                    const checkboxes = checkboxesDiv.querySelectorAll(
-                        "input[type='checkbox']"
-                    );
-                    checkboxes.forEach((checkbox) => {
-                        checkbox.checked = selectAllCheckbox.checked;
+        .page-link.active {
+            background-color: black;
+            color: white;
+        }
+
+    </style>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div class="header">
+            <div>
+                <h1 class="baslik" id="baslik" runat="server">Table Organizer Example</h1>
+            </div>
+            <div id="logo"></div>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="dropdown">
+                            Name <span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="NameDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Age<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="AgeDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="checkboxes"></div>
+
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Country <span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="CountryDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="checkboxes"></div>
+
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Occupation <span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="OccupationDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="checkboxes"></div>
+
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Email <span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="EmailDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="checkboxes"></div>
+
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- Rows will be added dynamically here -->
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+
+        <button id="reset-button">Reset</button>
+        <p id="rowCounter"></p>
+
+        <script>
+            const maxPage = 10;
+            const rowsPerPage = 20;
+            const paginationElement = document.getElementById("pagination");
+
+            var rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
+            var currentPage=1;
+            var filtredRows;
+
+            function displayRows() {
+                let length = currentPage * rowsPerPage;
+                if (length > rowCounter) length = rowCounter;
+                //console.log(length-(currentPage-1) * rowsPerPage);
+
+                for (let i = 0; i <  Array.from(document.querySelectorAll("tbody tr")).length; i++) {
+                      Array.from(document.querySelectorAll("tbody tr"))[i].style.display = 'none';
+
+                }
+                for (let i = (currentPage - 1) * rowsPerPage; i < length; i++) {
+                    filtredRows[i].style.display = '';
+                }
+
+            }
+
+            function setupPagination(start, end) {
+                if (rowCounter <= 0) return;
+                paginationElement.innerHTML = '';
+                if ((end - start) >= (maxPage - 1)) end = maxPage + start - 1;
+
+                for (let i = start; i <= end; i++) {
+                    const pageLink = document.createElement('a');
+                    pageLink.innerText = i;
+
+                    if (i === currentPage) {
+                        pageLink.classList.add('page-link', 'active');
+                    } else {
+                        pageLink.classList.add('page-link');
+                    }
+
+                    pageLink.addEventListener('click', function () {
+                        currentPage = i;
+                        displayRows();
+                        updatePagination();
                     });
-                    filterTable(columnName);
+
+                    paginationElement.appendChild(pageLink);
+                }
+            } 
+
+            function updatePagination() {
+                const pageLinks = document.querySelectorAll('.page-link');
+                pageLinks.forEach(link => link.classList.remove('active'));
+                if (Math.ceil(rowCounter / rowsPerPage) > maxPage) {
+                    if (currentPage > (maxPage / 2)) {
+                        setupPagination(currentPage - (maxPage / 2), Math.ceil(rowCounter / rowsPerPage));
+                        pageLinks[maxPage / 2].classList.add('active');
+
+                    }
+                    else {
+                        setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
+                        pageLinks[currentPage - 1].classList.add('active');
+                    }
+                }
+                else {
+                    pageLinks[currentPage - 1].classList.add('active');
+
+                }
+            }
+            
+        </script>
+
+        <script>
+            function add1000rowsTable() {
+                const tableBody = document.getElementById("tableBody");
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < 1000; i++) {
+                    const row = document.createElement("tr");
+                    row.classList.add('in-filter');
+                    row.style.display = "none";
+                    const name = document.createElement("td");
+                    name.textContent = `Name ${i}`;
+                    row.appendChild(name);
+
+                    const age = document.createElement("td");
+                    age.textContent = Math.floor(Math.random() * 100);
+                    row.appendChild(age);
+
+                    const country = document.createElement("td");
+                    country.textContent = `Country ${Math.floor(Math.random() * 3)}`;
+                    row.appendChild(country);
+
+                    const occupation = document.createElement("td");
+                    occupation.textContent = `Occupation ${Math.floor(Math.random() * 10)}`;
+                    row.appendChild(occupation);
+
+                    const email = document.createElement("td");
+                    email.textContent = `Email ${Math.floor(Math.random() * 10)}`;
+                    row.appendChild(email);
+
+                    fragment.appendChild(row);
+                }
+                tableBody.appendChild(fragment);
+
+            }
+
+            function generateTable() {
+                const columns = Array.from(
+                    document.querySelectorAll("th.dropdown")
+                );
+                columns.forEach((column) => {
+                    const dropdownContent = column.querySelector(".dropdown-content");
+                    const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+                    const columnName = dropdownContent.id;
+
+                    checkboxesDiv.innerHTML = "";
+                    const selectAllCheckbox = document.createElement("input");
+                    selectAllCheckbox.type = "checkbox";
+                    selectAllCheckbox.addEventListener("change", function () {
+                        const checkboxes = checkboxesDiv.querySelectorAll(
+                            "input[type='checkbox']"
+                        );
+                        checkboxes.forEach((checkbox) => {
+                            checkbox.checked = selectAllCheckbox.checked;
+                        });
+                        filterTable(columnName);
+                    });
+                    const selectAllDiv = document.createElement("div");
+
+                    selectAllDiv.appendChild(selectAllCheckbox);
+
+                    const selectAllLabel = document.createElement("label");
+                    selectAllLabel.textContent = "Select All";
+                    selectAllDiv.appendChild(selectAllLabel);
+
+                    const values = Array.from(
+                        new Set(
+                            Array.from(
+                                document.querySelectorAll(
+                                    `td:nth-child(${columns.indexOf(column) + 1})`
+                                )
+                            ).map((td) => td.textContent)
+                        )
+                    );
+                    selectAllDiv.appendChild(document.createElement("br"));
+                    checkboxesDiv.appendChild(selectAllDiv);
+
+                    values.forEach((value) => {
+                        const div = document.createElement("div");
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.value = value;
+                        checkbox.addEventListener("change", function () {
+                            selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
+                            if (!checkbox.checked && selectAll.checked) {
+                                selectAll.checked = false;
+                            }
+                            filterTable(columnName);
+                        });
+                        div.appendChild(checkbox);
+
+                        const label = document.createElement("label");
+                        label.textContent = value;
+                        div.appendChild(label);
+
+                        div.appendChild(document.createElement("br"));
+                        checkboxesDiv.appendChild(div);
+                    });
                 });
-                const selectAllDiv = document.createElement("div");
+                updateCount();
+                displayRows();
+                setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
 
-                selectAllDiv.appendChild(selectAllCheckbox);
+            }
 
-                const selectAllLabel = document.createElement("label");
-                selectAllLabel.textContent = "Select All";
-                selectAllDiv.appendChild(selectAllLabel);
+            function generateColumnCheckboxes(dropdownContent) {
+                const column = dropdownContent.parentElement;
+                const columnName = dropdownContent.id;
+                const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+                const divs = checkboxesDiv.querySelectorAll("div");
 
+                divs.forEach((div) => {
+                    const checkbox = div.querySelector("input");
+                    const label = div.querySelector("label");
+                    if (!checkbox.checked && label.textContent !== "Select All") {
+                        checkboxesDiv.removeChild(div);
+                    }
+                });
                 const values = Array.from(
                     new Set(
-                        Array.from(
-                            document.querySelectorAll(
-                                `td:nth-child(${columns.indexOf(column) + 1})`
-                            )
-                        ).map((td) => td.textContent)
+                        filtredRows.flatMap(row => Array.from(row.querySelectorAll(
+                            `td:nth-child(${Array.from(document.querySelectorAll("th.dropdown")).indexOf(column) + 1})`
+                        ))).map((td) => td.textContent)
                     )
                 );
-                selectAllDiv.appendChild(document.createElement("br"));
-                checkboxesDiv.appendChild(selectAllDiv);
 
                 values.forEach((value) => {
+                    if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
+                        return;
+                    }
                     const div = document.createElement("div");
                     const checkbox = document.createElement("input");
                     checkbox.type = "checkbox";
@@ -243,145 +436,100 @@
                     div.appendChild(document.createElement("br"));
                     checkboxesDiv.appendChild(div);
                 });
-            });
-        }
+            }
 
-        function generateColumnCheckboxes(dropdownContent) {
-            const column = dropdownContent.parentElement;
-            const columnName = dropdownContent.id.replace("Dropdown", "");
-            const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-            const divs = checkboxesDiv.querySelectorAll("div");
+            function filterTable(columnName) {
+                const columns = Array.from(
+                    document.querySelectorAll("th.dropdown")
+                );
+                const filters = {};
 
-            divs.forEach((div) => {
-                const checkbox = div.querySelector("input");
-                const label = div.querySelector("label");
-                if (!checkbox.checked && label.textContent !== "Select All") {
-                    checkboxesDiv.removeChild(div);
-                }
-            });
-            const values = Array.from(
-                new Set(
-                    filtredRows.flatMap(row => Array.from(row.querySelectorAll(
-                        `td:nth-child(${Array.from(document.querySelectorAll("th.dropdown")).indexOf(column) + 1})`
-                    ))).map((td) => td.textContent)
-                )
-            );
-
-            values.forEach((value) => {
-                if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
-                    return;
-                }
-                const div = document.createElement("div");
-                const checkbox = document.createElement("input");
-                checkbox.type = "checkbox";
-                checkbox.value = value;
-                checkbox.addEventListener("change", function () {
-                    selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
-                    if (!checkbox.checked && selectAll.checked) {
-                        selectAll.checked = false;
-                    }
-                    filterTable(columnName);
+                columns.forEach((column) => {
+                    const columnName = column.textContent.trim();
+                    const dropdownContent = column.querySelector(".dropdown-content");
+                    const checkedValues = Array.from(
+                        dropdownContent.querySelectorAll("input:checked")
+                    ).map((checkbox) => checkbox.value);
+                    filters[columnName.toLowerCase()] = checkedValues;
                 });
-                div.appendChild(checkbox);
 
-                const label = document.createElement("label");
-                label.textContent = value;
-                div.appendChild(label);
+                const rows = Array.from(document.querySelectorAll("tbody tr"));
+                rows.forEach((row) => {
+                    const cells = Array.from(row.querySelectorAll("td"));
+                    const inFilter = cells.every((cell, index) => {
+                        const columnName = columns[index].textContent
+                            .trim()
+                            .toLowerCase();
+                        const cellValue = cell.textContent;
+                        return (
+                            filters[columnName].length === 0 ||
+                            filters[columnName].includes(cellValue)
+                        );
+                    })
+                        ? true
+                        : false;
+                    if (inFilter) {
+                        row.classList.add('in-filter');
+                    }
+                    else {
+                        row.classList.remove('in-filter');
+                    }
+                });
+                updateCount();
+                currentPage = 1;
+                setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
+                updatePagination();
+                displayRows();
 
-                div.appendChild(document.createElement("br"));
-                checkboxesDiv.appendChild(div);
-            });
-        }
 
-        function filterTable(columnName) {
-            const columns = Array.from(
-                document.querySelectorAll("th.dropdown")
-            );
-            const filters = {};
+                Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
+                    if (column.id !== columnName|| column.querySelectorAll("input:checked").length === 0) {
+                        console.log(column.id,columnName);
+                        generateColumnCheckboxes(column);
+                    }
+                });
 
-            columns.forEach((column) => {
-                const columnName = column.textContent.trim();
-                const dropdownContent = column.querySelector(".dropdown-content");
-                const checkedValues = Array.from(
-                    dropdownContent.querySelectorAll("input:checked")
-                ).map((checkbox) => checkbox.value);
-                filters[columnName.toLowerCase()] = checkedValues;
-            });
+            }
 
-            const rows = Array.from(document.querySelectorAll("tbody tr"));
-            rows.forEach((row) => {
-                const cells = Array.from(row.querySelectorAll("td"));
-                const inFilter = cells.every((cell, index) => {
-                    const columnName = columns[index].textContent
-                        .trim()
-                        .toLowerCase();
-                    const cellValue = cell.textContent;
-                    return (
-                        filters[columnName].length === 0 ||
-                        filters[columnName].includes(cellValue)
-                    );
-                })
-                    ? true
-                    : false;
-                if (inFilter) {
-                    row.classList.add('in-filter');
-                }
-                else {
-                    row.classList.remove('in-filter');
-                }
-            });
-            countDisplayedRows();
+            function updateCount() {
+                filtredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
+                rowCounter = filtredRows.length;
+                const counterElement = document.getElementById("rowCounter");
+                counterElement.textContent = "Displayed Rows: " + rowCounter;
 
-            Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
-                if (column.id !== columnName || column.querySelectorAll("input:checked").length === 0) {
-                    generateColumnCheckboxes(column);
-                }
-            });
+            }
 
-        }
+            add1000rowsTable();
+            generateTable();
 
-        function countDisplayedRows() {
-            filtredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
-            rowCounter = filtredRows.length;
-            const counterElement = document.getElementById("rowCounter");
-            counterElement.textContent = "Displayed Rows: " + rowCounter;
-        }
+        </script>
+        <script>
+            const resetButton = document.getElementById("reset-button");
 
-        add1000rowsTable();
-        generateTable();
-        countDisplayedRows();
-
-    </script>
-    <script>
-        const resetButton = document.getElementById("reset-button");
-
-        function searchCheckboxes(searchInput) {
-            const filter = searchInput.value.toUpperCase();
-            const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
-            const divs = checkboxesDiv.getElementsByTagName("div");
-            for (let i = 0; i < divs.length; i++) {
-                const label = divs[i].getElementsByTagName("label")[0];
-                const txtValue = label.textContent || label.innerText;
-                if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                    divs[i].style.display = "";
-                } else {
-                    divs[i].style.display = "none";
+            function searchCheckboxes(searchInput) {
+                const filter = searchInput.value.toUpperCase();
+                const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
+                const divs = checkboxesDiv.getElementsByTagName("div");
+                for (let i = 0; i < divs.length; i++) {
+                    const label = divs[i].getElementsByTagName("label")[0];
+                    const txtValue = label.textContent || label.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        divs[i].style.display = "";
+                    } else {
+                        divs[i].style.display = "none";
+                    }
                 }
             }
-        }
 
-        resetButton.addEventListener("click", function () {
-            document
-                .querySelectorAll("input[type='checkbox']")
-                .forEach((checkbox) => {
-                    checkbox.checked = false;
-                });
-            filterTable(null);
-        });
+            resetButton.addEventListener("click", function () {
+                document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+                        checkbox.checked = false;
+                    });
+                filterTable(null);
+            });
 
 
-    </script>
-
+        </script>
+    </form>
 </body>
-
 </html>
