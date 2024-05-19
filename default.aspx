@@ -407,6 +407,8 @@
                     const values = Array.from(new Set(Array.from(
                         document.querySelectorAll(`td:nth-child(${columns.indexOf(column) + 2})`)).map((td) => td.textContent)));
 
+                    values.sort();
+
                     const fragment = document.createDocumentFragment();
                     values.forEach((value) => {
                         const div = document.createElement("div");
@@ -453,6 +455,8 @@
 
                 const values = Array.from(new Set(Array.from(
                     document.querySelectorAll(`tr.in-filter td:nth-child(${columnIndex})`)).map((td) => td.textContent)));
+
+                    values.sort();
 
                 const fragment = document.createDocumentFragment();
                 values.forEach((value) => {
