@@ -1,23 +1,32 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="vminfo._default" %>
-
 <html>
+
 <head runat="server">
     <title>All VMs</title>
     <style>
+        :root {
+            --primary-color: black;
+            --secondary-color: #383d42;
+            --background-color: #fff;
+            --text-color: #333;
+            --hover-color: #484848;
+        }
+
         body {
             font-family: Verdana;
             margin: 0;
             padding: 0;
             background-color: #fff;
         }
+
         .header {
             overflow: hidden;
             background-color: black;
         }
+
         .header a {
             color: white;
             text-decoration: none;
-            float:left;
+            float: left;
             text-transform: uppercase;
             padding: 10px 15px;
             line-height: 10px;
@@ -25,13 +34,16 @@
             text-align: center;
             border-radius: 4px;
         }
+
         .header a:hover {
-            background-color:  #383d42;
+            background-color: #383d42;
         }
+
         .header a.active {
             background-color: #383d42;
             color: white;
         }
+
         .header a:not(:last-child)::after {
             content: '|';
             position: absolute;
@@ -39,38 +51,44 @@
             top: 50%;
             transform: translateY(-50%);
         }
+
         #logo {
             background-image: url('logo.png');
             background-repeat: no-repeat;
-            background-size: cover;float:right;
+            background-size: cover;
+            float: right;
             width: 55px;
             height: 70px;
-            margin-right:10px;
+            margin-right: 10px;
         }
+
         footer {
             text-align: center;
             background-color: #f2f2f2;
             padding: 10px;
         }
+
         .footer {
             display: block;
             font-size: 14px;
             color: #888;
         }
 
-        #vcDropdown{
+        #vcDropdown {
             text-transform: uppercase;
             padding: 10px 15px;
-            margin:10px 2px;
+            margin: 10px 2px;
 
         }
+
         #nameInput {
             width: 75%;
             padding: 9px 15px;
-            margin:10px 2px;
+            margin: 10px 2px;
 
 
         }
+
         table {
             border-collapse: separate;
             border-spacing: 0;
@@ -78,7 +96,7 @@
             margin: 5px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            font-size:10px;
+            font-size: 10px;
         }
 
         th,
@@ -93,7 +111,7 @@
             color: #333;
             font-weight: bold;
             cursor: pointer;
-            width:auto
+            width: auto
         }
 
         tr:nth-child(even) {
@@ -114,7 +132,7 @@
             z-index: 1;
             max-height: 200px;
             overflow-y: auto;
-            text-align:left;
+            text-align: left;
         }
 
         .dropdown:hover .dropdown-content {
@@ -151,7 +169,7 @@
             display: flex;
             justify-content: center;
             margin-top: 20px;
-            margin-bottom:20px;
+            margin-bottom: 20px;
         }
 
         .page-link {
@@ -171,17 +189,24 @@
         }
     </style>
 </head>
+
 <body>
     <form id="form1" runat="server">
         <div class="header">
             <div>
-                <a class="active"><h2>VM</h2></a>
-                <a href="vmhost.aspx"><h2>VM Host</h2></a>
-                <a href="cluster.aspx"><h2>Cluster</h2></a>
+                <a class="active">
+                    <h2>VM</h2>
+                </a>
+                <a href="vmhost.aspx">
+                    <h2>VM Host</h2>
+                </a>
+                <a href="cluster.aspx">
+                    <h2>Cluster</h2>
+                </a>
             </div>
             <div id="logo"></div>
         </div>
-        
+
         <div style="text-align:center">
             <asp:DropDownList ID="vcDropdown" runat="server" AutoPostBack="true">
                 <asp:ListItem>ptekvcs01</asp:ListItem>
@@ -189,10 +214,10 @@
                 <asp:ListItem>apgaraavcs801</asp:ListItem>
                 <asp:ListItem>apgartstvcs201</asp:ListItem>
             </asp:DropDownList>
-            <input type="text" id="nameInput"  placeholder="Search for VMs..">
+            <input type="text" id="nameInput" placeholder="Search for VMs..">
         </div>
         <div class="table-container">
-            <table id="contentTable" >
+            <table id="contentTable">
                 <thead>
                     <tr>
                         <th>
@@ -202,6 +227,7 @@
                             CPU<span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="cpuDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -210,6 +236,7 @@
                             Memory(GB) <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="memoryDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -218,6 +245,7 @@
                             Total Disk(GB) <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="totaldiskDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -226,6 +254,7 @@
                             Power State <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="powerstateDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -234,6 +263,7 @@
                             Cluster <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="clusterDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -242,6 +272,7 @@
                             Data Center <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="datacenterDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -250,6 +281,7 @@
                             Owner <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="ownerDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -258,13 +290,14 @@
                             Created Date <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="createddateDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
                                 <div class="checkboxes"></div>
 
                             </div>
                         </th>
                     </tr>
                 </thead>
-                <tbody id="tableBody" runat="server" >
+                <tbody id="tableBody" runat="server">
                 </tbody>
             </table>
         </div>
@@ -272,132 +305,124 @@
         <button id="reset-button">Reset</button>
         <p id="rowCounter"></p>
         <script>
-            const maxPage = 10;
-            const rowsPerPage = 20;
+            const MAX_PAGE = 10;
+            const ROWS_PER_PAGE = 20;
             const paginationElement = document.getElementById("pagination");
 
-            var rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
-            var currentPage=1;
-            var filtredRows;
+            let rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
+            let currentPage = 1;
+            let filteredRows;
+            let checkedCheckboxes = [];
 
             function displayRows() {
-                let length = currentPage * rowsPerPage;
-                if (length > rowCounter) length = rowCounter;
-                //console.log(length-(currentPage-1) * rowsPerPage);
-
-                for (let i = 0; i < Array.from(document.querySelectorAll("tbody tr")).length; i++) {
-                    console.log(i);
-                    Array.from(document.querySelectorAll("tbody tr"))[i].style.display = 'none';
-
+                const length = Math.min(currentPage * ROWS_PER_PAGE, rowCounter);
+                document.querySelectorAll("tbody tr").forEach(row => {
+                    row.style.display = 'none';
+                });
+                for (let i = (currentPage - 1) * ROWS_PER_PAGE; i < length; i++) {
+                    filteredRows[i].style.display = '';
                 }
-                for (let i = (currentPage - 1) * rowsPerPage; i < length; i++) {
-                    console.log(i);
-                    filtredRows[i].style.display = '';
-                }
-
             }
 
             function setupPagination(start, end) {
-
-                if (rowCounter <= 0) return;
                 paginationElement.innerHTML = '';
-                if ((end - start) >= (maxPage - 1)) end = maxPage + start - 1;
-
+                if (end - start >= MAX_PAGE - 1) {
+                    end = MAX_PAGE + start - 1;
+                }
                 for (let i = start; i <= end; i++) {
                     const pageLink = document.createElement('a');
                     pageLink.innerText = i;
-
+                    pageLink.classList.add('page-link');
                     if (i === currentPage) {
-                        pageLink.classList.add('page-link', 'active');
-                    } else {
-                        pageLink.classList.add('page-link');
+                        pageLink.classList.add('active');
                     }
-
                     pageLink.addEventListener('click', function () {
                         currentPage = i;
                         displayRows();
                         updatePagination();
                     });
-
                     paginationElement.appendChild(pageLink);
                 }
-            } 
+            }
 
             function updatePagination() {
-                const pageLinks = document.querySelectorAll('.page-link');
-                pageLinks.forEach(link => link.classList.remove('active'));
-                if (Math.ceil(rowCounter / rowsPerPage) > maxPage) {
-                    if (currentPage > (maxPage / 2)) {
-                        setupPagination(currentPage - (maxPage / 2), Math.ceil(rowCounter / rowsPerPage));
-                        pageLinks[maxPage / 2].classList.add('active');
-
-                    }
-                    else {
-                        setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
-                        pageLinks[currentPage - 1].classList.add('active');
-                    }
-                }
-                else {
-                    pageLinks[currentPage - 1].classList.add('active');
-
-                }
+                const totalPages = Math.ceil(rowCounter / ROWS_PER_PAGE);
+                const start = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
+                const end = Math.min(totalPages, start + MAX_PAGE - 1);
+                setupPagination(start, end);
             }
-            
-        </script>
-        <script>
 
-            function generateTable() {
+            function add1000rows() {
+                const tableBody = document.getElementById("tableBody");
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < 8000; i++) {
+                    const row = document.createElement("tr");
+                    for (let j = 0; j < 9; j++) {
+                        const cell = document.createElement("td");
+                        cell.textContent = `Row ${i + 1} Cell ${j + 1}`;
+                        row.appendChild(cell);
+                    }
+                    row.classList.add('in-filter');
+                    fragment.appendChild(row);
+                }
+                tableBody.appendChild(fragment);
+            }
+            function createCheckboxes() {
                 const columns = Array.from(
                     document.querySelectorAll("th.dropdown")
                 );
                 columns.forEach((column) => {
                     const dropdownContent = column.querySelector(".dropdown-content");
                     const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-                    const columnName = dropdownContent.id;
+                    const selectAllDiv = dropdownContent.querySelector(".select-all-div");
 
-                    checkboxesDiv.innerHTML = "";
                     const selectAllCheckbox = document.createElement("input");
+                    const selectAllLabel = document.createElement("label");
+
                     selectAllCheckbox.type = "checkbox";
                     selectAllCheckbox.addEventListener("change", function () {
-                        const checkboxes = checkboxesDiv.querySelectorAll(
-                            "input[type='checkbox']"
-                        );
+                        const checkboxes = Array.from(checkboxesDiv.querySelectorAll("input[type='checkbox']"));
+                        if (selectAllCheckbox.checked) {
+                            checkedCheckboxes = checkedCheckboxes.filter((cb) => !checkboxes.includes(cb));
+                            checkedCheckboxes.push(...checkboxes);
+
+                        }
+                        else {
+                            checkedCheckboxes = checkedCheckboxes.filter((cb) => !checkboxes.includes(cb));
+
+                        }
                         checkboxes.forEach((checkbox) => {
                             checkbox.checked = selectAllCheckbox.checked;
                         });
-                        filterTable(columnName);
+                        loadCheckboxes();
                     });
-                    const selectAllDiv = document.createElement("div");
 
                     selectAllDiv.appendChild(selectAllCheckbox);
-
-                    const selectAllLabel = document.createElement("label");
                     selectAllLabel.textContent = "Select All";
                     selectAllDiv.appendChild(selectAllLabel);
 
-                    const values = Array.from(
-                        new Set(
-                            Array.from(
-                                document.querySelectorAll(
-                                    `td:nth-child(${columns.indexOf(column) +2})`
-                                )
-                            ).map((td) => td.textContent)
-                        )
-                    );
                     selectAllDiv.appendChild(document.createElement("br"));
-                    checkboxesDiv.appendChild(selectAllDiv);
 
+                    checkboxesDiv.innerHTML = "";
+                    const values = Array.from(new Set(Array.from(
+                        document.querySelectorAll(`td:nth-child(${columns.indexOf(column) + 2})`)).map((td) => td.textContent)));
+
+                    const fragment = document.createDocumentFragment();
                     values.forEach((value) => {
                         const div = document.createElement("div");
                         const checkbox = document.createElement("input");
                         checkbox.type = "checkbox";
                         checkbox.value = value;
                         checkbox.addEventListener("change", function () {
-                            selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
+                            const selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
                             if (!checkbox.checked && selectAll.checked) {
                                 selectAll.checked = false;
                             }
-                            filterTable(columnName);
+                            if (checkbox.checked)
+                                checkedCheckboxes.push(checkbox);
+                            else
+                                checkedCheckboxes = checkedCheckboxes.filter((cb) => cb !== checkbox);
+                            loadCheckboxes();
                         });
                         div.appendChild(checkbox);
 
@@ -406,36 +431,30 @@
                         div.appendChild(label);
 
                         div.appendChild(document.createElement("br"));
-                        checkboxesDiv.appendChild(div);
+                        fragment.appendChild(div);
                     });
+                    checkboxesDiv.appendChild(fragment);
                 });
-                updateCount();
-                displayRows();
-                setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
 
             }
 
             function generateColumnCheckboxes(dropdownContent) {
                 const column = dropdownContent.parentElement;
-                const columnName = dropdownContent.id;
+                const columnIndex = Array.from(document.querySelectorAll("th")).indexOf(column) + 1;
                 const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
                 const divs = checkboxesDiv.querySelectorAll("div");
 
                 divs.forEach((div) => {
-                    const checkbox = div.querySelector("input");
-                    const label = div.querySelector("label");
-                    if (!checkbox.checked && label.textContent !== "Select All") {
-                        checkboxesDiv.removeChild(div);
+                    const checkbox = div.querySelector("input[type='checkbox']");
+                    if (!checkbox.checked) {
+                        div.remove();
                     }
                 });
-                const values = Array.from(
-                    new Set(
-                        filtredRows.flatMap(row => Array.from(row.querySelectorAll(
-                            `td:nth-child(${Array.from(document.querySelectorAll("th.dropdown")).indexOf(column) + 1})`
-                        ))).map((td) => td.textContent)
-                    )
-                );
 
+                const values = Array.from(new Set(Array.from(
+                    document.querySelectorAll(`tr.in-filter td:nth-child(${columnIndex})`)).map((td) => td.textContent)));
+
+                const fragment = document.createDocumentFragment();
                 values.forEach((value) => {
                     if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
                         return;
@@ -449,85 +468,98 @@
                         if (!checkbox.checked && selectAll.checked) {
                             selectAll.checked = false;
                         }
-                        filterTable(columnName);
+                        if (checkbox.checked)
+                            checkedCheckboxes.push(checkbox);
+                        else
+                            checkedCheckboxes = checkedCheckboxes.filter((cb) => cb !== checkbox);
+                        loadCheckboxes();
                     });
-                    div.appendChild(checkbox);
-
                     const label = document.createElement("label");
                     label.textContent = value;
-                    div.appendChild(label);
 
+                    div.appendChild(checkbox);
+                    div.appendChild(label);
                     div.appendChild(document.createElement("br"));
-                    checkboxesDiv.appendChild(div);
+                    fragment.appendChild(div);
                 });
+                checkboxesDiv.appendChild(fragment);
             }
 
-            function filterTable(columnName) {
-                const columns = Array.from(
-                    document.querySelectorAll("th.dropdown")
-                );
-                const filters = {};
 
-                columns.forEach((column) => {
-                    const columnName = column.textContent.trim();
-                    const dropdownContent = column.querySelector(".dropdown-content");
-                    const checkedValues = Array.from(
-                        dropdownContent.querySelectorAll("input:checked")
-                    ).map((checkbox) => checkbox.value);
-                    filters[columnName.toLowerCase()] = checkedValues;
+            function loadCheckboxes() {
+                document.getElementById("nameInput").value = "";
+
+                document.querySelectorAll(".filtered-div").forEach(div => {
+                    div.classList.remove('filtered-div');
                 });
 
-                const rows = Array.from(document.querySelectorAll("tbody tr"));
-                rows.forEach((row) => {
-                    const cells = Array.from(row.querySelectorAll("td"));
-                    const inFilter = cells.every((cell, index) => {
-                        const columnName = columns[index].textContent
-                            .trim()
-                            .toLowerCase();
-                        const cellValue = cell.textContent;
-                        return (
-                            filters[columnName].length === 0 ||
-                            filters[columnName].includes(cellValue)
-                        );
-                    })
-                        ? true
-                        : false;
-                    if (inFilter) {
-                        row.classList.add('in-filter');
-                    }
-                    else {
-                        row.classList.remove('in-filter');
-                    }
+                document.querySelectorAll("tbody tr").forEach(row => {
+                    row.classList.add('in-filter');
                 });
-                updateCount();
+                if (checkedCheckboxes.length !== 0) {
+                    checkedCheckboxes.forEach((checkbox, index) => {
+                        filterTable(checkbox);
+                        if (index === checkedCheckboxes.length - 1) {
+                            document.querySelectorAll(".dropdown-content").forEach((column) => {
+                                if (column !== checkbox.closest(".dropdown-content"))
+                                    generateColumnCheckboxes(column);
+                            });
+                        }
+                        console.log(checkedCheckboxes);
+
+                    });
+                }
+                else {
+                    document.querySelectorAll(".dropdown-content").forEach((column) => {
+                        generateColumnCheckboxes(column);
+                    });
+                }
+
+
+                updateRows();
+
+            }
+            function filterTable(checkbox) {
+                if (!checkbox.parentElement) console.log("checkbox is null");
+                const parentDropdown = checkbox.closest(".dropdown-content");
+                const columnNum = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(parentDropdown) + 2;
+                const columnName = parentDropdown.id;
+
+                if (parentDropdown.classList.contains('filtered-div')) {
+
+                    document.querySelectorAll("tbody tr:not(.in-filter)").forEach(row => {
+                        const cell = row.querySelector(`td:nth-child(${columnNum})`);
+                        if (cell.textContent === checkbox.value) {
+                            row.classList.add('in-filter');
+                        }
+                    });
+                }
+                else {
+                    document.querySelectorAll("tr.in-filter").forEach(row => {
+                        const cell = row.querySelector(`td:nth-child(${columnNum})`);
+
+                        if (cell.textContent != checkbox.value) {
+                            row.classList.remove('in-filter');
+                        }
+
+                    });
+                    parentDropdown.classList.add('filtered-div');
+                }
+
+            }
+
+            function updateRows() {
                 currentPage = 1;
-                setupPagination(1, Math.ceil(rowCounter / rowsPerPage));
+
+                filteredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
+                rowCounter = filteredRows.length;
+                const counterElement = document.getElementById("rowCounter");
+                counterElement.textContent = "Displayed Rows: " + rowCounter;
                 updatePagination();
                 displayRows();
 
-
-                Array.from(document.querySelectorAll(".dropdown-content")).forEach((column) => {
-                    if (column.id !== columnName|| column.querySelectorAll("input:checked").length === 0) {
-                        console.log(column.id,columnName);
-                        generateColumnCheckboxes(column);
-                    }
-                });
-
             }
 
-            function updateCount() {
-                filtredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
-                rowCounter = filtredRows.length;
-                const counterElement = document.getElementById("rowCounter");
-                counterElement.textContent = "Displayed Rows: " + rowCounter;
-
-            }
-
-            generateTable();
-
-        </script>
-        <script>
-            const resetButton = document.getElementById("reset-button");
 
             function searchCheckboxes(searchInput) {
                 const filter = searchInput.value.toUpperCase();
@@ -544,16 +576,49 @@
                 }
             }
 
-            resetButton.addEventListener("click", function () {
-                document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-                        checkbox.checked = false;
+            document.getElementById("nameInput").addEventListener("keyup", function () {
+                const filter = this.value.toUpperCase();
+                if (filter === "") {
+                    filteredRows.forEach(row => {
+                        row.style.display = "";
                     });
-                filterTable(null);
+                }
+                else {
+                    filteredRows.forEach(row => {
+                        const cellValue = row.querySelector("td:first-child");
+                        if (cellValue.textContent.toUpperCase().indexOf(filter) > -1) {
+                            row.style.display = "";
+                        } else {
+                            row.style.display = "none";
+                        }
+
+                    });
+                }
+
             });
 
+            document.getElementById("reset-button").addEventListener("click", function () {
+                event.preventDefault();
+                document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+                    checkbox.checked = false;
+                });
+                document.querySelectorAll("input[type='text']").forEach((input) => {
+                    input.value = "";
+                });
+                checkedCheckboxes = [];
+
+                loadCheckboxes();
+
+
+            });
+
+            add1000rows();
+            createCheckboxes();
+            updateRows();
 
         </script>
 
     </form>
 </body>
+
 </html>
