@@ -61,7 +61,7 @@ namespace vminfo
                     }
                     tableBody.Controls.Add(newRow);
                     count++;
-                    if (count > 100) newRow.Style["display"] = "none";
+                    if (count > 100) newRow.Attributes["class"] = "in-filter";
 
                 }
 
