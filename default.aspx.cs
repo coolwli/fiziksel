@@ -11,39 +11,32 @@ namespace vminfo
     {
         private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
 
-        protected async void Page_Load(object sender, EventArgs e)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            if (!IsPostBack)
-            {
-                await ShowListAsync();
-            }
+            
+            ShowListAsync();
+            
         }
 
-        public async Task ShowListAsync()
+        public void ShowListAsync()
         {
             DataTable vmInfos = new DataTable();
             DataTable vmExtras = new DataTable();
 
             using (SqlConnection con = new SqlConnection(connectionString))
             {
-                await con.OpenAsync();
+                con.Open();
 
                 using (SqlCommand cmd = con.CreateCommand())
                 {
                     cmd.CommandType = CommandType.Text;
 
-                    // Update VMOwner to NULL if it's empty
-                    cmd.CommandText = "UPDATE VMInfos2 SET VMOwner = NULL WHERE VMOwner ='' ";
-                    await cmd.ExecuteNonQueryAsync();
-
-                    // Select VMInfos2 data
-                    cmd.CommandText = "SELECT VMName,vCenter,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2 ORDER BY CASE WHEN VMOwner IS NULL THEN 1 ELSE 0 END, VMName ASC";
+                    cmd.CommandText = "SELECT VMName,vCenter,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2";
                     using (SqlDataAdapter da = new SqlDataAdapter(cmd))
                     {
                         da.Fill(vmInfos);
                     }
 
-                    // Select VMsExtras data
                     cmd.CommandText = "SELECT CreatedDate,VMName FROM VMsExtras";
                     using (SqlDataAdapter da2 = new SqlDataAdapter(cmd))
                     {
@@ -70,20 +63,19 @@ namespace vminfo
                             var foundRow = vmExtras.AsEnumerable().FirstOrDefault(frow => frow.Field<string>("VMName") == row.Field<string>("VMName"));
                             if (foundRow != null)
                             {
-                                newCell.InnerText = foundRow.Field<DateTime>("CreatedDate").ToString();
+                                newCell.InnerText = foundRow["CreatedDate"].ToString();
                             }
                         }
 
                         newRow.Cells.Add(newCell);
                         newRow.Style["display"] = "none";
+                        newRow.Attributes["class"] = "in-filter";
+
                     }
 
                     tableBody.Controls.Add(newRow);
                     count++;
-                    if (count > 100)
-                    {
-                        newRow.Attributes["class"] = "in-filter";
-                    }
+
                 }
             }
         }
