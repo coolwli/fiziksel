@@ -1,15 +1,10 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="vminfo._default" %>
+
 <html>
 
 <head runat="server">
     <title>All VMs</title>
     <style>
-        :root {
-            --primary-color: black;
-            --secondary-color: #383d42;
-            --background-color: #fff;
-            --text-color: #333;
-            --hover-color: #484848;
-        }
 
         body {
             font-family: Verdana;
@@ -74,36 +69,20 @@
             color: #888;
         }
 
-        #vcDropdown {
-            text-transform: uppercase;
-            padding: 10px 15px;
-            margin: 10px 2px;
-
-        }
-
-        #nameInput {
-            width: 75%;
-            padding: 9px 15px;
-            margin: 10px 2px;
-
-
-        }
-
         table {
-            border-collapse: separate;
-            border-spacing: 0;
-            width: 100%;
-            margin: 5px;
+            border-collapse: collapse;
+            width: 97%;
+            margin: auto;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            font-size: 10px;
+            font-size: 9px;
         }
 
         th,
         td {
             border: none;
             padding: 8px;
-            text-align: center;
+            text-align: left;
         }
 
         th {
@@ -118,8 +97,10 @@
             background-color: #f9f9f9;
         }
 
-        tr:hover {
-            background-color: #f5f5f5;
+        tr:hover{
+            background-color: #efefef;
+            cursor: pointer;
+
         }
 
         .dropdown-content {
@@ -144,25 +125,55 @@
             font-size: 8px;
         }
 
+        .table-top{
+            width:97%;
+            display:flex;
+            justify-content:space-between;
+            margin:8px auto 4px auto
+        }
         button {
-            padding: 10px 20px;
-            background-color: black;
             color: white;
             border: none;
             cursor: pointer;
-            font-size: 16px;
-            border-radius: 4px;
+            font-size: 12px;
             transition: background-color 0.3s ease;
             outline: none;
         }
 
-        button:hover {
+        #reset-button{
+            background-color: black;
+            padding: 5px 8px;
+            margin-left:10px;
+
+
+        }
+
+        #reset-button:hover {
             background-color: #484848;
         }
 
+        #asc-button{
+            background-color: white;
+            padding: 1px 3px;
+            margin-left:10px;
+
+        }
+
+        #asc-button:hover {
+            background-color: #f0f0f0;
+        }
+
+        #asc-button img{
+            width:24px;
+        }
+        #sortSelect{
+            margin-left:10px;
+            padding: 4px 4px;
+
+        }
         #rowCounter {
-            font-size: 15px;
-            font-weight: bold;
+            margin-right:auto;
+            font-size: 10px;
         }
 
         .pagination {
@@ -206,22 +217,46 @@
             </div>
             <div id="logo"></div>
         </div>
-
-        <div style="text-align:center">
-            <asp:DropDownList ID="vcDropdown" runat="server" AutoPostBack="true">
-                <asp:ListItem>ptekvcs01</asp:ListItem>
-                <asp:ListItem>ptekvcsd01</asp:ListItem>
-                <asp:ListItem>apgaraavcs801</asp:ListItem>
-                <asp:ListItem>apgartstvcs201</asp:ListItem>
-            </asp:DropDownList>
-            <input type="text" id="nameInput" placeholder="Search for VMs..">
+        <div class="table-top">
+            <h2 id="rowCounter"></h2>
+            <select id="sortSelect">
+                <option value="0"> Name</option>
+                <option value="1"> vCenter</option>
+                <option value="2"> CPU</option>
+                <option value="3"> Memory</option>
+                <option value="4"> Disk</option>
+                <option value="5"> Power State</option>
+                <option value="6"> Cluster</option>
+                <option value="7"> DataCenter</option>
+                <option value="8"> Owner</option>
+                <option value="9"> Created Date</option>
+            </select>
+            <button id="asc-button">
+                <img id="sortIcon" src="sort.png" />
+            </button>
+            <button id="reset-button">Reset</button>
         </div>
+        
         <div class="table-container">
             <table id="contentTable">
                 <thead>
                     <tr>
-                        <th>
-                            Name
+                        <th style="width:16%" class="dropdown">
+                            Name<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="nameDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            vCenter<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="vcDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div"></div>
+                                <div class="checkboxes"></div>
+
+                            </div>
                         </th>
                         <th class="dropdown">
                             CPU<span class="dropdown-arrow">&#9660;</span>
@@ -277,7 +312,7 @@
 
                             </div>
                         </th>
-                        <th class="dropdown">
+                        <th class="dropdown" style="width:20%">
                             Owner <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="ownerDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
@@ -302,8 +337,11 @@
             </table>
         </div>
         <div class="pagination" id="pagination"></div>
-        <button id="reset-button">Reset</button>
-        <p id="rowCounter"></p>
+        
+        <footer>
+            <p class="footer">© 2024 - Cloud United Team</p>
+        </footer>
+
         <script>
             const MAX_PAGE = 10;
             const ROWS_PER_PAGE = 20;
@@ -313,6 +351,7 @@
             let currentPage = 1;
             let filteredRows;
             let checkedCheckboxes = [];
+            let ascending = true;
 
             function displayRows() {
                 const length = Math.min(currentPage * ROWS_PER_PAGE, rowCounter);
@@ -352,21 +391,6 @@
                 setupPagination(start, end);
             }
 
-            function add1000rows() {
-                const tableBody = document.getElementById("tableBody");
-                const fragment = document.createDocumentFragment();
-                for (let i = 0; i < 8000; i++) {
-                    const row = document.createElement("tr");
-                    for (let j = 0; j < 9; j++) {
-                        const cell = document.createElement("td");
-                        cell.textContent = `Row ${i + 1} Cell ${j + 1}`;
-                        row.appendChild(cell);
-                    }
-                    row.classList.add('in-filter');
-                    fragment.appendChild(row);
-                }
-                tableBody.appendChild(fragment);
-            }
             function createCheckboxes() {
                 const columns = Array.from(
                     document.querySelectorAll("th.dropdown")
@@ -405,9 +429,14 @@
 
                     checkboxesDiv.innerHTML = "";
                     const values = Array.from(new Set(Array.from(
-                        document.querySelectorAll(`td:nth-child(${columns.indexOf(column) + 2})`)).map((td) => td.textContent)));
+                        document.querySelectorAll(`td:nth-child(${columns.indexOf(column) + 1})`)).map((td) => td.textContent)));
 
-                    values.sort();
+                    values.sort(function (a, b) {
+                        if (!isNaN(a) && !isNaN(b)) {
+                            return ascending ? a - b : b - a;
+                        }
+                        return ascending ? a.localeCompare(b) : b.localeCompare(a);
+                    });
 
                     const fragment = document.createDocumentFragment();
                     values.forEach((value) => {
@@ -456,7 +485,12 @@
                 const values = Array.from(new Set(Array.from(
                     document.querySelectorAll(`tr.in-filter td:nth-child(${columnIndex})`)).map((td) => td.textContent)));
 
-                    values.sort();
+                values.sort(function (a, b) {
+                        if (!isNaN(a) && !isNaN(b)) {
+                            return ascending ? a - b : b - a;
+                        }
+                        return ascending ? a.localeCompare(b) : b.localeCompare(a);
+                });
 
                 const fragment = document.createDocumentFragment();
                 values.forEach((value) => {
@@ -489,9 +523,7 @@
                 checkboxesDiv.appendChild(fragment);
             }
 
-
             function loadCheckboxes() {
-                document.getElementById("nameInput").value = "";
 
                 document.querySelectorAll(".filtered-div").forEach(div => {
                     div.classList.remove('filtered-div');
@@ -523,11 +555,11 @@
                 updateRows();
 
             }
+
             function filterTable(checkbox) {
                 if (!checkbox.parentElement) console.log("checkbox is null");
                 const parentDropdown = checkbox.closest(".dropdown-content");
-                const columnNum = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(parentDropdown) + 2;
-                const columnName = parentDropdown.id;
+                const columnNum = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(parentDropdown) + 1;
 
                 if (parentDropdown.classList.contains('filtered-div')) {
 
@@ -558,13 +590,27 @@
                 filteredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
                 rowCounter = filteredRows.length;
                 const counterElement = document.getElementById("rowCounter");
-                counterElement.textContent = "Displayed Rows: " + rowCounter;
+                counterElement.textContent = rowCounter + " Satır Listelendi..";
                 updatePagination();
                 displayRows();
 
             }
 
+            function sortRows(columnIndex) {
+                filteredRows.sort((rowA, rowB) => {
+                    const cellA = rowA.cells[columnIndex].innerText.trim();
+                    const cellB = rowB.cells[columnIndex].innerText.trim();
+                    if (!isNaN(cellA) && !isNaN(cellB)) {
+                        return ascending ? cellA - cellB : cellB - cellA;
+                    }
+                    return ascending ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
+                });
+                currentPage = 1;
+                updatePagination();
+                displayRows();
 
+
+            }
             function searchCheckboxes(searchInput) {
                 const filter = searchInput.value.toUpperCase();
                 const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
@@ -580,25 +626,8 @@
                 }
             }
 
-            document.getElementById("nameInput").addEventListener("keyup", function () {
-                const filter = this.value.toUpperCase();
-                if (filter === "") {
-                    filteredRows.forEach(row => {
-                        row.style.display = "";
-                    });
-                }
-                else {
-                    filteredRows.forEach(row => {
-                        const cellValue = row.querySelector("td:first-child");
-                        if (cellValue.textContent.toUpperCase().indexOf(filter) > -1) {
-                            row.style.display = "";
-                        } else {
-                            row.style.display = "none";
-                        }
-
-                    });
-                }
-
+            document.getElementById("sortSelect").addEventListener("change", function () {
+                sortRows(document.getElementById("sortSelect").value);                
             });
 
             document.getElementById("reset-button").addEventListener("click", function () {
@@ -616,7 +645,21 @@
 
             });
 
-            add1000rows();
+            document.getElementById("asc-button").addEventListener("click", function () {
+                event.preventDefault();
+                if (ascending) {
+                    ascending = false;
+                    document.getElementById("sortIcon").src = "sort-descending.png";
+
+                }
+                else {
+                    ascending = true;
+                    document.getElementById("sortIcon").src = "sort.png";
+                }
+                sortRows(document.getElementById("sortSelect").value);
+
+            });
+
             createCheckboxes();
             updateRows();
 
