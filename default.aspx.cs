@@ -22,12 +22,11 @@ namespace vminfo
         public void showList()
         {
 
-            string vc = vcDropdown.SelectedValue;
             SqlCommand cmd = con.CreateCommand();
             cmd.CommandType = CommandType.Text;
             cmd.CommandText = "UPDATE VMInfos2 SET VMOwner = NULL WHERE VMOwner ='' ";
             cmd.ExecuteNonQuery();
-            cmd.CommandText = $"SELECT VMName,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2 WHERE vCenter = '{vc}' ORDER BY CASE WHEN VMOwner IS NULL THEN 1 ELSE 0 END, VMName ASC";
+            cmd.CommandText = $"SELECT VMName,vCenter,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2 ORDER BY CASE WHEN VMOwner IS NULL THEN 1 ELSE 0 END, VMName ASC";
             cmd.ExecuteNonQuery();
             DataTable dt = new DataTable();
             SqlDataAdapter da = new SqlDataAdapter(cmd);
@@ -45,11 +44,11 @@ namespace vminfo
                 foreach (DataRow row in dt.Rows)
                 {
                     HtmlTableRow newRow = new HtmlTableRow();
-                    for (int j = 0; j < 9; j++)
+                    for (int j = 0; j < 10; j++)
                     {
                         HtmlTableCell newCell = new HtmlTableCell();
                         newCell.InnerText = row[j].ToString();
-                        if (j == 8)
+                        if (j == 9)
                         {
                             var foundRow = dtt.AsEnumerable().ToList().FindIndex(frow => frow[1].ToString() == row[0].ToString());
                             if (foundRow != -1)
@@ -58,6 +57,7 @@ namespace vminfo
                             }
                         }
                         newRow.Cells.Add(newCell);
+                        newRow.Style["display"] = "none";
                     }
                     tableBody.Controls.Add(newRow);
                     count++;
