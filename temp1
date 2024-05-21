@@ -1,1 +1,17 @@
-Retrieving the COM class factory for component with CLSID {00024500-0000-0000-C000-000000000046} failed due to the following error: 800703fa Illegal operation attempted on a registry key that has been marked for deletion. (Exception from HRESULT: 0x800703FA).]
+private string DataTableToJson(DataTable dt)
+{
+    JavaScriptSerializer serializer = new JavaScriptSerializer();
+    List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+
+    foreach (DataRow dr in dt.Rows)
+    {
+        Dictionary<string, object> row = new Dictionary<string, object>();
+        foreach (DataColumn col in dt.Columns)
+        {
+            row.Add(col.ColumnName, dr[col]);
+        }
+        rows.Add(row);
+    }
+
+    return serializer.Serialize(rows);
+}
