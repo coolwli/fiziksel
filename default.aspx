@@ -5,7 +5,6 @@
 <head runat="server">
     <title>All VMs</title>
     <style>
-
         body {
             font-family: Verdana;
             margin: 0;
@@ -59,7 +58,6 @@
 
         footer {
             text-align: center;
-            background-color: #f2f2f2;
             padding: 10px;
         }
 
@@ -68,137 +66,9 @@
             font-size: 14px;
             color: #888;
         }
-
-        table {
-            border-collapse: collapse;
-            width: 97%;
-            margin: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            font-size: 9px;
-        }
-
-        th,
-        td {
-            border: none;
-            padding: 8px;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-            color: #333;
-            font-weight: bold;
-            cursor: pointer;
-            width: auto
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        tr:hover{
-            background-color: #efefef;
-            cursor: pointer;
-
-        }
-
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #f9f9f9;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-            padding: 12px 16px;
-            z-index: 1;
-            max-height: 200px;
-            overflow-y: auto;
-            text-align: left;
-        }
-
-        .dropdown:hover .dropdown-content {
-            display: block;
-        }
-
-        .dropdown-arrow {
-            margin-left: 5px;
-            font-size: 8px;
-        }
-
-        .table-top{
-            width:97%;
-            display:flex;
-            justify-content:space-between;
-            margin:8px auto 4px auto
-        }
-        button {
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 12px;
-            transition: background-color 0.3s ease;
-            outline: none;
-        }
-
-        #reset-button{
-            background-color: black;
-            padding: 5px 8px;
-            margin-left:10px;
-
-
-        }
-
-        #reset-button:hover {
-            background-color: #484848;
-        }
-
-        #asc-button{
-            background-color: white;
-            padding: 1px 3px;
-            margin-left:10px;
-
-        }
-
-        #asc-button:hover {
-            background-color: #f0f0f0;
-        }
-
-        #asc-button img{
-            width:24px;
-        }
-        #sortSelect{
-            margin-left:10px;
-            padding: 4px 4px;
-
-        }
-        #rowCounter {
-            margin-right:auto;
-            font-size: 10px;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-
-        .page-link {
-            display: inline-block;
-            padding: 8px;
-            margin: 0 4px;
-            text-decoration: none;
-            cursor: pointer;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .page-link.active {
-            background-color: black;
-            color: white;
-        }
     </style>
+    <link rel="stylesheet" type="text/css" href="tableStyle.css" />
+
 </head>
 
 <body>
@@ -208,10 +78,10 @@
                 <a class="active">
                     <h2>VM</h2>
                 </a>
-                <a href="vmhost.aspx">
+                <a href="hosts.aspx">
                     <h2>VM Host</h2>
                 </a>
-                <a href="cluster.aspx">
+                <a href="clusters.aspx">
                     <h2>Cluster</h2>
                 </a>
             </div>
@@ -219,24 +89,8 @@
         </div>
         <div class="table-top">
             <h2 id="rowCounter"></h2>
-            <select id="sortSelect">
-                <option value="0"> Name</option>
-                <option value="1"> vCenter</option>
-                <option value="2"> CPU</option>
-                <option value="3"> Memory</option>
-                <option value="4"> Disk</option>
-                <option value="5"> Power State</option>
-                <option value="6"> Cluster</option>
-                <option value="7"> DataCenter</option>
-                <option value="8"> Owner</option>
-                <option value="9"> Created Date</option>
-            </select>
-            <button id="asc-button">
-                <img id="sortIcon" src="sort.png" />
-            </button>
             <button id="reset-button">Reset</button>
         </div>
-        
         <div class="table-container">
             <table id="contentTable">
                 <thead>
@@ -245,7 +99,11 @@
                             Name<span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="nameDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
                             </div>
                         </th>
@@ -253,7 +111,11 @@
                             vCenter<span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="vcDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -262,7 +124,11 @@
                             CPU<span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="cpuDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -271,7 +137,11 @@
                             Memory(GB) <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="memoryDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -280,16 +150,23 @@
                             Total Disk(GB) <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="totaldiskDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
-
                             </div>
                         </th>
                         <th class="dropdown">
                             Power State <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="powerstateDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -298,7 +175,11 @@
                             Cluster <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="clusterDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -307,7 +188,11 @@
                             Data Center <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="datacenterDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
 
                             </div>
@@ -316,18 +201,24 @@
                             Owner <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="ownerDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
-
                             </div>
                         </th>
-                        <th class="dropdown">
+                        <th class="dropdown" style="width:16%">
                             Created Date <span class="dropdown-arrow">&#9660;</span>
                             <div class="dropdown-content" id="createddateDropdown">
                                 <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div"></div>
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
                                 <div class="checkboxes"></div>
-
                             </div>
                         </th>
                     </tr>
@@ -337,334 +228,11 @@
             </table>
         </div>
         <div class="pagination" id="pagination"></div>
-        
+
         <footer>
             <p class="footer">© 2024 - Cloud United Team</p>
         </footer>
-
-        <script>
-            const MAX_PAGE = 10;
-            const ROWS_PER_PAGE = 20;
-            const paginationElement = document.getElementById("pagination");
-
-            let rowCounter = Array.from(document.querySelectorAll("tbody tr")).length;
-            let currentPage = 1;
-            let filteredRows;
-            let checkedCheckboxes = [];
-            let ascending = true;
-
-            function displayRows() {
-                const length = Math.min(currentPage * ROWS_PER_PAGE, rowCounter);
-                document.querySelectorAll("tbody tr").forEach(row => {
-                    row.style.display = 'none';
-                });
-                for (let i = (currentPage - 1) * ROWS_PER_PAGE; i < length; i++) {
-                    filteredRows[i].style.display = '';
-                }
-            }
-
-            function setupPagination(start, end) {
-                paginationElement.innerHTML = '';
-                if (end - start >= MAX_PAGE - 1) {
-                    end = MAX_PAGE + start - 1;
-                }
-                for (let i = start; i <= end; i++) {
-                    const pageLink = document.createElement('a');
-                    pageLink.innerText = i;
-                    pageLink.classList.add('page-link');
-                    if (i === currentPage) {
-                        pageLink.classList.add('active');
-                    }
-                    pageLink.addEventListener('click', function () {
-                        currentPage = i;
-                        displayRows();
-                        updatePagination();
-                    });
-                    paginationElement.appendChild(pageLink);
-                }
-            }
-
-            function updatePagination() {
-                const totalPages = Math.ceil(rowCounter / ROWS_PER_PAGE);
-                const start = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
-                const end = Math.min(totalPages, start + MAX_PAGE - 1);
-                setupPagination(start, end);
-            }
-
-            function createCheckboxes() {
-                const columns = Array.from(
-                    document.querySelectorAll("th.dropdown")
-                );
-                columns.forEach((column) => {
-                    const dropdownContent = column.querySelector(".dropdown-content");
-                    const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-                    const selectAllDiv = dropdownContent.querySelector(".select-all-div");
-
-                    const selectAllCheckbox = document.createElement("input");
-                    const selectAllLabel = document.createElement("label");
-
-                    selectAllCheckbox.type = "checkbox";
-                    selectAllCheckbox.addEventListener("change", function () {
-                        const checkboxes = Array.from(checkboxesDiv.querySelectorAll("input[type='checkbox']"));
-                        if (selectAllCheckbox.checked) {
-                            checkedCheckboxes = checkedCheckboxes.filter((cb) => !checkboxes.includes(cb));
-                            checkedCheckboxes.push(...checkboxes);
-
-                        }
-                        else {
-                            checkedCheckboxes = checkedCheckboxes.filter((cb) => !checkboxes.includes(cb));
-
-                        }
-                        checkboxes.forEach((checkbox) => {
-                            checkbox.checked = selectAllCheckbox.checked;
-                        });
-                        loadCheckboxes();
-                    });
-
-                    selectAllDiv.appendChild(selectAllCheckbox);
-                    selectAllLabel.textContent = "Select All";
-                    selectAllDiv.appendChild(selectAllLabel);
-
-                    selectAllDiv.appendChild(document.createElement("br"));
-
-                    checkboxesDiv.innerHTML = "";
-                    const values = Array.from(new Set(Array.from(
-                        document.querySelectorAll(`td:nth-child(${columns.indexOf(column) + 1})`)).map((td) => td.textContent)));
-
-                    values.sort(function (a, b) {
-                        if (!isNaN(a) && !isNaN(b)) {
-                            return ascending ? a - b : b - a;
-                        }
-                        return ascending ? a.localeCompare(b) : b.localeCompare(a);
-                    });
-
-                    const fragment = document.createDocumentFragment();
-                    values.forEach((value) => {
-                        const div = document.createElement("div");
-                        const checkbox = document.createElement("input");
-                        checkbox.type = "checkbox";
-                        checkbox.value = value;
-                        checkbox.addEventListener("change", function () {
-                            const selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
-                            if (!checkbox.checked && selectAll.checked) {
-                                selectAll.checked = false;
-                            }
-                            if (checkbox.checked)
-                                checkedCheckboxes.push(checkbox);
-                            else
-                                checkedCheckboxes = checkedCheckboxes.filter((cb) => cb !== checkbox);
-                            loadCheckboxes();
-                        });
-                        div.appendChild(checkbox);
-
-                        const label = document.createElement("label");
-                        label.textContent = value;
-                        div.appendChild(label);
-
-                        div.appendChild(document.createElement("br"));
-                        fragment.appendChild(div);
-                    });
-                    checkboxesDiv.appendChild(fragment);
-                });
-
-            }
-
-            function generateColumnCheckboxes(dropdownContent) {
-                const column = dropdownContent.parentElement;
-                const columnIndex = Array.from(document.querySelectorAll("th")).indexOf(column) + 1;
-                const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-                const divs = checkboxesDiv.querySelectorAll("div");
-
-                divs.forEach((div) => {
-                    const checkbox = div.querySelector("input[type='checkbox']");
-                    if (!checkbox.checked) {
-                        div.remove();
-                    }
-                });
-
-                const values = Array.from(new Set(Array.from(
-                    document.querySelectorAll(`tr.in-filter td:nth-child(${columnIndex})`)).map((td) => td.textContent)));
-
-                values.sort(function (a, b) {
-                        if (!isNaN(a) && !isNaN(b)) {
-                            return ascending ? a - b : b - a;
-                        }
-                        return ascending ? a.localeCompare(b) : b.localeCompare(a);
-                });
-
-                const fragment = document.createDocumentFragment();
-                values.forEach((value) => {
-                    if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
-                        return;
-                    }
-                    const div = document.createElement("div");
-                    const checkbox = document.createElement("input");
-                    checkbox.type = "checkbox";
-                    checkbox.value = value;
-                    checkbox.addEventListener("change", function () {
-                        selectAll = checkboxesDiv.querySelector("input[type='checkbox']");
-                        if (!checkbox.checked && selectAll.checked) {
-                            selectAll.checked = false;
-                        }
-                        if (checkbox.checked)
-                            checkedCheckboxes.push(checkbox);
-                        else
-                            checkedCheckboxes = checkedCheckboxes.filter((cb) => cb !== checkbox);
-                        loadCheckboxes();
-                    });
-                    const label = document.createElement("label");
-                    label.textContent = value;
-
-                    div.appendChild(checkbox);
-                    div.appendChild(label);
-                    div.appendChild(document.createElement("br"));
-                    fragment.appendChild(div);
-                });
-                checkboxesDiv.appendChild(fragment);
-            }
-
-            function loadCheckboxes() {
-
-                document.querySelectorAll(".filtered-div").forEach(div => {
-                    div.classList.remove('filtered-div');
-                });
-
-                document.querySelectorAll("tbody tr").forEach(row => {
-                    row.classList.add('in-filter');
-                });
-                if (checkedCheckboxes.length !== 0) {
-                    checkedCheckboxes.forEach((checkbox, index) => {
-                        filterTable(checkbox);
-                        if (index === checkedCheckboxes.length - 1) {
-                            document.querySelectorAll(".dropdown-content").forEach((column) => {
-                                if (column !== checkbox.closest(".dropdown-content"))
-                                    generateColumnCheckboxes(column);
-                            });
-                        }
-                        console.log(checkedCheckboxes);
-
-                    });
-                }
-                else {
-                    document.querySelectorAll(".dropdown-content").forEach((column) => {
-                        generateColumnCheckboxes(column);
-                    });
-                }
-
-
-                updateRows();
-
-            }
-
-            function filterTable(checkbox) {
-                if (!checkbox.parentElement) console.log("checkbox is null");
-                const parentDropdown = checkbox.closest(".dropdown-content");
-                const columnNum = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(parentDropdown) + 1;
-
-                if (parentDropdown.classList.contains('filtered-div')) {
-
-                    document.querySelectorAll("tbody tr:not(.in-filter)").forEach(row => {
-                        const cell = row.querySelector(`td:nth-child(${columnNum})`);
-                        if (cell.textContent === checkbox.value) {
-                            row.classList.add('in-filter');
-                        }
-                    });
-                }
-                else {
-                    document.querySelectorAll("tr.in-filter").forEach(row => {
-                        const cell = row.querySelector(`td:nth-child(${columnNum})`);
-
-                        if (cell.textContent != checkbox.value) {
-                            row.classList.remove('in-filter');
-                        }
-
-                    });
-                    parentDropdown.classList.add('filtered-div');
-                }
-
-            }
-
-            function updateRows() {
-                currentPage = 1;
-
-                filteredRows = Array.from(document.querySelectorAll("tbody tr.in-filter"));
-                rowCounter = filteredRows.length;
-                const counterElement = document.getElementById("rowCounter");
-                counterElement.textContent = rowCounter + " Satır Listelendi..";
-                updatePagination();
-                displayRows();
-
-            }
-
-            function sortRows(columnIndex) {
-                filteredRows.sort((rowA, rowB) => {
-                    const cellA = rowA.cells[columnIndex].innerText.trim();
-                    const cellB = rowB.cells[columnIndex].innerText.trim();
-                    if (!isNaN(cellA) && !isNaN(cellB)) {
-                        return ascending ? cellA - cellB : cellB - cellA;
-                    }
-                    return ascending ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
-                });
-                currentPage = 1;
-                updatePagination();
-                displayRows();
-
-
-            }
-            function searchCheckboxes(searchInput) {
-                const filter = searchInput.value.toUpperCase();
-                const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
-                const divs = checkboxesDiv.getElementsByTagName("div");
-                for (let i = 0; i < divs.length; i++) {
-                    const label = divs[i].getElementsByTagName("label")[0];
-                    const txtValue = label.textContent || label.innerText;
-                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                        divs[i].style.display = "";
-                    } else {
-                        divs[i].style.display = "none";
-                    }
-                }
-            }
-
-            document.getElementById("sortSelect").addEventListener("change", function () {
-                sortRows(document.getElementById("sortSelect").value);                
-            });
-
-            document.getElementById("reset-button").addEventListener("click", function () {
-                event.preventDefault();
-                document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-                    checkbox.checked = false;
-                });
-                document.querySelectorAll("input[type='text']").forEach((input) => {
-                    input.value = "";
-                });
-                checkedCheckboxes = [];
-
-                loadCheckboxes();
-
-
-            });
-
-            document.getElementById("asc-button").addEventListener("click", function () {
-                event.preventDefault();
-                if (ascending) {
-                    ascending = false;
-                    document.getElementById("sortIcon").src = "sort-descending.png";
-
-                }
-                else {
-                    ascending = true;
-                    document.getElementById("sortIcon").src = "sort.png";
-                }
-                sortRows(document.getElementById("sortSelect").value);
-
-            });
-
-            createCheckboxes();
-            updateRows();
-
-        </script>
-
+        <script src="tableOrganizer.js"></script>
     </form>
 </body>
 
