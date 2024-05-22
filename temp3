@@ -1,148 +1,117 @@
-using OfficeOpenXml;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Web.UI.DataVisualization.Charting;
-using System.Web.UI.HtmlControls;
-using Excel = Microsoft.Office.Interop.Excel;
-
-namespace WebApplication1
-{
-    public partial class _default : System.Web.UI.Page
-    {
-        Dictionary<string, Dictionary<string, int>> columnUniqueValuesCount;
-
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            columnUniqueValuesCount = new Dictionary<string, Dictionary<string, int>>();
-
-            for (int rowIndex = 1; rowIndex < dataTable.Rows.Count; rowIndex++)
-            {
-                HtmlTableRow row = dataTable.Rows[rowIndex];
-                for (int i = 0; i < row.Cells.Count; i++)
-                {
-                    string columnName = dataTable.Rows[0].Cells[i].InnerText;
-                    string cellValue = row.Cells[i].InnerText;
-
-                    if (!columnUniqueValuesCount.ContainsKey(columnName))
-                    {
-                        columnUniqueValuesCount[columnName] = new Dictionary<string, int>();
-                    }
-
-                    if (!columnUniqueValuesCount[columnName].ContainsKey(cellValue))
-                    {
-                        columnUniqueValuesCount[columnName][cellValue] = 1;
-                    }
-                    else
-                    {
-                        columnUniqueValuesCount[columnName][cellValue]++;
-                    }
-                }
-            }
-            foreach (var column in columnUniqueValuesCount)
-            {
-                HtmlGenericControl divChart = new HtmlGenericControl("div");
-                divChart.Attributes["class"] = "chart-container";
-
-                Chart chart = new Chart();
-                chart.Width = 300;
-                chart.Height = 300;
-                chart.ChartAreas.Add(new ChartArea());
-                chart.Titles.Add(column.Key + " Grafiği");
-
-                Series series = new Series();
-                series.ChartType = SeriesChartType.Pie;
-                series.IsValueShownAsLabel = false;
-
-                foreach (var valueCount in column.Value)
-                {
-                    DataPoint point = new DataPoint();
-
-                    point.SetValueY(valueCount.Value);
-                    point.LegendText = $"{valueCount.Key} ({valueCount.Value})";
-                    series.Points.Add(point);
-                }
-
-                chart.Series.Add(series);
-
-                Legend legend = new Legend();
-                legend.Docking = Docking.Bottom;
-                chart.Legends.Add(legend);
-
-                divChart.Controls.Add(chart);
-
-                chartsContainer.Controls.Add(divChart);
-            }
-
+param(
+    [int]$start=0
+)
+$reset=$start
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+foreach($vcenter in $vcenters){
+    for($i=0;$i -le 7;$i++){
+        Connect-VIServer -Server $vcenter 
+        if(!$vms){
+            $vms= Get-VM
         }
-        protected void btnCreateCharts_Click(object sender, EventArgs e)
-        {
-            Excel.Application excelApp = new Excel.Application();
-            Excel.Workbook workbook = excelApp.Workbooks.Add();
-            Excel._Worksheet worksheet = workbook.ActiveSheet;
-            worksheet.Name = "Charts";
+        for($j = ($start+($i*300));$j -lt (($start+300)+($i*300));$j++){
+            $j
 
-            int startRow = 1;
+            if($j -gt $vms.Length-1 -or $j -gt (2000+$start-1)){ break;}
 
-            foreach (var column in columnUniqueValuesCount)
-            {
-                int startColumn = 1;
-                Excel.Range target = worksheet.Cells[startRow, 5];
-                Excel.ChartObjects chartObjects = (Excel.ChartObjects)worksheet.ChartObjects(Type.Missing);
-                Excel.ChartObject chartObject = chartObjects.Add((int)target.Left, (int)target.Top, 300, 300);
+            $vm=$vms[$j]
+            $vmNotes=(((($vm.Notes) -replace "'"," ")-replace ";",".")-replace ","," ") -replace "\n"," "
+            $vmName=$vm.Name
+            $vmOwner=$vm.CustomFields.Value[5]
+            $vmPowerState=$vm.PowerState
+            $vmGuestOS=$vm.Guest.OSFullName
+            if($vm.CreateDate -eq "01/01/1970 00:00:00"){
+                $vmCreatedDate="NULL"        
+            }
+            else{
+                $vmCreatedDate=($vm.CreateDate -split' ')[0]
+            }
+            $vmCoresPerSocket=$vm.CoresPerSocket
+            $vmNumCPU=$vm.NumCpu 
+            $vmMemory=$vm.MemoryGB
+            $vmCluster=$vm.VMHost.Parent.Name-replace '#',''
+            $vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
+            $vmHost=$vm.VMHost.Name
+            $VMHostModel=$vm.VMHost.Model
+            $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
 
-                Excel.Chart chart = chartObject.Chart;
-                chart.ChartType = Excel.XlChartType.xlPie;
-                chart.HasTitle = true;
-                chart.ChartTitle.Text = column.Key;
-
-                worksheet.Cells[startRow, startColumn].Value = column.Key;
-                worksheet.Cells[startRow, startColumn + 1].Value = "Value";
-                worksheet.Cells[startRow, startColumn + 2].Value = "Percentage";
-
-                startRow++;
-                int dataStartRow = startRow;
-                int total = column.Value.Sum(x => x.Value);
-                foreach (var valueCount in column.Value)
-                {
-                    worksheet.Cells[startRow, startColumn].Value = $"{valueCount.Key} ({valueCount.Value})"; 
-                    worksheet.Cells[startRow, startColumn + 1].Value = valueCount.Value;
-                    double percentage = (double)valueCount.Value / total * 100;
-                    worksheet.Cells[startRow, startColumn + 2].Value = $"%{percentage:F2}"; 
-                    startRow++;
-                }
-
-                Excel.Range chartDataRange = worksheet.Range[worksheet.Cells[dataStartRow, startColumn + 1], worksheet.Cells[dataStartRow + column.Value.Count - 1, startColumn + 1]];
-                Excel.Range chartLabelsRange = worksheet.Range[worksheet.Cells[dataStartRow, startColumn], worksheet.Cells[dataStartRow + column.Value.Count - 1, startColumn]];
-
-                Excel.SeriesCollection seriesCollection = chart.SeriesCollection();
-                Excel.Series series = seriesCollection.NewSeries();
-                series.XValues = chartLabelsRange;
-                series.Values = chartDataRange;
-
-                series.ApplyDataLabels(Excel.XlDataLabelsType.xlDataLabelsShowLabelAndPercent);
-                startRow = startRow + 20; // Space between charts
+            $AdapterName=""
+            $NetworkName=""
+            $AdapterType=""
+            $AdapterMACAddress=""
+            $adapter=""
+            foreach($adapter in $vm|Get-NetworkAdapter){
+                $AdapterName+="$($adapter.Name)~" 
+                $NetworkName+= "$($adapter.NetworkName)~"
+                $AdapterMACAddress+= "$($adapter.MacAddress)~"
+                $AdapterType+= "$($adapter.Type)~"
+                                           
+                
             }
 
-            // Geçici dosya yolunu oluştur
-            string tempFilePath = Path.GetTempFileName();
-            string excelFilePath = Path.ChangeExtension(tempFilePath, "xlsx");
+            $diskName=""
+            $diskFormat=""
+            $diskCapacity=""
+            $diskDS=""
+            $TotalCapacity=0
+            $disks= $vm |Get-HardDisk
+            foreach($disk in $disks){
+                $diskName+="$($disk.Name)~"
+                $diskFormat+="$($disk.StorageFormat)~"
+                $diskCapacity+="$($disk.CapacityGB)~"
+                $diskDS+="$(($disk.Filename-split ' ')[0].Trim('[',']'))~"
+                $TotalCapacity=$TotalCapacity+$disk.CapacityGB
 
-            // Excel dosyasını kaydet
-            workbook.SaveAs(excelFilePath);
 
-            // Clean up
-            workbook.Close();
-            excelApp.Quit();
+            }
 
-            // Send the file to the browser
-            Response.Clear();
-            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            Response.AppendHeader("Content-Disposition", "attachment; filename=pieCharts.xlsx");
-            Response.TransmitFile(excelFilePath);
-            Response.End();
+            if($vmPowerState -eq "PoweredOn"){
+                $CPUAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $DiskAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $NetworkAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $MemoryAverageUsage ="{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage/$vm.MemoryMB)-replace'%',''
+
+            }
+            else{
+                $CPUAverageUsage =0
+                $MemoryAverageUsage =0
+                $NetworkAverageUsage=0
+                $DiskAverageUsage=0
+
+            }
+
+            $EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
+            $eventDate=""
+            $eventMessage=""
+            foreach ($EventLog in $EventLogs) {
+                $eventDate+="$($EventLog.CreatedTime)~"
+                $eventMessage+="$((($EventLog.FullFormattedMessage)-replace "'"," ")-replace ","," ")~"
+            }
+            $command = $conn.CreateCommand()
+                
+            $sql = @"
+            INSERT INTO VMInfos2 (VMName,VMOwner,vCenter,VMPowerState,VMGuestOS,VMNotes,VMAverageCPUUsage,VMAverageMemoryUsage,VMAverageNetworkUsage
+            ,VMAverageDiskUsage,VMNetworkAdapterName,VMNetworkName,VMNetworkCardType,VMNetworkAdapterMacAddress,VMDiskName,VMDiskTotalSize
+            ,VMDiskStorageFormat,VMDiskDataStore,VMCreatedDate,VMNumCPU,VMCoresPerSocket,VMMemoryCapacity,VMCluster,VMDataCenter,VMHost,LastWriteTime,
+            VMTotalDisk,VMHostModel,VMEventDates,VMEventMessages) 
+            VALUES
+            ('$vmName','$vmOwner','$vcenter','$vmPowerState','$vmGuestOS','$vmNotes',$CPUAverageUsage,$MemoryAverageUsage,$NetworkAverageUsage
+            ,$DiskAverageUsage,'$AdapterName','$NetworkName','$AdapterType','$AdapterMACAddress','$diskName','$diskCapacity'
+            ,'$diskFormat','$diskDS','$vmCreatedDate','$vmNumCPU','$vmCoresPerSocket','$vmMemory','$vmCluster','$vmDataCenter','$vmHost','$lastWriteTime',
+            $("{0:F2}" -f [decimal]$TotalCapacity),'$VMHostModel','$eventDate','$eventMessage') 
+"@
+            $command.CommandText = $sql
+            $row=$command.ExecuteNonQuery()
         }
+        Disconnect-VIServer -Server $vcenter -Confirm:$false
+        
 
-    }
+    } 
+    $vms=$null
+    $start=$reset
+
+      
 }
+$conn.Close() 
