@@ -1,25 +1,31 @@
 $conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 $conn.Open()
 $command = $conn.CreateCommand()
-$check="DELETE FROM VMInfos2"
-$command.CommandText = $check
-$command.ExecuteNonQuery()
-$check="DELETE FROM VMHostInfos"
-$command.CommandText = $check
-$command.ExecuteNonQuery()
-$check="DELETE FROM ClusterInfos"
-$command.CommandText = $check
-$command.ExecuteNonQuery()
 
-Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\clusterInfosSavingSql.ps1" -NoNewWindow
-Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\vmhostInfosSavingSql.ps1" -NoNewWindow
-for($i=0;$i -le 5;$i++){
-    Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\vmInfosSavingSql.ps1 -start $($i*2000)" -NoNewWindow
+$queries = @(
+    "DELETE FROM VMInfos2",
+    "DELETE FROM VMHostInfos",
+    "DELETE FROM ClusterInfos"
+)
+
+foreach ($query in $queries) {
+    $command.CommandText = $query
+    $command.ExecuteNonQuery()
 }
-$check="UPDATE VMInfos2
+
+# Start and wait for each PowerShell script
+Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\clusterInfosSavingSql.ps1" -NoNewWindow -Wait
+Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\vmhostInfosSavingSql.ps1" -NoNewWindow -Wait
+
+for ($i = 0; $i -le 5; $i++) {
+    Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\vmInfosSavingSql.ps1 -start $($i * 2000)" -NoNewWindow -Wait
+}
+
+$updateQueries = @"
+UPDATE VMInfos2
 SET VMCreatedDate = VMsExtras.CreatedDate
 FROM VMInfos2
-JOIN VMsExtras ON VMInfos2.VMName =VMsExtras.VMName
+JOIN VMsExtras ON VMInfos2.VMName = VMsExtras.VMName
 WHERE VMCreatedDate = 'NULL';
 
 UPDATE VMInfos2
@@ -28,9 +34,10 @@ WHERE VMCreatedDate = 'NULL';
 
 UPDATE VMInfos2
 SET VMOwner = '-'
-WHERE VMOwner IS NULL;"
-$command.CommandText = $check
-$command.ExecuteNonQuery()
-$conn.Close()
+WHERE VMOwner IS NULL;
+"@
 
- 
+$command.CommandText = $updateQueries
+$command.ExecuteNonQuery()
+
+$conn.Close()
