@@ -1,54 +1,60 @@
-function sortTable(columnIndex,column) {
-                var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-                table = column.closest('table');
-                switching = true;
-                dir = "asc";
-                while (switching) {
-                    switching = false;
-                        rows = table.rows;
-                        for (i = 1; i < rows.length - 1; i++) {
-                            shouldSwitch = false;
-                            x = rows[i].getElementsByTagName("td")[columnIndex];
-                            y = rows[i + 1].getElementsByTagName("td")[columnIndex];
+function sortTable(columnIndex, column) {
+    var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+    table = column.closest('table');
+    switching = true;
+    dir = "asc";
+    
+    // Get all rows except the header
+    rows = Array.from(table.rows).slice(1);
+    
+    while (switching) {
+        switching = false;
 
-                            if (dir == "asc")
-                            {
-                                if (!isNaN(x.innerText) && !isNaN(y.innerText)) {
-                                    if (aValue > bValue) {
-                                        shouldSwitch = true;
-                                        break;
-                                    }
-                                }
-                                else if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
-                                    shouldSwitch = true;
-                                    break;
-                                }
-                            }
-                            else (dir == "desc")
-                            {
-                                if (!isNaN(x.innerText) && !isNaN(y.innerText)) {
-                                    if (aValue < bValue) {
-                                        shouldSwitch = true;
-                                        break;
-                                    }
-                                }
-                                else if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
-                                    shouldSwitch = true;
-                                    break;
-                                }
-                            }
-                        }
+        for (i = 0; i < rows.length - 1; i++) {
+            shouldSwitch = false;
+            x = rows[i].getElementsByTagName("td")[columnIndex];
+            y = rows[i + 1].getElementsByTagName("td")[columnIndex];
+            
+            var xValue = x.innerText || x.textContent;
+            var yValue = y.innerText || y.textContent;
+            
+            if (!isNaN(xValue) && !isNaN(yValue)) {
+                xValue = parseFloat(xValue);
+                yValue = parseFloat(yValue);
+            } else {
+                xValue = xValue.toLowerCase();
+                yValue = yValue.toLowerCase();
+            }
 
-                        if (shouldSwitch) {
-                            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                            switching = true;
-                            switchcount++;
-                        }
-                        else {
-                            if (switchcount == 0 && dir == "asc") {
-                                dir = "desc";
-                                switching = true;
-                            }
-                        }
+            if (dir == "asc") {
+                if (xValue > yValue) {
+                    shouldSwitch = true;
+                    break;
+                }
+            } else if (dir == "desc") {
+                if (xValue < yValue) {
+                    shouldSwitch = true;
+                    break;
                 }
             }
+        }
+
+        if (shouldSwitch) {
+            // Swap the rows in the array
+            [rows[i], rows[i + 1]] = [rows[i + 1], rows[i]];
+            switching = true;
+            switchcount++;
+        } else {
+            if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+            }
+        }
+    }
+
+    // Rebuild the table with sorted rows
+    for (i = 0; i < rows.length; i++) {
+        table.appendChild(rows[i]);
+    }
+}
+
