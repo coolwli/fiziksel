@@ -2,234 +2,248 @@ using System;
 using System.Web.UI.HtmlControls;
 using System.Web.UI.WebControls;
 using System.Data;
+using System.Text;
 using System.IO;
 using System.Web.UI;
 using System.Data.SqlClient;
 
 namespace vminfo
 {
-    public partial class vmScreen : System.Web.UI.Page
+    public partial class vmhostScreen : System.Web.UI.Page
     {
-        private readonly SqlConnection _con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
-        private string _hostName;
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
+        string hostName;
+        
+
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            if (!IsPostBack)
+            hostName = Request.QueryString["id"];
+
+            if (con.State == ConnectionState.Open)
             {
-                _hostName = Request.QueryString["id"];
-                if (string.IsNullOrEmpty(_hostName))
-                {
-                    // Handle missing or invalid ID here
-                    return;
-                }
-
-                if (_con.State == ConnectionState.Open)
-                {
-                    _con.Close();
-                }
-
-                _con.Open();
-                ShowHost();
+                con.Close();
             }
+            con.Open();
+            showHost();
+        }
+        public void showHost()
+        {
+            SqlCommand command = new SqlCommand("SELECT * FROM VMHostInfos WHERE HostName = @name", con);
+            command.Parameters.AddWithValue("@name", hostName);
+            using (SqlDataReader reader = command.ExecuteReader())
+            {
+                if (reader.Read())
+                {
+                    vcenter.InnerText = reader["vCenter"].ToString();
+                    cluster.InnerText = reader["HostCluster"].ToString();
+                    datacenter.InnerText = reader["HostDataCenter"].ToString();
+                    manufacturer.InnerText = reader["HostManufacturer"].ToString();
+                    hostmodel.InnerText = reader["HostModel"].ToString();
+                    memorysize.InnerText = reader["HostMemorySize"].ToString();
+                    cpucore.InnerText = reader["HostNumCPUCores"].ToString();
+                    cpumhz.InnerText = reader["HostCPUMhz"].ToString();
+                    hostnic.InnerText = reader["HostNumNics"].ToString();
+                    hbas.InnerText = reader["HostHBAs"].ToString();
+                    avcpu.InnerText = reader["averageCpu"].ToString()+"%";
+                    avmem.InnerText = reader["averageMemory"].ToString() + "%";
+                    avdisk.InnerText = reader["averageDisk"].ToString() + " KBps";
+                    avnet.InnerText = reader["averageNetwork"].ToString() + " KBps";
+                    lasttime.InnerText = reader["LastWriteTime"].ToString();
+                    uptimedays.InnerText = reader["uptimeDay"].ToString() + " Day";
+                    
+
+
+
+
+                }
+            }
+            showVMs();
+            showCpus();
+            showDss();
+            showEvents();
         }
 
-        private void ShowHost()
+        public void showCpus()
         {
+            string[] cpuId, cpuName;
+            SqlCommand cmd = con.CreateCommand();
+
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT CPUIndex,CPUDesc FROM VMHostInfos  WHERE HostName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
+
+            cmd.ExecuteNonQuery();
             DataTable dt = new DataTable();
-            using (SqlCommand command = new SqlCommand("SELECT * FROM VMInfos2 WHERE VMName = @name", _con))
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+            cpuName = (dt.Rows[0][1]).ToString().Split('~');
+            cpuId = (dt.Rows[0][0]).ToString().Split('~');
+            for (int i = 0; i < cpuId.Length - 1; i++)
             {
-                command.Parameters.AddWithValue("@name", _hostName);
-                using (SqlDataReader reader = command.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        PopulateHostDetails(reader);
-                    }
-                }
-            }
+                HtmlTableRow newRow = new HtmlTableRow();
+                HtmlTableCell cell1 = new HtmlTableCell();
+                HtmlTableCell cell2 = new HtmlTableCell();
+                cell2.InnerText = cpuId[i].ToString();
+                newRow.Cells.Add(cell2);
+                cell1.InnerText = cpuName[i].ToString();
+                newRow.Cells.Add(cell1);
 
-            ShowNetwork();
-            ShowDisks();
-            ShowEvents();
-        }
-
-        private void PopulateHostDetails(SqlDataReader reader)
-        {
-            vcenter.InnerText = reader["vCenter"].ToString();
-            host.InnerText = reader["VMHost"].ToString();
-            cluster.InnerText = reader["VMCluster"].ToString();
-            datacenter.InnerText = reader["VMDataCenter"].ToString();
-            power.InnerText = reader["VMPowerState"].ToString();
-            notes.InnerText = reader["VMNotes"].ToString();
-            numcpu.InnerText = reader["VMNumCPU"].ToString();
-            corespersocket.InnerText = reader["VMCoresPerSocket"].ToString();
-            totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
-            totaldisk.InnerText = reader["VMTotalDisk"].ToString();
-            averageDisk.InnerText = reader["VMAverageDiskUsage"].ToString() + " KBps";
-            averageCpu.InnerText = reader["VMAverageCPUUsage"].ToString() + "%";
-            averageMemory.InnerText = reader["VMAverageMemoryUsage"].ToString() + "%";
-            averageNetwork.InnerText = reader["VMAverageNetworkUsage"].ToString() + " KBps";
-            lasttime.InnerText = reader["LastWriteTime"].ToString();
-            hostmodel.InnerText = reader["VMHostModel"].ToString();
-            os.InnerText = reader["VMGuestOS"].ToString();
-            string tempCreatedDate = reader["VMCreatedDate"].ToString();
-
-            PopulateCreatedDate(tempCreatedDate);
-        }
-
-        private void PopulateCreatedDate(string tempCreatedDate)
-        {
-            using (SqlCommand command = new SqlCommand("SELECT CreatedDate FROM VMsExtras WHERE VMName = @name", _con))
-            {
-                command.Parameters.AddWithValue("@name", _hostName);
-                using (SqlDataReader reader = command.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        createdDate.InnerText = reader["CreatedDate"].ToString();
-                    }
-                    else
-                    {
-                        createdDate.InnerText = tempCreatedDate;
-                    }
-                }
+                cpuTable.Rows.Add(newRow);
             }
         }
-
-        private void ShowEvents()
+        public void showEvents()
         {
-            using (SqlCommand cmd = new SqlCommand("SELECT VMEventDates, VMEventMessages FROM VmInfos2 WHERE VMName = @name", _con))
+            string[] ed, em;
+            SqlCommand cmd = con.CreateCommand();
+
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT eventDate,eventMessage FROM VMHostInfos  WHERE HostName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
+
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+            ed = (dt.Rows[0][1]).ToString().Split('~');
+            em = (dt.Rows[0][0]).ToString().Split('~');
+            for (int i = 0; i < ed.Length - 1; i++)
             {
-                cmd.Parameters.AddWithValue("@name", _hostName);
+                HtmlTableRow newRow = new HtmlTableRow();
+                HtmlTableCell cell1 = new HtmlTableCell();
+                HtmlTableCell cell2 = new HtmlTableCell();
+                cell2.InnerText = ed[i].ToString();
+                newRow.Cells.Add(cell2);
+                cell1.InnerText = em[i].ToString();
+                newRow.Cells.Add(cell1);
 
-                using (SqlDataReader reader = cmd.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        string[] eventDates = reader["VMEventDates"].ToString().Split('~');
-                        string[] eventMessages = reader["VMEventMessages"].ToString().Split('~');
-
-                        for (int i = 0; i < eventDates.Length - 1; i++)
-                        {
-                            HtmlTableRow newRow = new HtmlTableRow();
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = eventDates[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = eventMessages[i] });
-                            eventsTable.Rows.Add(newRow);
-                        }
-                    }
-                }
+                eventsTable.Rows.Add(newRow);
             }
         }
+        public void showVMs() {
+            string[] vmNames;
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT vmsName FROM VMHostInfos  WHERE HostName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
 
-        private void ShowNetwork()
-        {
-            using (SqlCommand cmd = new SqlCommand("SELECT VMNetworkAdapterName, VMNetworkName, VMNetworkCardType, VMNetworkAdapterMacAddress FROM VMInfos2 WHERE VMName = @name", _con))
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+            vmNames = (dt.Rows[0][0]).ToString().Split('~');
+
+        
+            foreach (string vmname in vmNames)
             {
-                cmd.Parameters.AddWithValue("@name", _hostName);
+                cmd.CommandText = $"SELECT VMName,VMOwner,VMPowerState,VMTotalDisk FROM VMInfos2  WHERE VMName = '{vmname}'";
+                cmd.ExecuteNonQuery();
 
-                using (SqlDataReader reader = cmd.ExecuteReader())
+                DataTable dtv = new DataTable();
+                SqlDataAdapter daV = new SqlDataAdapter(cmd);
+                daV.Fill(dtv);
+                foreach (DataRow row in dtv.Rows)
                 {
-                    if (reader.Read())
+                    HtmlTableRow newRow = new HtmlTableRow();
+                    for (int j = 0; j < 4; j++)
                     {
-                        string[] adapterNames = reader["VMNetworkAdapterName"].ToString().Split('~');
-                        string[] networkNames = reader["VMNetworkName"].ToString().Split('~');
-                        string[] macAddresses = reader["VMNetworkAdapterMacAddress"].ToString().Split('~');
-                        string[] networkCardTypes = reader["VMNetworkCardType"].ToString().Split('~');
-
-                        for (int i = 0; i < adapterNames.Length - 1; i++)
-                        {
-                            HtmlTableRow newRow = new HtmlTableRow();
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = adapterNames[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = networkNames[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = macAddresses[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = networkCardTypes[i] });
-                            networkTable.Rows.Add(newRow);
-                        }
+                        HtmlTableCell newCell = new HtmlTableCell();
+                        newCell.InnerText = row[j].ToString();
+                        newRow.Cells.Add(newCell);
                     }
+                    vmsTable.Rows.Add(newRow);
+
                 }
+
             }
+            
+
         }
 
-        private void ShowDisks()
-        {
-            using (SqlCommand cmd = new SqlCommand("SELECT VMDiskName, VMDiskTotalSize, VMDiskStorageFormat, VMDiskDataStore FROM VMInfos2 WHERE VMName = @name", _con))
+        public void showDss() {
+            string[] dsName, dsCapacity, dsFree, dsPercentUsing;
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT dsName, dsCapacity, dsFree, dsPercentUsing FROM VMHostInfos  WHERE HostName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
+
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+            dsName = (dt.Rows[0][0]).ToString().Split('~');
+            dsCapacity = (dt.Rows[0][1]).ToString().Split('~');
+            dsFree= (dt.Rows[0][2]).ToString().Split('~');
+            dsPercentUsing= (dt.Rows[0][3]).ToString().Split('~');
+            for (int i = 0; i < dsName.Length - 1; i++)
             {
-                cmd.Parameters.AddWithValue("@name", _hostName);
+                HtmlTableRow newRow = new HtmlTableRow();
+                HtmlTableCell cell1 = new HtmlTableCell();
+                HtmlTableCell cell2 = new HtmlTableCell();
+                HtmlTableCell cell3 = new HtmlTableCell();
+                HtmlTableCell cell4 = new HtmlTableCell();
+                cell1.InnerText = dsName[i].ToString();
+                newRow.Cells.Add(cell1);
+                cell2.InnerText = dsCapacity[i].ToString();
+                newRow.Cells.Add(cell2);
+                cell3.InnerText = dsFree[i].ToString();
+                newRow.Cells.Add(cell3);
+                cell4.InnerText = "%"+dsPercentUsing[i].ToString();
+                newRow.Cells.Add(cell4);
 
-                using (SqlDataReader reader = cmd.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        string[] diskNames = reader["VMDiskName"].ToString().Split('~');
-                        string[] totalSizes = reader["VMDiskTotalSize"].ToString().Split('~');
-                        string[] formats = reader["VMDiskStorageFormat"].ToString().Split('~');
-                        string[] dataStores = reader["VMDiskDataStore"].ToString().Split('~');
-
-                        for (int i = 0; i < diskNames.Length - 1; i++)
-                        {
-                            HtmlTableRow newRow = new HtmlTableRow();
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = diskNames[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = totalSizes[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = formats[i] });
-                            newRow.Cells.Add(new HtmlTableCell { InnerText = dataStores[i] });
-                            disksTable.Rows.Add(newRow);
-                        }
-                    }
-                }
+                dsTable.Rows.Add(newRow);
             }
         }
 
-        protected void ExportToExcelClick(object sender, EventArgs e)
+        protected void exportToExcelClick(object sender, EventArgs e)
         {
-            using (SqlCommand cmd = new SqlCommand("SELECT * FROM VMInfos2 WHERE VMName = @name", _con))
-            {
-                cmd.Parameters.AddWithValue("@name", _hostName);
-                DataTable dt = new DataTable();
-                using (SqlDataAdapter da = new SqlDataAdapter(cmd))
-                {
-                    da.Fill(dt);
-                }
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT * FROM VMHostInfos WHERE HostName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
 
-                ExpandDataTable(dt);
-
-                DataGrid dg = new DataGrid { DataSource = dt };
-                dg.DataBind();
-
-                Response.Clear();
-                Response.Buffer = true;
-                Response.Charset = "";
-                Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                Response.AddHeader("content-disposition", $"attachment;filename={_hostName}.xls");
-
-                using (StringWriter sw = new StringWriter())
-                {
-                    using (HtmlTextWriter htw = new HtmlTextWriter(sw))
-                    {
-                        dg.RenderControl(htw);
-                        Response.Output.Write(sw.ToString());
-                        Response.Flush();
-                        Response.End();
-                    }
-                }
-            }
-        }
-
-        private void ExpandDataTable(DataTable dt)
-        {
             foreach (DataColumn col in dt.Columns)
             {
                 string[] keys = dt.Rows[0][col].ToString().Split('~');
                 for (int i = 1; i < keys.Length; i++)
                 {
                     if (dt.Rows.Count < keys.Length)
-                    {
                         dt.Rows.Add();
-                    }
                     dt.Rows[i][col.ColumnName] = keys[i - 1].Trim();
                 }
                 dt.Rows[0][col] = keys[0];
+
+
             }
+
+
+            DataGrid dg = new DataGrid();
+            dg.DataSource = dt;
+            dg.DataBind();
+
+            Response.Clear();
+            Response.Buffer = true;
+            Response.Charset = "";
+            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            Response.AddHeader("content-disposition", ("attachment;filename=" + hostName + ".xls"));
+
+            using (StringWriter sw = new StringWriter())
+            {
+                using (HtmlTextWriter htw = new HtmlTextWriter(sw))
+                {
+                    dg.RenderControl(htw);
+                    Response.Output.Write(sw.ToString());
+                    Response.Flush();
+                    Response.End();
+                }
+
+            }
+
         }
+
     }
 }
