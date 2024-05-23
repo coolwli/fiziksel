@@ -1,136 +1,24 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="vmhostScreen.aspx.cs" Inherits="vminfo.vmhostScreen" %>
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="hostscreen.aspx.cs" Inherits="vminfo.hostscreen" %>
 
-<!DOCTYPE html>
-<head runat="server">
+<html>
+<head runat="server">  
+    <title>Host Screen</title>
+    <link rel="stylesheet" type="text/css" href="screenStyle.css" />
     <style>
-        *,
-        *:before,
-        *:after {
-            margin: 0;
-            font-family: Verdana;
-            
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: Verdana, Geneva, Tahoma, sans-serif;
-
-            background-color: #F8F9FA;
-        }
-
-        .boldText {
-            text-transform: uppercase;
-            margin-bottom: 5px;
-            font-weight: bold;
-            font-size: small;
-        }
-
-        .blueText {
-            letter-spacing: 2px;
-            color: #54AFE4;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-        }
-        .linkText {
-            color: #54AFE4;
-            text-decoration:underline;
-            margin-bottom: 5px;
-            font-weight: bold;
-            cursor:pointer;
-        }
-
-        .header {
-            overflow: hidden;
-            background-color: #212529;
-            padding: 10px 10px;
-        }
-
-        .header h1 {
-            margin: 20px;
-            float: left;
-            text-align: center;
-            text-decoration: none;
-            line-height: 10px;
-            border-radius: 4px;
-            color: #F8F9FA;
-        }
-
-        .columnLeft {
-            float: left;
-            width: 45%;
-            margin-top: 20px;
-            margin-left: 10px;
-        }
-
-        .columnRight {
-            float: left;
-            width: 50%;
-            margin-top: 20px;
-            margin-left: 10px;
-        }
-
-        .panelsRight {
-            height: 300px;
-            background-color: #F8F9FA;
-            overflow-y: auto;
-            border-radius: 0px;
-            box-shadow: 0px 0px 10px #888;
-            border-color: #EF5160;
-            margin-bottom: 10px;
-            margin-left: 5px;
-            margin-right: 5px;
-            padding: 5px;
-        }
-
-        .detailsTable {
-            border-collapse: collapse;
-            width: 100%;
-            border: 1px solid #ddd;
-            font-size: 12px;
-        }
-
-        .detailsTable th, .detailsTable td {
-            text-align: left;
-            padding: 8px;
-        }
-
-        .detailsTable tr {
-            border-bottom: 1px solid #ddd;
-        }
-
         #vmsTable td:hover {
             cursor: pointer;
         }
 
-        .detailsTable th:hover {
-            cursor: pointer;
-        }
-
-        .detailsTable tr:hover {
-            background-color: #dee2e6;
-        }
-
-
-
-        
-        .exportButton{
-            font-size:14px;
-            padding: 10px 20px;
-        }
-
-    </style>    
-    <title>VM Host Screen</title>
-
+    </style>
 </head>
 <body>
     <form id="form1" runat="server">
         <div class="header">
             <h1 class="baslik" id="baslik" runat="server">Host Informations</h1>
         </div>
-        <div>
+        <div class="container">
             <div class="columnLeft">
-                <div class="panelsRight" style="height:auto">
+                <div class="panel" style="height:auto">
 
                     <table>
 
@@ -221,7 +109,7 @@
 
                 </div>
 
-                <div class="panelsRight">
+                <div class="panel">
                     <p class="blueText">last event logs</p>
                     <table id="eventsTable" class="detailsTable" runat="server">
                         <thead>
@@ -240,7 +128,7 @@
             </div>
 
             <div class="columnRight">
-                <div class="panelsRight">
+                <div class="panel">
                     <p class="blueText">all vms</p>
                     <table id="vmsTable" class="detailsTable" runat="server">
                         <thead>
@@ -256,7 +144,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="panelsRight">
+                <div class="panel">
                     <p class="blueText">cpus</p>
                     <table id="cpuTable" class="detailsTable" runat="server">
                         <thead>
@@ -271,7 +159,7 @@
                     </table>
 
                 </div>
-                <div class="panelsRight">
+                <div class="panel">
                     <p class="blueText">datastores</p>
                     <table id="dsTable" class="detailsTable" runat="server">
                         <thead>
@@ -289,16 +177,19 @@
                 </div>
 
             </div>
+
         </div>
+        
+        <footer>
+            <p class="footer">© 2024 - Cloud United Team</p>
+        </footer>
         <script>
             const urlParams = new URLSearchParams(window.location.search);
             const id = urlParams.get("id");
         
             const baslik = document.getElementsByClassName("baslik")[0];
             baslik.textContent = id;
-        </script>
-
-        <script>
+       
             function sortTable(columnIndex,column) {
                 var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
                 table = column.closest('table');
@@ -339,12 +230,11 @@
                     }
             }
 
+            
             document.getElementById("cluster").addEventListener("click", function () {
-                window.location.href = "clusterScreen.aspx?id=" + document.getElementById("cluster").textContent;
+                window.location.href = "clusterscreen.aspx?id=" + document.getElementById("cluster").textContent;
             });
-        </script>
 
-        <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const tablo = document.getElementById("vmsTable");
 
@@ -353,7 +243,7 @@
                     const satir = event.currentTarget;
                     const id = satir.querySelector("td:first-child").textContent;
 
-                    window.location.href="vmScreen.aspx?id=" + id;
+                    window.location.href="vmscreen.aspx?id=" + id;
                 }
                 const satirListesi = tablo.querySelectorAll("tbody tr");
                 satirListesi.forEach(function (satir) {
@@ -361,8 +251,9 @@
                     satir.addEventListener("click", satirTiklandi);
                 });
             });
+            
+        </script>
 
-    </script>
     </form>
 </body>
 </html>
