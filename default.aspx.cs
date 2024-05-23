@@ -9,41 +9,6 @@ using System.Data.SqlClient;
 
 namespace vminfo
 {
-    public partial class vmhostScreen : System.Web.UI.Page
-    {
-        private readonly SqlConnection _con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
-        private string _hostName;
-
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            _hostName = Request.QueryString["id"];
-
-            if (string.IsNullOrEmpty(_hostName))
-            {
-                // Handle missing or invalid ID here
-                return;
-            }
-
-            if (_con.State == ConnectionState.Open)
-            {
-                _con.Close();
-            }
-
-            _con.Open();
-            ShowHost();
-        }
-
- using System;
-using System.Web.UI.HtmlControls;
-using System.Web.UI.WebControls;
-using System.Data;
-using System.Text;
-using System.IO;
-using System.Web.UI;
-using System.Data.SqlClient;
-
-namespace vminfo
-{
     public partial class clusterScreen : System.Web.UI.Page
     {
         SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
@@ -259,58 +224,5 @@ namespace vminfo
 
         }
 
-    }
-}
-protected void ExportToExcelClick(object sender, EventArgs e)
-        {
-            using (SqlCommand cmd = new SqlCommand("SELECT * FROM VMHostInfos WHERE HostName = @name", _con))
-            {
-                cmd.Parameters.AddWithValue("@name", _hostName);
-                DataTable dt = new DataTable();
-                using (SqlDataAdapter da = new SqlDataAdapter(cmd))
-                {
-                    da.Fill(dt);
-                }
-
-                ExpandDataTable(dt);
-
-                DataGrid dg = new DataGrid { DataSource = dt };
-                dg.DataBind();
-
-                Response.Clear();
-                Response.Buffer = true;
-                Response.Charset = "";
-                Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                Response.AddHeader("content-disposition", $"attachment;filename={_hostName}.xls");
-
-                using (StringWriter sw = new StringWriter())
-                {
-                    using (HtmlTextWriter htw = new HtmlTextWriter(sw))
-                    {
-                        dg.RenderControl(htw);
-                        Response.Output.Write(sw.ToString());
-                        Response.Flush();
-                        Response.End();
-                    }
-                }
-            }
-        }
-
-        private void ExpandDataTable(DataTable dt)
-        {
-            foreach (DataColumn col in dt.Columns)
-            {
-                string[] keys = dt.Rows[0][col].ToString().Split('~');
-                for (int i = 1; i < keys.Length; i++)
-                {
-                    if (dt.Rows.Count < keys.Length)
-                    {
-                        dt.Rows.Add();
-                    }
-                    dt.Rows[i][col.ColumnName] = keys[i - 1].Trim();
-                }
-                dt.Rows[0][col] = keys[0];
-            }
-        }
     }
 }
