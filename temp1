@@ -1,60 +1,118 @@
-function sortTable(columnIndex, column) {
-    var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-    table = column.closest('table');
-    switching = true;
-    dir = "asc";
-    
-    // Get all rows except the header
-    rows = Array.from(table.rows).slice(1);
-    
-    while (switching) {
-        switching = false;
-
-        for (i = 0; i < rows.length - 1; i++) {
-            shouldSwitch = false;
-            x = rows[i].getElementsByTagName("td")[columnIndex];
-            y = rows[i + 1].getElementsByTagName("td")[columnIndex];
-            
-            var xValue = x.innerText || x.textContent;
-            var yValue = y.innerText || y.textContent;
-            
-            if (!isNaN(xValue) && !isNaN(yValue)) {
-                xValue = parseFloat(xValue);
-                yValue = parseFloat(yValue);
-            } else {
-                xValue = xValue.toLowerCase();
-                yValue = yValue.toLowerCase();
-            }
-
-            if (dir == "asc") {
-                if (xValue > yValue) {
-                    shouldSwitch = true;
-                    break;
-                }
-            } else if (dir == "desc") {
-                if (xValue < yValue) {
-                    shouldSwitch = true;
-                    break;
-                }
-            }
+param(
+    [int]$start=0
+)
+$reset=$start
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+foreach($vcenter in $vcenters){
+    for($i=0;$i -le 7;$i++){
+        Connect-VIServer -Server $vcenter 
+        if(!$vms){
+            $vms= Get-VM
         }
+        for($j = ($start+($i*300));$j -lt (($start+300)+($i*300));$j++){
+            $j
 
-        if (shouldSwitch) {
-            // Swap the rows in the array
-            [rows[i], rows[i + 1]] = [rows[i + 1], rows[i]];
-            switching = true;
-            switchcount++;
-        } else {
-            if (switchcount == 0 && dir == "asc") {
-                dir = "desc";
-                switching = true;
+            if($j -gt $vms.Length-1 -or $j -gt (2000+$start-1)){ break;}
+
+            $vm=$vms[$j]
+            $vmNotes=(((($vm.Notes) -replace "'"," ")-replace ";",".")-replace ","," ") -replace "\n"," "
+            $vmName=$vm.Name
+            $vmOwner=$vm.CustomFields.Value[5]
+            $vmPowerState=$vm.PowerState
+            $vmGuestOS=$vm.Guest.OSFullName
+            if($vm.CreateDate -eq "01/01/1970 00:00:00"){
+                $vmCreatedDate="NULL"        
             }
-        }
-    }
+            else{
+                $vmCreatedDate=($vm.CreateDate -split' ')[0]
+            }
+            $vmCoresPerSocket=$vm.CoresPerSocket
+            $vmNumCPU=$vm.NumCpu 
+            $vmMemory=$vm.MemoryGB
+            $vmCluster=$vm.VMHost.Parent.Name-replace '#',''
+            $vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
+            $vmHost=$vm.VMHost.Name
+            $VMHostModel=$vm.VMHost.Model
+            $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
 
-    // Rebuild the table with sorted rows
-    for (i = 0; i < rows.length; i++) {
-        table.appendChild(rows[i]);
-    }
+            $AdapterName=""
+            $NetworkName=""
+            $AdapterType=""
+            $AdapterMACAddress=""
+            $adapter=""
+            foreach($adapter in $vm|Get-NetworkAdapter){
+                $AdapterName+="$($adapter.Name)~" 
+                $NetworkName+= "$($adapter.NetworkName)~"
+                $AdapterMACAddress+= "$($adapter.MacAddress)~"
+                $AdapterType+= "$($adapter.Type)~"
+                                           
+                
+            }
+
+            $diskName=""
+            $diskFormat=""
+            $diskCapacity=""
+            $diskDS=""
+            $TotalCapacity=0
+            $disks= $vm |Get-HardDisk
+            foreach($disk in $disks){
+                $diskName+="$($disk.Name)~"
+                $diskFormat+="$($disk.StorageFormat)~"
+                $diskCapacity+="$($disk.CapacityGB)~"
+                $diskDS+="$(($disk.Filename-split ' ')[0].Trim('[',']'))~"
+                $TotalCapacity=$TotalCapacity+$disk.CapacityGB
+
+
+            }
+
+            if($vmPowerState -eq "PoweredOn"){
+                $CPUAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $DiskAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $NetworkAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $MemoryAverageUsage ="{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage/$vm.MemoryMB)-replace'%',''
+
+            }
+            else{
+                $CPUAverageUsage =0
+                $MemoryAverageUsage =0
+                $NetworkAverageUsage=0
+                $DiskAverageUsage=0
+
+            }
+
+            $EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
+            $eventDate=""
+            $eventMessage=""
+            foreach ($EventLog in $EventLogs) {
+                $eventDate+="$($EventLog.CreatedTime)~"
+                $eventMessage+="$((($EventLog.FullFormattedMessage)-replace "'"," ")-replace ","," ")~"
+            }
+            $command = $conn.CreateCommand()
+                
+            $sql = @"
+            INSERT INTO VMInfos2 (VMName,VMOwner,vCenter,VMPowerState,VMGuestOS,VMNotes,VMAverageCPUUsage,VMAverageMemoryUsage,VMAverageNetworkUsage
+            ,VMAverageDiskUsage,VMNetworkAdapterName,VMNetworkName,VMNetworkCardType,VMNetworkAdapterMacAddress,VMDiskName,VMDiskTotalSize
+            ,VMDiskStorageFormat,VMDiskDataStore,VMCreatedDate,VMNumCPU,VMCoresPerSocket,VMMemoryCapacity,VMCluster,VMDataCenter,VMHost,LastWriteTime,
+            VMTotalDisk,VMHostModel,VMEventDates,VMEventMessages) 
+            VALUES
+            ('$vmName','$vmOwner','$vcenter','$vmPowerState','$vmGuestOS','$vmNotes',$CPUAverageUsage,$MemoryAverageUsage,$NetworkAverageUsage
+            ,$DiskAverageUsage,'$AdapterName','$NetworkName','$AdapterType','$AdapterMACAddress','$diskName','$diskCapacity'
+            ,'$diskFormat','$diskDS','$vmCreatedDate',$vmNumCPU,$vmCoresPerSocket,$vmMemory,'$vmCluster','$vmDataCenter','$vmHost','$lastWriteTime',
+            $TotalCapacity,'$VMHostModel','$eventDate','$eventMessage') 
+"@
+            $command.CommandText = $sql
+            $row=$command.ExecuteNonQuery()
+        }
+        Disconnect-VIServer -Server $vcenter -Confirm:$false
+        
+
+    } 
+    $vms=$null
+    $start=$reset
+
+      
 }
+$conn.Close() 
 
