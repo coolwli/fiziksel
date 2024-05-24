@@ -1,72 +1,65 @@
-$vmNotes=(((($vm.Notes) -replace "'"," ")-replace ";",".")-replace ","," ") -replace "\n"," "
-            $vmName=$vm.Name
-            $vmOwner=$vm.CustomFields.Value[5]
-            $vmPowerState=$vm.PowerState
-            $vmGuestOS=$vm.Guest.OSFullName
-            if($vm.CreateDate -eq "01/01/1970 00:00:00"){
-                $vmCreatedDate="NULL"        
-            }
-            else{
-                $vmCreatedDate=($vm.CreateDate -split' ')[0]
-            }
-            $vmCoresPerSocket=$vm.CoresPerSocket
-            $vmNumCPU=$vm.NumCpu 
-            $vmMemory=$vm.MemoryGB
-            $vmCluster=$vm.VMHost.Parent.Name-replace '#',''
-            $vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
-            $vmHost=$vm.VMHost.Name
-            $VMHostModel=$vm.VMHost.Model
-            $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+$vmNotes = $vm.Notes -replace "[^A-Za-z0-9\s]", ""
+$vmName = $vm.Name
+$vmOwner = $vm.CustomFields.Value[5]
+$vmPowerState = $vm.PowerState
+$vmGuestOS = $vm.Guest.OSFullName
 
-            $AdapterName=""
-            $NetworkName=""
-            $AdapterType=""
-            $AdapterMACAddress=""
-            $adapter=""
-            foreach($adapter in $vm|Get-NetworkAdapter){
-                $AdapterName+="$($adapter.Name)~" 
-                $NetworkName+= "$($adapter.NetworkName)~"
-                $AdapterMACAddress+= "$($adapter.MacAddress)~"
-                $AdapterType+= "$($adapter.Type)~"
-                                           
-                
-            }
+$vmCreatedDate = if ($vm.CreateDate -eq "01/01/1970 00:00:00") { "NULL" } else { ($vm.CreateDate -split ' ')[0] }
 
-            $diskName=""
-            $diskFormat=""
-            $diskCapacity=""
-            $diskDS=""
-            $TotalCapacity=0
-            $disks= $vm |Get-HardDisk
-            foreach($disk in $disks){
-                $diskName+="$($disk.Name)~"
-                $diskFormat+="$($disk.StorageFormat)~"
-                $diskCapacity+="$($disk.CapacityGB)~"
-                $diskDS+="$(($disk.Filename-split ' ')[0].Trim('[',']'))~"
-                $TotalCapacity=$TotalCapacity+$disk.CapacityGB
+$vmCoresPerSocket = $vm.CoresPerSocket
+$vmNumCPU = $vm.NumCpu 
+$vmMemory = $vm.MemoryGB
+$vmCluster = $vm.VMHost.Parent.Name -replace '#', ''
+$vmDataCenter = $vm.VMHost.Parent.ParentFolder.Parent.Name
+$vmHost = $vm.VMHost.Name
+$VMHostModel = $vm.VMHost.Model
+$lastWriteTime = Get-Date -Format "yyyy-MM-dd HH:mm"
 
+$AdapterName = @()
+$NetworkName = @()
+$AdapterMACAddress = @()
+$AdapterType = @()
 
-            }
+foreach ($adapter in $vm | Get-NetworkAdapter) {
+    $AdapterName += $adapter.Name
+    $NetworkName += $adapter.NetworkName
+    $AdapterMACAddress += $adapter.MacAddress
+    $AdapterType += $adapter.Type
+}
 
-            if($vmPowerState -eq "PoweredOn"){
-                $CPUAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
-                $DiskAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
-                $NetworkAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
-                $MemoryAverageUsage ="{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage/$vm.MemoryMB)-replace'%',''
+$diskName = @()
+$diskFormat = @()
+$diskCapacity = @()
+$diskDS = @()
+$TotalCapacity = 0
 
-            }
-            else{
-                $CPUAverageUsage =0
-                $MemoryAverageUsage =0
-                $NetworkAverageUsage=0
-                $DiskAverageUsage=0
+foreach ($disk in $vm | Get-HardDisk) {
+    $diskName += $disk.Name
+    $diskFormat += $disk.StorageFormat
+    $diskCapacity += $disk.CapacityGB
+    $diskDS += ($disk.Filename -split ' ')[0].Trim('[', ']')
+    $TotalCapacity += $disk.CapacityGB
+}
 
-            }
+if ($vmPowerState -eq "PoweredOn") {
+    $CPUAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+    $DiskAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+    $NetworkAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+    $MemoryAverageUsage = "{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage / $vm.MemoryMB) -replace '%', ''
+} else {
+    $CPUAverageUsage = 0
+    $MemoryAverageUsage = 0
+    $NetworkAverageUsage = 0
+    $DiskAverageUsage = 0
+}
 
-            $EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
-            $eventDate=""
-            $eventMessage=""
-            foreach ($EventLog in $EventLogs) {
-                $eventDate+="$($EventLog.CreatedTime)~"
-                $eventMessage+="$((($EventLog.FullFormattedMessage)-replace "'"," ")-replace ","," ")~"
-            }
+$EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
+$eventDate = @()
+$eventMessage = @()
+
+foreach ($EventLog in $EventLogs) {
+    $eventDate += $EventLog.CreatedTime
+    $eventMessage += (($EventLog.FullFormattedMessage) -replace "'", "") -replace ",", ""
+}
+
+# Şimdi bu verileri veritabanına ekleme işlemi burada yapılır.
