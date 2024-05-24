@@ -1,37 +1,12 @@
-$hash = @{}
-
-foreach ($adapter in $vm | Get-NetworkAdapter) {
-    $hash["AdapterName"] += $adapter.Name
-    $hash["NetworkName"] += $adapter.NetworkName
-    $hash["AdapterMACAddress"] += $adapter.MacAddress
-    $hash["AdapterType"] += $adapter.Type
+$sqlValues = $vmInfoArray | ForEach-Object {
+    "('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}', '{15}', '{16}', '{17}', '{18}', '{19}', '{20}', '{21}', '{22}', '{23}', '{24}', '{25}', '{26}', '{27}', '{28}', '{29}', '{30}')" -f 
+    $_.VMName, $_.VMOwner, $_.VMPowerState, $_.VMGuestOS, $_.VMNotes, $_.VMCreatedDate, $_.VMCoresPerSocket, $_.VMNumCPU, $_.VMMemory, $_.VMCluster, $_.VMDataCenter, $_.VMHost, $_.VMHostModel, $_.LastWriteTime, $_.AdapterName, $_.NetworkName, $_.AdapterMACAddress, $_.AdapterType, $_.DiskName, $_.DiskFormat, $_.DiskCapacity, $_.DiskDS, $_.TotalCapacity, $_.CPUAverageUsage, $_.DiskAverageUsage, $_.NetworkAverageUsage, $_.MemoryAverageUsage, $_.EventDate, $_.EventMessage
 }
 
-foreach ($disk in $vm | Get-HardDisk) {
-    $hash["DiskName"] += $disk.Name
-    $hash["DiskFormat"] += $disk.StorageFormat
-    $hash["DiskCapacity"] += $disk.CapacityGB
-    $hash["DiskDS"] += ($disk.Filename -split ' ')[0].Trim('[', ']')
-    $hash["TotalCapacity"] += $disk.CapacityGB
-}
+$sqlValuesString = $sqlValues -join ','
 
-if ($vmPowerState -eq "PoweredOn") {
-    $hash["CPUAverageUsage"] = [Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
-    $hash["DiskAverageUsage"] = [Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
-    $hash["NetworkAverageUsage"] = [Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
-    $hash["MemoryAverageUsage"] = "{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage / $vm.MemoryMB) -replace '%', ''
-} else {
-    $hash["CPUAverageUsage"] = 0
-    $hash["MemoryAverageUsage"] = 0
-    $hash["NetworkAverageUsage"] = 0
-    $hash["DiskAverageUsage"] = 0
-}
-
-$EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
-$hash["EventDate"] = @()
-$hash["EventMessage"] = @()
-
-foreach ($EventLog in $EventLogs) {
-    $hash["EventDate"] += $EventLog.CreatedTime
-    $hash["EventMessage"] += (($EventLog.FullFormattedMessage) -replace "'", "") -replace ",", ""
-}
+$sql = @"
+INSERT INTO VMInfos2 (VMName, VMOwner, VMPowerState, VMGuestOS, VMNotes, VMCreatedDate, VMCoresPerSocket, VMNumCPU, VMMemory, VMCluster, VMDataCenter, VMHost, VMHostModel, LastWriteTime, AdapterName, NetworkName, AdapterMACAddress, AdapterType, DiskName, DiskFormat, DiskCapacity, DiskDS, TotalCapacity, CPUAverageUsage, DiskAverageUsage, NetworkAverageUsage, MemoryAverageUsage, EventDate, EventMessage)
+VALUES
+$sqlValuesString
+"@
