@@ -13,7 +13,6 @@ INSERT INTO ClusterInfos (
 VALUES 
 "@
 
-
     foreach ($cluster in $Clusters) {
         $clusterName = $cluster.Name -replace '#', ''
         if ($clusterName -match "^#") {
@@ -81,7 +80,7 @@ VALUES
 # Function to process vCenter clusters
 function Process-vCenter {
     param (
-        $vcenter
+        $vcenter, $conn
     )
 
     Connect-VIServer -Server $vcenter
@@ -102,7 +101,7 @@ function Process-vCenter {
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-$vcenters = ("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
 
 # Open SQL Connection
 $conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
@@ -110,14 +109,11 @@ $conn.Open()
 
 # Process vCenters in parallel
 $vcenters | ForEach-Object -Parallel {
-    Process-vCenter -vcenter $_
-}
+    param($vcenter, $connectionString)
+    $conn = New-Object System.Data.SqlClient.SqlConnection $connectionString
+    $conn.Open()
+    Process-vCenter -vcenter $vcenter -conn $conn
+    $conn.Close()
+} -ArgumentList $_, "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 
 $conn.Close()
-
-
-
-ForEach-Object : Parameter set cannot be resolved using the specified named parameters.
-At line:112 char:13
-+ $vcenters | ForEach-Object -Parallel {
-+             ~~~~~~~~~~~~~~~~~~~~~~~~~~
