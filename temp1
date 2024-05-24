@@ -1,52 +1,72 @@
-param(
-    [int]$start = 0
-)
+$vmNotes=(((($vm.Notes) -replace "'"," ")-replace ";",".")-replace ","," ") -replace "\n"," "
+            $vmName=$vm.Name
+            $vmOwner=$vm.CustomFields.Value[5]
+            $vmPowerState=$vm.PowerState
+            $vmGuestOS=$vm.Guest.OSFullName
+            if($vm.CreateDate -eq "01/01/1970 00:00:00"){
+                $vmCreatedDate="NULL"        
+            }
+            else{
+                $vmCreatedDate=($vm.CreateDate -split' ')[0]
+            }
+            $vmCoresPerSocket=$vm.CoresPerSocket
+            $vmNumCPU=$vm.NumCpu 
+            $vmMemory=$vm.MemoryGB
+            $vmCluster=$vm.VMHost.Parent.Name-replace '#',''
+            $vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
+            $vmHost=$vm.VMHost.Name
+            $VMHostModel=$vm.VMHost.Model
+            $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
 
-$reset = $start
-$vcenters = ("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
-$vmInfoArray = @()
-$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+            $AdapterName=""
+            $NetworkName=""
+            $AdapterType=""
+            $AdapterMACAddress=""
+            $adapter=""
+            foreach($adapter in $vm|Get-NetworkAdapter){
+                $AdapterName+="$($adapter.Name)~" 
+                $NetworkName+= "$($adapter.NetworkName)~"
+                $AdapterMACAddress+= "$($adapter.MacAddress)~"
+                $AdapterType+= "$($adapter.Type)~"
+                                           
+                
+            }
 
-$conn.Open()
+            $diskName=""
+            $diskFormat=""
+            $diskCapacity=""
+            $diskDS=""
+            $TotalCapacity=0
+            $disks= $vm |Get-HardDisk
+            foreach($disk in $disks){
+                $diskName+="$($disk.Name)~"
+                $diskFormat+="$($disk.StorageFormat)~"
+                $diskCapacity+="$($disk.CapacityGB)~"
+                $diskDS+="$(($disk.Filename-split ' ')[0].Trim('[',']'))~"
+                $TotalCapacity=$TotalCapacity+$disk.CapacityGB
 
-foreach ($vcenter in $vcenters) {
-    Connect-VIServer -Server $vcenter
 
-    if (!$vms) {
-        $vms = Get-VM
-    }
+            }
 
-    foreach ($vm in $vms) {
-        # VM bilgilerini toplu olarak al
-        $vmInfo = [PSCustomObject]@{
-            VMName = $vm.Name
-            VMOwner = $vm.CustomFields.Value[5]
-            VMPowerState = $vm.PowerState
-            VMGuestOS = $vm.Guest.OSFullName
-            # Diğer VM bilgileri buraya eklenebilir
-        }
+            if($vmPowerState -eq "PoweredOn"){
+                $CPUAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $DiskAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $NetworkAverageUsage=([Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average),2))
+                $MemoryAverageUsage ="{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage/$vm.MemoryMB)-replace'%',''
 
-        $vmInfoArray += $vmInfo
-    }
+            }
+            else{
+                $CPUAverageUsage =0
+                $MemoryAverageUsage =0
+                $NetworkAverageUsage=0
+                $DiskAverageUsage=0
 
-    Disconnect-VIServer -Server $vcenter -Confirm:$false
-}
+            }
 
-# Tüm VM bilgilerini tek bir sorguda eklemek için hazırla
-$sqlValues = $vmInfoArray | ForEach-Object {
-    "('{0}', '{1}', '{2}', '{3}')" -f $_.VMName, $_.VMOwner, $_.VMPowerState, $_.VMGuestOS
-}
-
-$sqlValuesString = $sqlValues -join ','
-
-$sql = @"
-INSERT INTO VMInfos2 (VMName, VMOwner, VMPowerState, VMGuestOS)
-VALUES
-$sqlValuesString
-"@
-
-$command = $conn.CreateCommand()
-$command.CommandText = $sql
-$row = $command.ExecuteNonQuery()
-
-$conn.Close()
+            $EventLogs = Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)
+            $eventDate=""
+            $eventMessage=""
+            foreach ($EventLog in $EventLogs) {
+                $eventDate+="$($EventLog.CreatedTime)~"
+                $eventMessage+="$((($EventLog.FullFormattedMessage)-replace "'"," ")-replace ","," ")~"
+            }
