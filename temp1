@@ -1,36 +1,21 @@
-# Fonksiyon tanımı
-function Connect-ToVCenter {
+# İşlemi yapacak olan fonksiyonu tanımlıyoruz
+function Write-Numbers {
     param (
-        [string]$VCenterServer,
-        [string]$Username,
-        [string]$Password
+        [int]$StartNumber
     )
-    
-    try {
-        # vCenter'a bağlanma
-        Connect-VIServer -Server $VCenterServer -User $Username -Password $Password -ErrorAction Stop
-        # Bağlantı sağlandıktan sonra basit bir işlem gerçekleştirme
-        $datacenters = Get-Datacenter
-        Disconnect-VIServer -Server $VCenterServer -Confirm:$false
-        return "$VCenterServer bağlantısı başarılı"
-    } catch {
-        return "$VCenterServer bağlantısı başarısız: $_"
+
+    # StartNumber'dan 10'a kadar olan sayıları yazdıran döngü
+    for ($i = $StartNumber; $i -le 10; $i++) {
+        Write-Output "Number: $i"
+        # Her bir sayıdan sonra kısa bir bekleme süresi ekliyoruz ki paralel işlem farkı görülebilsin
+        Start-Sleep -Milliseconds 100
     }
 }
 
-# Paralel işlem bloğu
-$VCenterServer = "vcenter.example.com"
-$Username = "admin"
-$Password = "password"
-$instances = 1..30
-$results = $instances | ForEach-Object -Parallel {
-    param ($instance, $VCenterServer, $Username, $Password, $function)
+# Paralel işlemleri başlatacak olan kod
+$startNumbers = 1..5  # 1'den 5'e kadar sayılarla örnek veriyoruz
 
-    # Fonksiyonu çağır
-    $result = & $function -VCenterServer $VCenterServer -Username $Username -Password $Password
-    return $result
-
-} -ThrottleLimit 30 -ArgumentList $using:VCenterServer, $using:Username, $using:Password, $using:Connect-ToVCenter
-
-# Sonuçları yazdır
-$results | ForEach-Object { Write-Output $_ }
+$startNumbers | ForEach-Object -Parallel {
+    # Her bir sayı için Write-Numbers fonksiyonunu çağırıyoruz
+    Write-Numbers -StartNumber $_
+} -ThrottleLimit 5  # Aynı anda çalışacak maksimum paralel işlem sayısı
