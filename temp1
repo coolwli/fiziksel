@@ -1,12 +1,36 @@
-$sqlValues = $vmInfoArray | ForEach-Object {
-    "('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}', '{15}', '{16}', '{17}', '{18}', '{19}', '{20}', '{21}', '{22}', '{23}', '{24}', '{25}', '{26}', '{27}', '{28}', '{29}', '{30}')" -f 
-    $_.VMName, $_.VMOwner, $_.VMPowerState, $_.VMGuestOS, $_.VMNotes, $_.VMCreatedDate, $_.VMCoresPerSocket, $_.VMNumCPU, $_.VMMemory, $_.VMCluster, $_.VMDataCenter, $_.VMHost, $_.VMHostModel, $_.LastWriteTime, $_.AdapterName, $_.NetworkName, $_.AdapterMACAddress, $_.AdapterType, $_.DiskName, $_.DiskFormat, $_.DiskCapacity, $_.DiskDS, $_.TotalCapacity, $_.CPUAverageUsage, $_.DiskAverageUsage, $_.NetworkAverageUsage, $_.MemoryAverageUsage, $_.EventDate, $_.EventMessage
+# Fonksiyon tanımı
+function Connect-ToVCenter {
+    param (
+        [string]$VCenterServer,
+        [string]$Username,
+        [string]$Password
+    )
+    
+    try {
+        # vCenter'a bağlanma
+        Connect-VIServer -Server $VCenterServer -User $Username -Password $Password -ErrorAction Stop
+        # Bağlantı sağlandıktan sonra basit bir işlem gerçekleştirme
+        $datacenters = Get-Datacenter
+        Disconnect-VIServer -Server $VCenterServer -Confirm:$false
+        return "$VCenterServer bağlantısı başarılı"
+    } catch {
+        return "$VCenterServer bağlantısı başarısız: $_"
+    }
 }
 
-$sqlValuesString = $sqlValues -join ','
+# Paralel işlem bloğu
+$VCenterServer = "vcenter.example.com"
+$Username = "admin"
+$Password = "password"
+$instances = 1..30
+$results = $instances | ForEach-Object -Parallel {
+    param ($instance, $VCenterServer, $Username, $Password, $function)
 
-$sql = @"
-INSERT INTO VMInfos2 (VMName, VMOwner, VMPowerState, VMGuestOS, VMNotes, VMCreatedDate, VMCoresPerSocket, VMNumCPU, VMMemory, VMCluster, VMDataCenter, VMHost, VMHostModel, LastWriteTime, AdapterName, NetworkName, AdapterMACAddress, AdapterType, DiskName, DiskFormat, DiskCapacity, DiskDS, TotalCapacity, CPUAverageUsage, DiskAverageUsage, NetworkAverageUsage, MemoryAverageUsage, EventDate, EventMessage)
-VALUES
-$sqlValuesString
-"@
+    # Fonksiyonu çağır
+    $result = & $function -VCenterServer $VCenterServer -Username $Username -Password $Password
+    return $result
+
+} -ThrottleLimit 30 -ArgumentList $using:VCenterServer, $using:Username, $using:Password, $using:Connect-ToVCenter
+
+# Sonuçları yazdır
+$results | ForEach-Object { Write-Output $_ }
