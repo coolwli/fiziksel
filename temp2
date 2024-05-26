@@ -1,119 +1,15 @@
-# Function to insert data into SQL Server
-function Insert-ClusterData {
-    param (
-        $Clusters, $vcenter, $conn
-    )
+# Parametreleri tanımla
+$vCenter = "your-vcenter-server"
+$username = "your-username"
+$password = "your-password"
+$serverName = "your-server-name"
 
-    $insertQuery = @"
+# Ana betiği çağırarak bağlantıyı başlat
+powershell -File "C:\path\to\connect-vcenter.ps1" -vCenter $vCenter -username $username -password $password
 
-INSERT INTO ClusterInfos (
-    ClusterName, DataCenter, ClusterHAE, vCenter, ClusterDRSEnabled, ClusterCPUCapacityMhz, ClusterTotalMemory, ClusterEffectiveMemory, 
-    ClusterTotalCPU, ClusterNumVmotions, ClusterEffectiveCPU, ClusterNumHosts, ClusterNumCPUCores, ClusterNumCPUThreads, TotalVMCount, LastWriteTime, 
-    dsName, dsCapacity, dsFree, dsPercentUsing, VMHostNames, ClusterEventDates, ClusterEventMessages) 
-VALUES 
-"@
+# İşlem betiğini çağırarak işlemi gerçekleştir
+powershell -File "C:\path\to\perform-task.ps1" -serverName $serverName
 
-    foreach ($cluster in $Clusters) {
-        $clusterName = $cluster.Name -replace '#', ''
-        if ($clusterName -match "^#") {
-            continue
-        }
-
-        $datacenter = ($cluster | Get-Datacenter).Name
-        $clusterHAE = $cluster.HAEnabled
-        $clusterDrsEnabled = $cluster.DRSEnabled
-        $clusterCpuCapacityMhz = $cluster.ExtensionData.Summary.UsageSummary.TotalCpuCapacityMhz.ToString("N0")
-        $clusterTotalMemory = ([math]::Round($cluster.ExtensionData.Summary.TotalMemory / 1MB)).ToString("N0")
-        $clusterEffectiveMemory = $cluster.ExtensionData.Summary.EffectiveMemory.ToString("N0")
-        $clusterTotalCPU = $cluster.ExtensionData.Summary.TotalCpu.ToString("N0")
-        $clusterNumVmotions = $cluster.ExtensionData.Summary.NumVmotions.ToString("N0")
-        $clusterEffectiveCPU = $cluster.ExtensionData.Summary.EffectiveCpu.ToString("N0")
-        $clusterNumHosts = $cluster.ExtensionData.Summary.NumHosts
-        $clusterNumCpuCores = $cluster.ExtensionData.Summary.NumCpuCores
-        $clusterNumCpuThreads = $cluster.ExtensionData.Summary.NumCpuThreads
-        $totalVmCount = $cluster.ExtensionData.Summary.UsageSummary.TotalVmCount
-        $lastWriteTime = Get-Date -Format "yyyy-MM-dd HH:mm"
-
-        $dss = $cluster | Get-Datastore
-        $dsNames = @()
-        $dsCapacities = @()
-        $dsFrees = @()
-        $dsPercentUsings = @()
-        foreach ($ds in $dss) {
-            $dsNames += $ds.Name
-            $dsCapacities += "{0:F2}" -f [decimal]$ds.CapacityGB
-            $dsFrees += "{0:F2}" -f [decimal]$ds.FreeSpaceGB
-            $dsPercentUsings += [math]::Round(($ds.CapacityGB - $ds.FreeSpaceGB) / $ds.CapacityGB * 100, 2)
-        }
-
-        $hosts = $cluster | Get-VMHost
-        $vmhostNames = @()
-        foreach ($vmhost in $hosts) {
-            $vmhostNames += $vmhost.Name
-        }
-
-        $eventLogs = Get-VIEvent -Entity $cluster -Start (Get-Date).AddDays(-7)
-        $eventDates = @()
-        $eventMessages = @()
-        foreach ($eventLog in $eventLogs) {
-            $eventDates += $eventLog.CreatedTime
-            $eventMessages += (($eventLog.FullFormattedMessage -replace "'", " ") -replace ",", " ")
-        }
-
-        $insertQuery += @"
-(
-    '$clusterName', '$datacenter', '$clusterHAE', '$vcenter', '$clusterDrsEnabled', $clusterCpuCapacityMhz, $clusterTotalMemory, $clusterEffectiveMemory, 
-    $clusterTotalCPU, $clusterNumVmotions, $clusterEffectiveCPU, $clusterNumHosts, $clusterNumCpuCores, $clusterNumCpuThreads, $totalVmCount, '$lastWriteTime',
-    '$(($dsNames -join "~"))', '$(($dsCapacities -join "~"))', '$(($dsFrees -join "~"))', '$(($dsPercentUsings -join "~"))', '$(($vmhostNames -join "~"))', 
-    '$(($eventDates -join "~"))', '$(($eventMessages -join "~"))'
-),
-"@
-    }
-
-    # Remove the trailing comma and execute the bulk insert
-    $insertQuery = $insertQuery.TrimEnd(",")
-    $command = $conn.CreateCommand()
-    $command.CommandText = $insertQuery
-    $command.ExecuteNonQuery() | Out-Null
-}
-
-# Function to process vCenter clusters
-function Process-vCenter {
-    param (
-        $vcenter, $conn
-    )
-
-    Connect-VIServer -Server $vcenter
-
-    $clusters = Get-Cluster
-    $batchSize = 20
-    $batchCount = [math]::Ceiling($clusters.Length / $batchSize)
-
-    for ($i = 0; $i -lt $batchCount; $i++) {
-        $start = $i * $batchSize
-        $end = ($i + 1) * $batchSize - 1
-        $end = [Math]::Min($end, $clusters.Length - 1)
-        $batch = $clusters[$start..$end]
-
-        Insert-ClusterData -Clusters $batch -vcenter $vcenter -conn $conn
-    }
-
-    Disconnect-VIServer -Server $vcenter -Confirm:$false
-}
-
-$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
-
-# Open SQL Connection
-$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
-$conn.Open()
-
-# Process vCenters in parallel
-$vcenters | ForEach-Object -Parallel {
-    param($vcenter, $connectionString)
-    $conn = New-Object System.Data.SqlClient.SqlConnection $connectionString
-    $conn.Open()
-    Process-vCenter -vcenter $vcenter -conn $conn
-    $conn.Close()
-} -ArgumentList $_, "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
-
-$conn.Close()
+# Diğer işlemler için aynı bağlantıyı kullanarak farklı betikler çağırılabilir
+# Örneğin:
+# powershell -File "C:\path\to\another-task.ps1" -someOtherParameter $value
