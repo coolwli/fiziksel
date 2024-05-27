@@ -1,21 +1,103 @@
-# İşlemi yapacak olan fonksiyonu tanımlıyoruz
-function Write-Numbers {
-    param (
-        [int]$StartNumber
-    )
+param(
+    [int]$start=0
+)
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+$vcenters=("ptekvcs01")
+$vmInfoArray = @()
+foreach($vcenter in $vcenters){
+    for($i=0;$i -lt 4;$i++){
+        "-----$i-----"
+        Connect-VIServer -Server $vcenter 
+        $vms= Get-VM | Select-Object -Skip (($start*2000)+($i*500)) -First 500
+        foreach($vm in $vms){
+                $vmInfo = [PSCustomObject]@{
+                vmNotes=($vm.Notes) -replace "',;,"," "-replace ";","."-replace ","," " -replace "\n"," "
+                vmName=$vm.Name
+                vmOwner=$vm.CustomFields.Value[5]
+                vmPowerState=$vm.PowerState
+                vmGuestOS=$vm.Guest.OSFullName
+                vmCreatedDate=if($vm.CreateDate -eq "01/01/1970 00:00:00"){ "NULL" } else{ ($vm.CreateDate -split' ')[0] }
+                vmCoresPerSocket=$vm.CoresPerSocket
+                vmNumCPU=$vm.NumCpu 
+                vmMemory=$vm.MemoryGB
+                vmCluster=$vm.VMHost.Parent.Name-replace '#',''
+                vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
+                vmHost=$vm.VMHost.Name
+                VMHostModel=$vm.VMHost.Model
+                lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+                adapterName=""
+                networkName=""
+                adapterMACAddress=""
+                adapterType=""
+                diskName=""
+                diskFormat=""
+                diskCapacity=""
+                diskDS=""
+                totalCapacity=0
+                cpuAverageUsage=0
+                diskAverageUsage=0
+                networkAverageUsage=0
+                memoryAverageUsage=0
+                eventDate=""
+                eventMessage=""
+            }
+            foreach ($adapter in $vm | Get-NetworkAdapter) {
+                $vmInfo.adapterName += "$($adapter.Name)~"
+                $vmInfo.networkName += "$($adapter.NetworkName)~"
+                $vmInfo.adapterMACAddress += "$($adapter.MacAddress)~"
+                $vmInfo.AdapterType += "$($adapter.Type)~"
+            }
+            foreach ($disk in $vm | Get-HardDisk) {
+                $vmInfo.diskName += "$($disk.Name)~"
+                $vmInfo.diskFormat += "$($disk.StorageFormat)~"
+                $vmInfo.diskCapacity += "$($disk.CapacityGB)~"
+                $vmInfo.diskDS += "$(($disk.Filename -split ' ')[0].Trim('[', ']'))~"
+                $vmInfo.totalCapacity += $disk.CapacityGB
+            }
+            if ($vmInfo.vmPowerState -eq "PoweredOn") {
+                $vmInfo.cpuAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat cpu.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+                $vmInfo.diskAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat disk.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+                $vmInfo.networkAverageUsage = [Math]::Round(((Get-Stat -Entity $vm -Stat net.usage.average -Start (Get-Date).AddDays(-7) -IntervalMins 1 | Measure-Object Value -Average).Average), 2)
+                $vmInfo.memoryAverageUsage = "{0:P}" -f ($vm.ExtensionData.Summary.Quickstats.GuestMemoryUsage / $vm.MemoryMB) -replace '%', ''
+            } 
+            foreach ($eventLog in Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)) {
+                $vmInfo.eventDate += "$($eventLog.CreatedTime)~"
+                $log=$eventLog.FullFormattedMessage -replace "'", ""-replace ",", ""
+                $vmInfo.eventMessage += "$($log)~"
+            }
+            $vmInfoArray += $vmInfo
+            $vmInfoArray.Length
+        }
+        Disconnect-VIServer -Server $vcenter -Confirm:$false
 
-    # StartNumber'dan 10'a kadar olan sayıları yazdıran döngü
-    for ($i = $StartNumber; $i -le 10; $i++) {
-        Write-Output "Number: $i"
-        # Her bir sayıdan sonra kısa bir bekleme süresi ekliyoruz ki paralel işlem farkı görülebilsin
-        Start-Sleep -Milliseconds 100
     }
-}
+    $sqlValues = $vmInfoArray | ForEach-Object {
+        "('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}', '{15}', '{16}', '{17}', '{18}', '{19}',
+            '{20}', '{21}', '{22}', '{23}', '{24}', '{25}', '{26}', '{27}', '{28}', '{29}')" -f 
+        $_.vmName, $_.vmOwner, $vcenter, $_.vmPowerState, $_.vmGuestOS, $_.vmNotes,$_.cpuAverageUsage, $_.memoryAverageUsage,  $_.networkAverageUsage, $_.diskAverageUsage, 
+        $_.adapterName, $_.networkName,  $_.adapterType, $_.adapterMACAddress, $_.diskName, $_.diskCapacity, $_.diskFormat, $_.diskDS, $_.vmCreatedDate, $_.vmNumCPU,$_.vmCoresPerSocket,
+        $_.vmMemory, $_.vmCluster, $_.vmDataCenter, $_.vmHost,$_.lastWriteTime,$_.totalCapacity, $_.vmHostModel, $_.eventDate, $_.eventMessage
+    }
 
-# Paralel işlemleri başlatacak olan kod
-$startNumbers = 1..5  # 1'den 5'e kadar sayılarla örnek veriyoruz
+    $sqlValuesString = $sqlValues -join ','
 
-$startNumbers | ForEach-Object -Parallel {
-    # Her bir sayı için Write-Numbers fonksiyonunu çağırıyoruz
-    Write-Numbers -StartNumber $_
-} -ThrottleLimit 5  # Aynı anda çalışacak maksimum paralel işlem sayısı
+    $sql = @"
+    INSERT INTO VMInfos2 (VMName,VMOwner,vCenter,VMPowerState,VMGuestOS,VMNotes,VMAverageCPUUsage,VMAverageMemoryUsage,VMAverageNetworkUsage
+            ,VMAverageDiskUsage,VMNetworkAdapterName,VMNetworkName,VMNetworkCardType,VMNetworkAdapterMacAddress,VMDiskName,VMDiskTotalSize
+            ,VMDiskStorageFormat,VMDiskDataStore,VMCreatedDate,VMNumCPU,VMCoresPerSocket,VMMemoryCapacity,VMCluster,VMDataCenter,VMHost,LastWriteTime,
+            VMTotalDisk,VMHostModel,VMEventDates,VMEventMessages)
+    VALUES
+    
+"@
+
+    $conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+    $conn.Open()
+
+    $command = $conn.CreateCommand()
+    $command.CommandText = $sql
+    #$row = $command.ExecuteNonQuery()
+
+    $conn.Close()
+        
+} 
+
