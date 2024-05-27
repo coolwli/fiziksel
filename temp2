@@ -1,15 +1,28 @@
-# Parametreleri tanımla
-$vCenter = "your-vcenter-server"
-$username = "your-username"
-$password = "your-password"
-$serverName = "your-server-name"
+param(
+    [int]$start=0,
+    [PSObject]$server
 
-# Ana betiği çağırarak bağlantıyı başlat
-powershell -File "C:\path\to\connect-vcenter.ps1" -vCenter $vCenter -username $username -password $password
+)
 
-# İşlem betiğini çağırarak işlemi gerçekleştir
-powershell -File "C:\path\to\perform-task.ps1" -serverName $serverName
+if($server -eq $null){
+    $vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+    $vcenters=("ptekvcs01")
+    for ($i = 1; $i -le 1; $i++) {
+        $server = Connect-VIServer -Server $vcenters 
+        Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vminfo\untitle.ps1 -start 0 -server $server" -NoNewWindow -Wait
 
-# Diğer işlemler için aynı bağlantıyı kullanarak farklı betikler çağırılabilir
-# Örneğin:
-# powershell -File "C:\path\to\another-task.ps1" -someOtherParameter $value
+    }
+}
+else{
+    "from new window"
+    $start
+    $start+500
+    
+}
+$server
+$vms= Get-VM -Server $server | Select-Object -Skip ($start*500) -First 500
+
+$vms.Length
+Disconnect-VIServer -Server $vcenters -Confirm:$false
+
+Read-Host
