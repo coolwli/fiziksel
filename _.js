@@ -88,8 +88,9 @@ function initializeTable() {
     filteredData = data;
     document.querySelectorAll(".select-all-div input[type='checkbox']").forEach(selectAllCheckbox => {
         selectAllCheckbox.addEventListener("change", () => {
-            const checkboxes = Array.from(selectAllCheckbox.closest(".dropdown-content").querySelectorAll("input[type='checkbox']"));
-            checkboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
+            const checkboxes = selectAllCheckbox.closest(".dropdown-content").querySelectorAll("input[type='checkbox']:not([style*='display: none'])");
+            const visibleCheckboxes = Array.from(checkboxes).filter(checkbox => checkbox.parentElement.style.display !== "none");
+            visibleCheckboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
             filterTable();
         });
     });
@@ -223,5 +224,4 @@ document.getElementById('reset-button').addEventListener('click', () => {
     filterTable();
     sortDatas(0);
 });
-initializeTable();
         
