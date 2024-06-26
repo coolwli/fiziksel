@@ -1,65 +1,55 @@
 using System;
 using System.Data;
 using System.Data.SqlClient;
-using System.Collections.Generic;
-using System.Web.Script.Serialization;
 
-namespace vminfo
+
+namespace fiziksel
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class create : System.Web.UI.Page
     {
-        private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True");
         protected void Page_Load(object sender, EventArgs e)
         {
-            ShowList();
+
+        }
+        public void createNew()
+        {
+            if (con.State == ConnectionState.Open)
+            {
+                con.Close();
+            }
+            con.Open();
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = $"INSERT INTO fiziksel  " +
+                $"(Adı,[Seri No],Açıklama,[Üretici Firma],Model,[CPU Soket Sayısı],[CPU Core Sayısı],[Toplam Core Adet]," +
+                $"[Memory (GB)],[Cihaz Tipi],Hall,Row,Rack,[Blade Şasi],[Domain Bilgisi (UCS-HP)],Enviroment,Firma,Sahiplik," +
+                $"Lokasyon,[Kapsam-BBVA Metrics],Cluster,[İşletim Sistemi],[Sorumlu Grup],[Satın Alma Tarihi]," +
+                $"[Planlanan Devreden Çıkarma Tarihi],[Bakım Başlangıç Tarihi],[Bakım Bitiş Tarihi],[Özel Durumu],Support) " +
+                $"VALUES " +
+                $"('{adi.Value}','{seri_no.Value}','{aciklama.Value}','{uretici_firma.Value}','{model.Value}'," +
+                $"'{cpu_soket.Value}','{cpu_core.Value}','{toplam_core.Value}','{memory.Value}','{cihaz_tipi.Value}'," +
+                $"'{hall.Value}','{row.Value}','{rack.Value}','{blade_schasi.Value}','{domain_bilgisi.Value}'," +
+                $"'{enviroment.Value}','{firma.Value}','{sahiplik.Value}','{lokasyon.Value}','{kapsam_bbva_metrics.Value}'," +
+                $"'{cluster.Value}','{isletim_sistemi.Value}','{sorumlu_grup.Value}','{satin_alma_tarihi.Value}'," +
+                $"'{planlanan_devreden_cikarma_tarihi.Value}','{bakim_baslangic_tarihi.Value}','{bakim_bitis_tarihi.Value}'," +
+                $"'{ozel_durumu.Value}','{support.Value}')";
+            cmd.ExecuteNonQuery();
+        }
+
+        protected void onlyButton_Click(object sender, EventArgs e)
+        {
+            createNew();
+            Response.Redirect("default.aspx");
 
         }
 
-        public void ShowList()
+        protected void bothButton_Click(object sender, EventArgs e)
         {
-            DataTable vmInfos = new DataTable();
+            createNew();
+            Response.Redirect("default.aspx");
 
-            using (SqlConnection con = new SqlConnection(connectionString))
-            {
-                con.Open();
 
-                using (SqlCommand cmd = con.CreateCommand())
-                {
-                    cmd.CommandType = CommandType.Text;
-
-                    cmd.CommandText = "SELECT VMName,vCenter,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2";
-                    using (SqlDataAdapter da = new SqlDataAdapter(cmd))
-                    {
-                        da.Fill(vmInfos);
-                    }
-
-                }
-            }
-            string json = DataTableToJson(vmInfos);
-            string script = $"<script> data = {json}; initializeTable(); screenName = 'vmscreen'; </script>";
-            ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
-            
-
-        }
-
-        private string DataTableToJson(DataTable dt)
-        {
-            JavaScriptSerializer serializer = new JavaScriptSerializer();
-            serializer.MaxJsonLength = Int32.MaxValue;
-            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
-
-            foreach (DataRow dr in dt.Rows)
-            {
-                Dictionary<string, object> row = new Dictionary<string, object>();
-                foreach (DataColumn col in dt.Columns)
-                {
-                    row.Add(col.ColumnName, dr[col]);
-                }
-                rows.Add(row);
-            }
-
-            return serializer.Serialize(rows);
         }
     }
 }
