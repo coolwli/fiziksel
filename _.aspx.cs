@@ -1,106 +1,65 @@
 using System;
-using System.Web.UI.HtmlControls;
-using Excel = Microsoft.Office.Interop.Excel;
+using System.Data;
+using System.Data.SqlClient;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
-namespace CloudUnited
+namespace vminfo
 {
     public partial class _default : System.Web.UI.Page
     {
+        private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
         protected void Page_Load(object sender, EventArgs e)
         {
-            string excelPath = @"F:/Ali/CloudUnited/Datas/CombinedData.xlsx";
-            
-            // Tek bir bağlantı kur
-            Excel.Application excelApp = new Excel.Application();
-            Excel.Workbook wb = excelApp.Workbooks.Open(excelPath);
-            
-            // Her bir worksheet'i ayrı ayrı yükle
-            Excel.Worksheet wsMembers = wb.Worksheets["Members"];
-            Excel.Worksheet wsDirections = wb.Worksheets["Directions"];
-            Excel.Worksheet wsServices = wb.Worksheets["Services"];
-            
-            // Verileri yükle
-            loadMembers(wsMembers);
-            loadServices(wsServices);
-            loadDirections(wsDirections);
-            
-            // Workbook'u kapat ve Excel uygulamasını kapat
-            wb.Close(false);
-            excelApp.Quit();
-            
-            // Kaynakları serbest bırak
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(wsMembers);
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(wsDirections);
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(wsServices);
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(wb);
-            System.Runtime.InteropServices.Marshal.ReleaseComObject(excelApp);
+            ShowList();
+
         }
 
-        void loadMembers(Excel.Worksheet ws)
+        public void ShowList()
         {
-            string cities = "cities=[";
-            string members = "members=[";
-            Excel.Range range = ws.UsedRange;
+            DataTable vmInfos = new DataTable();
 
-            for (int col = 1; col <= range.Columns.Count; col++)
+            using (SqlConnection con = new SqlConnection(connectionString))
             {
-                string colText = range.Cells[1, col].Text;
-                cities += "'" + colText + "'";
-                cities += ",";
-                members += "[";
-                for (int i = 2; i <= range.Rows.Count; i++)
+                con.Open();
+
+                using (SqlCommand cmd = con.CreateCommand())
                 {
-                    if (range.Cells[i, col].Text == "") break;
-                    members += "'" + range.Cells[i, col].Text + "'";
-                    members += ",";
+                    cmd.CommandType = CommandType.Text;
+
+                    cmd.CommandText = "SELECT VMName,vCenter,VMNumCPU,VMMemoryCapacity,VMTotalDisk,VMPowerState,VMCluster,VMDataCenter,VMOwner,VMCreatedDate FROM VMInfos2";
+                    using (SqlDataAdapter da = new SqlDataAdapter(cmd))
+                    {
+                        da.Fill(vmInfos);
+                    }
+
                 }
-                members = members.Substring(0, members.Length - 1);
-                members += "] ";
-                members += ",";
             }
-            cities = cities.Substring(0, cities.Length - 1);
-            cities += "] ";
-            members = members.Substring(0, members.Length - 1);
-            members += "] ";
+            string json = DataTableToJson(vmInfos);
+            string script = $"<script> data = {json}; initializeTable(); screenName = 'vmscreen'; </script>";
+            ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
+            
 
-            string script = $"<script>{members}; {cities}; showAll();</script>";
-            ClientScript.RegisterStartupScript(this.GetType(), "CallMyFunction", script);
         }
 
-        void loadDirections(Excel.Worksheet ws)
+        private string DataTableToJson(DataTable dt)
         {
-            Excel.Range range = ws.UsedRange;
-            for (int i = 2; i <= range.Rows.Count; i++)
-            {
-                HtmlGenericControl div = new HtmlGenericControl("div");
-                div.Attributes.Add("class", "direction-panel");
-                HtmlGenericControl h3 = new HtmlGenericControl("h3");
-                h3.ID = range.Cells[i, 3].Text;
-                h3.InnerText = range.Cells[i, 1].Text;
-                HtmlGenericControl p = new HtmlGenericControl("p");
-                p.InnerText = range.Cells[i, 2].Text;
-                div.Controls.Add(h3);
-                div.Controls.Add(p);
-                directions.Controls.Add(div);
-            }
-        }
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = Int32.MaxValue;
+            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
 
-        void loadServices(Excel.Worksheet ws)
-        {
-            Excel.Range range = ws.UsedRange;
-            for (int i = 2; i <= range.Rows.Count; i++)
+            foreach (DataRow dr in dt.Rows)
             {
-                HtmlGenericControl div = new HtmlGenericControl("div");
-                div.Attributes.Add("class", "service-panel");
-                HtmlGenericControl h3 = new HtmlGenericControl("h3");
-                h3.ID = range.Cells[i, 3].Text;
-                h3.InnerText = range.Cells[i, 1].Text;
-                HtmlGenericControl p = new HtmlGenericControl("p");
-                p.InnerText = range.Cells[i, 2].Text;
-                div.Controls.Add(h3);
-                div.Controls.Add(p);
-                services.Controls.Add(div);
+                Dictionary<string, object> row = new Dictionary<string, object>();
+                foreach (DataColumn col in dt.Columns)
+                {
+                    row.Add(col.ColumnName, dr[col]);
+                }
+                rows.Add(row);
             }
+
+            return serializer.Serialize(rows);
         }
     }
 }
