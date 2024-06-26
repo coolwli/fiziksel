@@ -1,22 +1,20 @@
+using Microsoft.SqlServer.Server;
 using System;
 using System.Data;
 using System.Data.SqlClient;
+using System.Reflection;
 
 namespace fiziksel
 {
     public partial class edit : System.Web.UI.Page
     {
-        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True");
+        string connectionString=@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True";
         string hostName;
 
         protected void Page_Load(object sender, EventArgs e)
         {
             hostName = Request.QueryString["name"];
-            if (con.State == ConnectionState.Open)
-            {
-                con.Close();
-            }
-            con.Open();
+
             getDatas();
 
         }
@@ -49,63 +47,77 @@ namespace fiziksel
         }
         public void getDatas()
         {
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            cmd.CommandText = $"SELECT * FROM fiziksel  WHERE Adı = '{hostName}'";
-            using (SqlDataReader reader = cmd.ExecuteReader())
-            {
-                if (reader.Read())
+            
+            using (SqlConnection con = new SqlConnection(connectionString)){
+                con.Open();
+                SqlCommand cmd = con.CreateCommand();
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = $"SELECT * FROM fiziksel  WHERE Adı = '{hostName}'";
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    seri_no.Value = reader[3].ToString();
-                    aciklama.Value = reader[4].ToString();
-                    uretici_firma.Value = reader[5].ToString();
-                    model.Value = reader[6].ToString();
-                    cpu_soket.Value = reader[7].ToString();
-                    cpu_core.Value = reader[8].ToString();
-                    toplam_core.Value = reader[9].ToString();
-                    memory.Value = reader[10].ToString();
-                    cihaz_tipi.Value = reader[11].ToString();
-                    hall.Value = reader[12].ToString();
-                    row.Value = reader[13].ToString();
-                    rack.Value = reader[14].ToString();
-                    blade_schasi.Value = reader[15].ToString();
-                    domain_bilgisi.Value = reader[16].ToString();
-                    enviroment.Value = reader[17].ToString();
-                    firma.Value = reader[18].ToString();
-                    sahiplik.Value = reader[19].ToString();
-                    lokasyon.Value = reader[20].ToString();
-                    kapsam_bbva_metrics.Value = reader[21].ToString();
-                    cluster.Value = reader[22].ToString();
-                    isletim_sistemi.Value = reader[23].ToString();
-                    sorumlu_grup.Value = reader[24].ToString();
-                    satin_alma_tarihi.Value = getDate(reader[25].ToString()).ToString("yyyy-MM-dd");
-                    planlanan_devreden_cikarma_tarihi.Value = getDate(reader[26].ToString()).ToString("yyyy-MM-dd");
-                    bakim_baslangic_tarihi.Value = getDate(reader[27].ToString()).ToString("yyyy-MM-dd");
-                    bakim_bitis_tarihi.Value = getDate(reader[28].ToString()).ToString("yyyy-MM-dd");
-                    ozel_durumu.Value = reader[33].ToString();
-                    support.Value = reader[34].ToString();
+                    if (reader.Read())
+                    {
+                        seri_no.Value = reader[3].ToString();
+                        aciklama.Value = reader[4].ToString();
+                        uretici_firma.Value = reader[5].ToString();
+                        model.Value = reader[6].ToString();
+                        cpu_soket.Value = reader[7].ToString();
+                        cpu_core.Value = reader[8].ToString();
+                        toplam_core.Value = reader[9].ToString();
+                        memory.Value = reader[10].ToString();
+                        cihaz_tipi.Value = reader[11].ToString();
+                        hall.Value = reader[12].ToString();
+                        row.Value = reader[13].ToString();
+                        rack.Value = reader[14].ToString();
+                        blade_schasi.Value = reader[15].ToString();
+                        domain_bilgisi.Value = reader[16].ToString();
+                        enviroment.Value = reader[17].ToString();
+                        firma.Value = reader[18].ToString();
+                        sahiplik.Value = reader[19].ToString();
+                        lokasyon.Value = reader[20].ToString();
+                        kapsam_bbva_metrics.Value = reader[21].ToString();
+                        cluster.Value = reader[22].ToString();
+                        isletim_sistemi.Value = reader[23].ToString();
+                        sorumlu_grup.Value = reader[24].ToString();
+                        satin_alma_tarihi.Value = getDate(reader[25].ToString()).ToString("yyyy-MM-dd");
+                        planlanan_devreden_cikarma_tarihi.Value = getDate(reader[26].ToString()).ToString("yyyy-MM-dd");
+                        bakim_baslangic_tarihi.Value = getDate(reader[27].ToString()).ToString("yyyy-MM-dd");
+                        bakim_bitis_tarihi.Value = getDate(reader[28].ToString()).ToString("yyyy-MM-dd");
+                        ozel_durumu.Value = reader[33].ToString();
+                        support.Value = reader[34].ToString();
 
+                    }
                 }
             }
         }
         protected void updateRow()
         {
-            string[] inputs = getInputs();
-
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            cmd.CommandText = $"UPDATE fiziksel SET " +
-                $"[Seri No]='{inputs[0]}',Açıklama='{inputs[1]}',[Üretici Firma]='{inputs[2]}'," +
-                $"Model='{inputs[3]}',[CPU Soket Sayısı]='{inputs[4]}',[CPU Core Sayısı]='{inputs[5]}'," +
-                $"[Toplam Core Adet]='{inputs[6]}',[Memory (GB)]='{inputs[7]}',[Cihaz Tipi]='{inputs[8]}'," +
-                $"Hall='{inputs[9]}',Row='{inputs[10]}',Rack='{inputs[11]}',[Blade Şasi]='{inputs[12]}'," +
-                $"[Domain Bilgisi (UCS-HP)]='{inputs[13]}',Enviroment='{inputs[14]}',Firma='{inputs[15]}',Sahiplik='{inputs[16]}'," +
-                $"Lokasyon='{inputs[17]}',[Kapsam-BBVA Metrics]='{inputs[18]}',Cluster='{inputs[19]}'," +
-                $"[İşletim Sistemi]='{inputs[20]}',[Sorumlu Grup]='{inputs[21]}',[Satın Alma Tarihi]='{inputs[22]}'," +
-                $"[Planlanan Devreden Çıkarma Tarihi]='{inputs[23]}',[Bakım Başlangıç Tarihi]='{inputs[24]}'," +
-                $"[Bakım Bitiş Tarihi]='{inputs[25]}',[Özel Durumu]='{inputs[26]}',Support='{inputs[27]}'" +
-                $"WHERE Adı = '{hostName}'";
-            cmd.ExecuteNonQuery();
+            try
+            {
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
+                    string[] inputs = getInputs();
+                    SqlCommand cmd = con.CreateCommand();
+                    cmd.CommandType = CommandType.Text;
+                    cmd.CommandText = $"UPDATE fiziksel SET " +
+                        $"[Seri No]='{inputs[0]}',Açıklama='{inputs[1]}',[Üretici Firma]='{inputs[2]}'," +
+                        $"Model='{inputs[3]}',[CPU Soket Sayısı]='{inputs[4]}',[CPU Core Sayısı]='{inputs[5]}'," +
+                        $"[Toplam Core Adet]='{inputs[6]}',[Memory (GB)]='{inputs[7]}',[Cihaz Tipi]='{inputs[8]}'," +
+                        $"Hall='{inputs[9]}',Row='{inputs[10]}',Rack='{inputs[11]}',[Blade Şasi]='{inputs[12]}'," +
+                        $"[Domain Bilgisi (UCS-HP)]='{inputs[13]}',Enviroment='{inputs[14]}',Firma='{inputs[15]}',Sahiplik='{inputs[16]}'," +
+                        $"Lokasyon='{inputs[17]}',[Kapsam-BBVA Metrics]='{inputs[18]}',Cluster='{inputs[19]}'," +
+                        $"[İşletim Sistemi]='{inputs[20]}',[Sorumlu Grup]='{inputs[21]}',[Satın Alma Tarihi]='{inputs[22]}'," +
+                        $"[Planlanan Devreden Çıkarma Tarihi]='{inputs[23]}',[Bakım Başlangıç Tarihi]='{inputs[24]}'," +
+                        $"[Bakım Bitiş Tarihi]='{inputs[25]}',[Özel Durumu]='{inputs[26]}',Support='{inputs[27]}'" +
+                        $"WHERE Adı = '{hostName}'";
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                Response.Write(ex.Message);
+            }
 
         }
         protected void save_Click(object sender, EventArgs e)
@@ -122,11 +134,15 @@ namespace fiziksel
 
         protected void delete_Click(object sender, EventArgs e)
         {
-            SqlCommand cmd = con.CreateCommand();
-            cmd.CommandType = CommandType.Text;
-            cmd.CommandText = $"DELETE FROM fiziksel WHERE Adı = '{hostName}'";
-            cmd.ExecuteNonQuery();
-            Response.Redirect("default.aspx");
+            using (SqlConnection con = new SqlConnection(connectionString))
+            {
+                con.Open();
+                SqlCommand cmd = con.CreateCommand();
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandText = $"DELETE FROM fiziksel WHERE Adı = '{hostName}'";
+                cmd.ExecuteNonQuery();
+                Response.Redirect("default.aspx");
+            }
 
         }
     }
