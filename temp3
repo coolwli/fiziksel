@@ -1,12 +1,99 @@
-# 1'den 5'e kadar olan sayıları paralel olarak işleme
-$sayilar = 1..5
+<!DOCTYPE html>
+<html lang="tr">
 
-# Paralel işlem başlatma
-$sayilar | ForEach-Object -Parallel {
-    Start-Sleep -Seconds 10 # Her işlem 10 saniye bekler
-    $kare = $_ * $_
-    Write-Output "Sayı: $_, Karesi: $kare"
-}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VM Status Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
 
-# Paralel işlemler tamamlandıktan sonra yürütülecek kod
-Write-Output "Paralel işlemler tamamlandı. Şimdi sıradaki kod çalışıyor."
+        .container {
+            width: 90%;
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        h2 {
+            color: #4CAF50;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid #dddddd;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>VM Durum Raporu</h2>
+        <p>Merhaba,</p>
+        <p>Şirketimizdeki çeşitli ekiplerin powered off durumda olan VM'lerinin güncel durumu aşağıda listelenmiştir:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>VM Name</th>
+                    <th>Ekip Adı</th>
+                    <th>Kaç Gündür Kapalı</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>VM1</td>
+                    <td>Ekip A</td>
+                    <td>5</td>
+                </tr>
+                <tr>
+                    <td>VM2</td>
+                    <td>Ekip B</td>
+                    <td>10</td>
+                </tr>
+                <tr>
+                    <td>VM3</td>
+                    <td>Ekip C</td>
+                    <td>7</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>Bilgilerinize sunarız.</p>
+        <p>Saygılarımızla,</p>
+        <p>IT Departmanı</p>
+    </div>
+</body>
+
+</html>
