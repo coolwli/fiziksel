@@ -7,24 +7,23 @@
     <meta charset="UTF-8">
     <title>Fiziksel Envanter</title>
 
-    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
+    <link rel="stylesheet" type="text/css" href="styles.css" />
 
     <style>
-
+        /* Container Styles */
         .panel-container {
             display: flex;
             padding: 10px;
-            margin:auto;
+            margin: auto;
             width: 80%;
             justify-content: center;
-            font-size:10px;
-
+            font-size: 10px;
         }
 
         .left-panel {
             display: flex;
             flex-wrap: wrap;
-            flex-direction:row-reverse;
+            justify-content: flex-end;
         }
 
         .right-panel {
@@ -32,6 +31,7 @@
             padding-top: 10px;
         }
 
+        /* Panel Styles */
         .panel,
         .left-panel .extra-panel {
             border: 1px solid #ddd;
@@ -67,10 +67,10 @@
 
         .extra-panel .checkbox-panel {
             max-height: 290px;
-            margin-left:10px;
+            margin-left: 10px;
         }
 
-        
+        /* Input Styles */
         .search-input {
             width: 90%;
             padding: 5px;
@@ -83,8 +83,8 @@
         .extra-panel .search-input {
             margin-top: 5px;
             margin-bottom: 5px;
-            margin-left:10px;        
-            }
+            margin-left: 10px;
+        }
 
         .dropdown {
             width: 90%;
@@ -98,6 +98,7 @@
             margin: 0;
         }
 
+        /* Table Styles */
         #score-table {
             border: none;
             border-collapse: collapse;
@@ -111,28 +112,6 @@
             text-align: left;
             border: none;
         }
-        .button-container {
-            display: flex;
-            justify-content: center;
-            
-        }
-        .button-container .button{
-            background-color: #ccc;
-            color:black;
-        }
-        .button-container .active {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .panel-button {
-            margin-top: 5px;
-            margin-left: 15px;
-            padding: 10px 0px;
-
-            width: 150px;
-            border-radius: 3px;
-        }
 
         .table-container {
             width: 90%;
@@ -140,22 +119,12 @@
             align-items: center;
             justify-content: center;
             margin: auto;
-            font-size:10px;
-
+            font-size: 10px;
         }
 
         .content-table {
             border-collapse: collapse;
             font-size: 10px;
-        }
-
-        .edit-icon {
-            min-width: 16px;
-            background-image: url('edit.png');
-            background-repeat: no-repeat;
-            background-size: 70%;
-            background-position: center;
-            cursor: pointer;
         }
 
         th,
@@ -174,6 +143,41 @@
             min-width: 170px;
         }
 
+        /* Button Styles */
+        .button-container {
+            display: flex;
+            justify-content: center;
+        }
+
+        .button-container .button {
+            background-color: #ccc;
+            color: black;
+        }
+
+        .button-container .active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .panel-button {
+            margin-top: 5px;
+            margin-left: 15px;
+            padding: 10px 0px;
+            width: 150px;
+            border-radius: 3px;
+        }
+
+        /* Icon Styles */
+        .edit-icon {
+            min-width: 16px;
+            background-image: url('edit.png');
+            background-repeat: no-repeat;
+            background-size: 70%;
+            background-position: center;
+            cursor: pointer;
+        }
+
+        /* Pagination Styles */
         .pagination {
             display: flex;
             justify-content: center;
@@ -197,16 +201,18 @@
             color: white;
         }
 
+        /* Heading Styles */
         h5 {
             margin: 0 0 10px;
             font-size: 10px;
             color: #333;
         }
+
         h2 {
             margin-bottom: 5px;
         }
-
     </style>
+
 </head>
 
 <body>
@@ -285,10 +291,10 @@
                     <h2 id="row-count">0</h2>
 
                 </div>
-                <div class="buttons-panel" style="background-color:none;">
+                <div class="buttons-panel">
                     <button id="reset-button" class="panel-button" type="button">Reset Filters</button>
                     <button id="add-button" class="panel-button">Add a new Machine</button>
-                    <button id="chart-button" class="panel-button" type="button" >Show as Pie Chart</button>
+                    <button id="chart-button" class="panel-button" type="button">Show as Pie Chart</button>
 
 
                 </div>
@@ -356,7 +362,7 @@
             let rowsPerPage = 10;
             let currentPage = 1;
             let tableRows = [];
-            paginationElement = document.getElementById('pagination');
+            const paginationElement = document.getElementById('pagination');
 
             function displayRows() {
                 tableRows = Array.from(contentTable.querySelectorAll('tr.visible'));
@@ -365,18 +371,17 @@
 
                 for (let i = 1; i < document.getElementById("contentTable").rows.length; i++) {
                     document.getElementById("contentTable").rows[i].style.display = 'none';
-
                 }
                 for (let i = (currentPage - 1) * rowsPerPage; i < length; i++) {
                     tableRows[i].style.display = '';
                 }
                 setupPagination(1, Math.ceil(tableRows.length / rowsPerPage));
-
-
             }
+
             function setupPagination(start, end) {
                 paginationElement.innerHTML = '';
                 if ((end - start) >= (maxPage - 1)) end = maxPage + start - 1;
+
                 for (let i = start; i <= end; i++) {
                     const pageLink = document.createElement('a');
                     pageLink.href = '#';
@@ -397,29 +402,24 @@
                     paginationElement.appendChild(pageLink);
                 }
             }
+
             function updatePagination() {
                 const pageLinks = document.querySelectorAll('.page-link');
                 pageLinks.forEach(link => link.classList.remove('active'));
+
                 if (Math.ceil(tableRows.length / rowsPerPage) > maxPage) {
                     if (currentPage > (maxPage / 2)) {
                         setupPagination(currentPage - (maxPage / 2), Math.ceil(tableRows.length / rowsPerPage));
                         pageLinks[maxPage / 2].classList.add('active');
-
-                    }
-                    else {
+                    } else {
                         setupPagination(1, Math.ceil(tableRows.length / rowsPerPage));
                         pageLinks[currentPage - 1].classList.add('active');
                     }
-                }
-                else {
+                } else {
                     pageLinks[currentPage - 1].classList.add('active');
-
                 }
             }
 
-        </script>
-
-        <script>
             document.addEventListener("DOMContentLoaded", function () {
                 const panelContainer = document.getElementById("panel-container");
                 const contentTable = document.getElementById("contentTable");
@@ -440,7 +440,6 @@
 
                 function calculateTotalValues(columnIndex) {
                     const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
-
                     let totalValue = 0;
 
                     visibleRows.forEach(row => {
@@ -454,6 +453,7 @@
                 function createCheckbox(panel, labelFor, labelText) {
                     const cont = document.createElement("div");
                     cont.className = "checkbox-content";
+
                     const checkbox = document.createElement("input");
                     checkbox.type = "checkbox";
                     checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
@@ -473,10 +473,9 @@
                     const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
 
                     panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
-                        if (checkbox.checked) {
-                            return;
+                        if (!checkbox.checked) {
+                            checkbox.closest('.checkbox-content').remove();
                         }
-                        checkbox.closest('.checkbox-content').parentElement.removeChild(checkbox.closest('.checkbox-content'));
                     });
 
                     const uniqueValues = new Set(visibleRows.map(row => row.cells[columnIndex].innerText.trim()));
@@ -498,13 +497,10 @@
                     currentPage = 1;
                     Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
 
-
                     if (labels.length === 0) {
                         tableRows.forEach(row => row.classList.add('visible'));
                         lastChangedColumn = null;
-
-                    }
-                    else {
+                    } else {
                         if (isBack) {
                             tableRows.forEach(row => row.classList.add('visible'));
                         }
@@ -513,15 +509,13 @@
                             const columnName = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
                             if (columnName.classList.contains('filtered')) {
                                 tableRows.forEach(row => {
-                                    if (row.classList.contains('visible')) return;
+                                    if (!row.classList.contains('visible')) return;
+
                                     const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
                                     if (cellValue == label.innerText) row.classList.add('visible');
                                     else row.classList.remove('visible');
-
                                 });
-                            }
-
-                            else {
+                            } else {
                                 columnName.classList.add('filtered');
 
                                 tableRows.forEach(row => {
@@ -531,8 +525,6 @@
                                     if (cellValue == label.innerText) row.classList.add('visible');
                                     else row.classList.remove('visible');
                                 });
-
-
                             }
                         });
                     }
@@ -553,9 +545,7 @@
                     document.getElementById("core-count").innerText = calculateTotalValues(8);
                     document.getElementById("memory-count").innerText = calculateTotalValues(9);
                     displayRows();
-                    
                 }
-
 
                 function handleCheckboxChange(event) {
                     if (event.target.type === "checkbox") {
@@ -563,10 +553,8 @@
 
                         if (event.target.checked) {
                             lastChangedColumn = label.closest(".panel") ? label.closest(".panel").querySelector("h5").innerText : label.closest(".extra-panel").querySelector("h5").innerText;
-                            labels = [...labels, label];
+                            labels.push(label);
                             filterTable();
-
-
                         } else {
                             labels = labels.filter(item => item !== label);
                             lastChangedColumn = null;
@@ -580,7 +568,6 @@
                     const columnName = panel.querySelector('h5').innerText.trim();
                     const columnIndex = getColumnIndex(columnName);
                     const searchText = event.target.value.trim().toLowerCase();
-                    console.log(searchText);
                     filterCheckboxes(panel, searchText);
                 }
 
@@ -591,14 +578,14 @@
                     checkboxes.forEach(function (checkbox) {
                         const label = checkbox.querySelector('label');
                         const labelText = label.innerText.toLowerCase();
-                        const cont = checkbox.closest('.checkbox-content');
-                        cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
+                        checkbox.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
                     });
                 }
 
                 function handleDropdownChange() {
                     const dropdown = document.getElementById('column-dropdown');
-                    const extraCbs = Array.from(dropdown.closest(".extra-panel").querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox);
+                    const extraCbs = Array.from(dropdown.closest(".extra-panel").querySelectorAll('input[type="checkbox"]:checked'));
+
                     extraCbs.forEach(function (checkbox) {
                         const label = checkbox.closest('.checkbox-content').querySelector('label');
                         labels = labels.filter(item => item !== label);
@@ -616,10 +603,8 @@
                         const panel = dropdown.closest(".extra-panel");
                         const columnIndex = getColumnIndex(dropdown.value);
                         populatePanelCheckboxes(panel, columnIndex);
-                    }
-                    else {
+                    } else {
                         dropdown.closest(".extra-panel").querySelector('.search-input').style.display = "none";
-
                     }
                 }
 
@@ -630,8 +615,10 @@
                     firstOption.value = "Select Extra Column";
                     firstOption.textContent = "Select Extra Column";
                     dropdown.appendChild(firstOption);
+
                     contentTable.querySelectorAll('th').forEach(column => {
                         if (["", "Adı", "Üretici Firma", "Kapsam-BBVA Metrics", "Enviroment", "Özel Durumu", "İşletim Sistemi", "Model"].includes(column.innerText)) return;
+
                         const option = document.createElement('option');
                         option.value = column.innerText;
                         option.textContent = column.innerText;
@@ -641,29 +628,30 @@
 
                 function editRow(rowName) {
                     window.location.href = "edit.aspx?name=" + rowName;
-
                 }
-
 
                 function setEditIcons() {
                     tableRows.forEach(row => {
-                        icon = row.querySelectorAll('td')[0];
+                        const icon = row.querySelectorAll('td')[0];
                         icon.classList.add('edit-icon');
                         icon.addEventListener('click', function () {
                             editRow(row.querySelectorAll('td')[1].innerText);
                         });
                     });
                 }
-                
-                document.getElementById('add-button').addEventListener('click', function () {
+
+                document.getElementById('add-button').addEventListener('click', function (event) {
                     event.preventDefault();
                     window.location.href = 'create.aspx';
                 });
+
                 document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
+
                 panelContainer.querySelectorAll('.panel').forEach(panel => {
                     const searchInput = panel.querySelector('.search-input');
                     searchInput.addEventListener('input', handleSearchInput);
                 });
+
                 document.querySelector('.right-panel').querySelector('.extra-panel').querySelector('.search-input').addEventListener('input', handleSearchInput);
                 panelContainer.addEventListener("change", handleCheckboxChange);
                 resetButton.addEventListener("click", resetCheckboxes);
@@ -672,6 +660,7 @@
                 setEditIcons();
                 addOptionsDropdown();
             });
+
             function selectRow(selectedButton) {
                 const buttons = document.querySelector(".button-container").querySelectorAll('.button');
                 buttons.forEach(button => button.classList.remove('active'));
@@ -679,13 +668,12 @@
                 rowsPerPage = selectedButton.textContent;
                 currentPage = 1;
                 displayRows();
-
             }
         </script>
+
         <script>
             function showCharts() {
-                
-                var uniqueValues = [
+                let uniqueValues = [
                     {
                         column: "",
                         values: [
@@ -695,48 +683,41 @@
                 ];
 
                 function findValue(currentColumnIndex, value) {
-                    let i = -1;
-                    Array.from(uniqueValues[currentColumnIndex].values).forEach((currentValue,index) => {
-                        if (currentValue.value.trim() === value.trim()) {
-                            i = index; 
-                            return;
-                        }
-                    });
-                    return i;
+                    return uniqueValues[currentColumnIndex].values.findIndex(currentValue => currentValue.value.trim() === value.trim());
                 }
 
-                Array.from(document.getElementById("contentTable").querySelectorAll('th')).slice(1).forEach(col => {
-                    newColumn = { column: col.innerText, values: [] };
-                    uniqueValues.push(newColumn);
-                });
+                const columns = Array.from(document.getElementById("contentTable").querySelectorAll('th')).slice(1);
+                columns.forEach(col => uniqueValues.push({ column: col.innerText, values: [] }));
 
-                const visibleRows = Array.from(document.getElementById("contentTable").querySelectorAll('tr')).slice(1).filter(row => row.classList.contains('visible'));
+                const visibleRows = Array.from(document.getElementById("contentTable").querySelectorAll('tr.visible')).slice(1);
                 visibleRows.forEach(row => {
-                    for (var i = 4; i < uniqueValues.length; i++) {
-                        var index = findValue(i, row.cells[i].innerText);
-                        if (index == -1) uniqueValues[i].values.push({ value: row.cells[i].innerText, count: 1 });
-                        else uniqueValues[i].values[index].count++;
-
+                    for (let i = 4; i < uniqueValues.length; i++) {
+                        const cellValue = row.cells[i].innerText;
+                        const index = findValue(i, cellValue);
+                        if (index === -1) {
+                            uniqueValues[i].values.push({ value: cellValue, count: 1 });
+                        } else {
+                            uniqueValues[i].values[index].count++;
+                        }
                     }
+                });
 
+                const columnsToRemove = [24, 23, 22, 21, 19, 15, 3, 2, 1, 0];
+                columnsToRemove.forEach(colIndex => uniqueValues.splice(colIndex, 1));
+
+                uniqueValues.forEach(columnData => {
+                    columnData.values.sort((a, b) => b.count - a.count);
                 });
-                uniqueValues.splice(24, 4);
-                uniqueValues.splice(21, 1);
-                uniqueValues.splice(19, 1);
-                uniqueValues.splice(15, 1);
-                uniqueValues.splice(0, 4);
-                uniqueValues.forEach(dizi => {
-                    dizi.values.sort(function (a, b) {
-                        return b.count - a.count;
-                    });
-                });
+
                 localStorage.setItem("chartDatas", JSON.stringify(uniqueValues));
-                var uniqueValues = JSON.parse(localStorage.getItem('chartDatas'));
-                console.log(uniqueValues);
+                const storedValues = JSON.parse(localStorage.getItem('chartDatas'));
+                console.log(storedValues);
                 window.location.href = "/piecharts";
             }
+
             document.getElementById("chart-button").addEventListener("click", showCharts);
         </script>
+
 
     </form>
 
