@@ -1,161 +1,105 @@
-table
-table {
-    border-collapse: collapse;
-    width: 97%;
-    margin: auto;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    font-size: 9px;
+:root {
+    --primary-color: black;
+    --secondary-color: #54AFE4;
+	--default-gray:#f2f2f2;
+    --error-red: #E04F4F;
 }
-
-th,
-td {
-    border: none;
-    padding: 8px;
-    text-align: left;
-}
-
-th {
-    background-color: #f2f2f2;
-    color: #333;
-    font-weight: bold;
-    cursor: pointer;
-    width: auto
-}
-
-tr:nth-child(even) {
-    background-color: #f9f9f9;
-}
-
-tr:hover {
-    background-color: #efefef;
-    cursor: pointer;
-}
-
-.dropdown-content {
-    display: none;
-    position: absolute;
-    background-color: #f9f9f9;
-    min-width: 160px;
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-    padding: 12px 16px;
-    z-index: 1;
-    max-height: 200px;
-    overflow-y: auto;
-    text-align: left;
-}
-
-.dropdown:hover .dropdown-content {
-    display: block;
-}
-
-.dropdown-arrow {
-    margin-left: 5px;
-    font-size: 8px;
-}
-
-.table-top {
-    width: 97%;
-    display: flex;
-    justify-content: space-between;
-    margin: 8px auto 4px auto
-}
-
-button {
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
-    transition: background-color 0.3s ease;
-    outline: none;
-}
-
-#reset-button {
-    background-color: black;
-    padding: 5px 8px;
-    margin-left: 10px;
-}
-
-    #reset-button:hover {
-        background-color: #484848;
-    }
-
-#rowCounter {
-    margin-right: auto;
-    font-size: 10px;
-}
-
-.pagination {
-    display: flex;
-    justify-content: center;
-    margin-top: 20px;
-    margin-bottom: 20px;
-}
-
-.page-link {
-    display: inline-block;
-    padding: 10px;
-    margin: 0 4px;
-    text-decoration: none;
-    cursor: pointer;
-    color: #333;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-    .page-link.active {
-        background-color: black;
-        color: white;
-    }
-
-
-screen
 
 body {
     font-family: Verdana;
     margin: 0;
     padding: 0;
     background-color: #fff;
+    align-items: center;
 }
 
-.boldText {
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    font-weight: bold;
-    font-size: small;
-}
-
-.blueText {
+.blue-text {
     letter-spacing: 2px;
-    color: #54AFE4;
+    color: var(--secondary-color);
     font-weight: bold;
     margin-bottom: 10px;
     text-transform: uppercase;
 }
 
-.linkText {
-    color: #8dbdd9;
+.link-text {
+    font-size: 14px;
+    font-weight: 400;
+    color: #2997ff;
     text-decoration: underline;
     margin-bottom: 5px;
     font-weight: bold;
     cursor: pointer;
-    font-size: small;
 }
+
+.bold-text {
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+.strong-text {
+    font-size: 40px;
+    letter-spacing: 0;
+    line-height: 44px;
+    font-weight: 700;
+}
+
+.gray-text {
+    font-size: 18px;
+    color: #8b959e;
+    line-height: 1.4;
+}
+
+.number-box {
+    border-radius: 8px;
+    width: 500px;
+    overflow: hidden;
+    border: 1px solid #ced5db;
+    text-align: center;
+    margin: auto;
+    height: auto;
+    padding: 10px;
+}
+
+    .number-box .strong-text {
+        display: block;
+    }
+
+.big-cell {
+    text-align: center;
+    padding-top: 24px;
+    padding-right: 32px;
+    padding-left: 32px;
+    line-height: normal;
+}
+
+button, .button {
+    color: white;
+    background-color: var(--primary-color);
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    outline: none;
+}
+
+    .button:hover, button:hover {
+        background-color: #333333;
+    }
 
 .header {
     overflow: hidden;
-    background-color: black;
-    padding: 10px 10px;
+    background-color: var(--primary-color);
 }
 
     .header h1 {
-        margin: 20px;
         float: left;
         text-align: center;
         text-decoration: none;
         line-height: 10px;
         border-radius: 4px;
         color: #F8F9FA;
+        margin-left: 10px;
+        margin-top: 30px;
     }
 
 
@@ -176,6 +120,6 @@ footer {
 
 .footer {
     display: block;
-    font-size: 14px;
     color: #888;
+    font-size: 14px;
 }
