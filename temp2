@@ -1,149 +1,53 @@
-using Microsoft.SqlServer.Server;
-using System;
-using System.Data;
-using System.Data.SqlClient;
-using System.Reflection;
+<!DOCTYPE html>
+<html lang="tr">
 
-namespace fiziksel
-{
-    public partial class edit : System.Web.UI.Page
-    {
-        string connectionString=@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True";
-        string hostName;
-
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            hostName = Request.QueryString["name"];
-
-            getDatas();
-
-        }
-        public DateTime getDate(string date)
-        {
-            date = date.Split(' ')[0];
-            int day = Convert.ToInt32(date.Split('/')[0]);
-            int month = Convert.ToInt32(date.Split('/')[1]);
-            int year = Convert.ToInt32(date.Split('/')[2]);
-            DateTime dt = new DateTime(year, day, month);
-            return dt;
-        }
-        public string[] getInputs()
-        {
-            string[] inputNames = {"seri_no","aciklama","uretici_firma","model","cpu_soket","cpu_core",
-                "toplam_core","memory","cihaz_tipi","hall","row","rack","blade_schasi","domain_bilgisi","enviroment",
-                "firma","sahiplik","lokasyon","kapsam_bbva_metrics","cluster","isletim_sistemi","sorumlu_grup",
-                "satin_alma_tarihi","planlanan_devreden_cikarma_tarihi","bakim_baslangic_tarihi","bakim_bitis_tarihi",
-                "ozel_durumu","support" };
-            string[] inputs = new string[inputNames.Length];
-
-            int i = 0;
-            foreach (string name in inputNames)
-            {
-                inputs[i] = Request.Form[name];
-                i++;
-            }
-
-            return inputs;
-        }
-        public void getDatas()
-        {
-            
-            using (SqlConnection con = new SqlConnection(connectionString)){
-                con.Open();
-                SqlCommand cmd = con.CreateCommand();
-                cmd.CommandType = CommandType.Text;
-                cmd.CommandText = $"SELECT * FROM fiziksel  WHERE Adı = '{hostName}'";
-                using (SqlDataReader reader = cmd.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        seri_no.Value = reader[3].ToString();
-                        aciklama.Value = reader[4].ToString();
-                        uretici_firma.Value = reader[5].ToString();
-                        model.Value = reader[6].ToString();
-                        cpu_soket.Value = reader[7].ToString();
-                        cpu_core.Value = reader[8].ToString();
-                        toplam_core.Value = reader[9].ToString();
-                        memory.Value = reader[10].ToString();
-                        cihaz_tipi.Value = reader[11].ToString();
-                        hall.Value = reader[12].ToString();
-                        row.Value = reader[13].ToString();
-                        rack.Value = reader[14].ToString();
-                        blade_schasi.Value = reader[15].ToString();
-                        domain_bilgisi.Value = reader[16].ToString();
-                        enviroment.Value = reader[17].ToString();
-                        firma.Value = reader[18].ToString();
-                        sahiplik.Value = reader[19].ToString();
-                        lokasyon.Value = reader[20].ToString();
-                        kapsam_bbva_metrics.Value = reader[21].ToString();
-                        cluster.Value = reader[22].ToString();
-                        isletim_sistemi.Value = reader[23].ToString();
-                        sorumlu_grup.Value = reader[24].ToString();
-                        satin_alma_tarihi.Value = getDate(reader[25].ToString()).ToString("yyyy-MM-dd");
-                        planlanan_devreden_cikarma_tarihi.Value = getDate(reader[26].ToString()).ToString("yyyy-MM-dd");
-                        bakim_baslangic_tarihi.Value = getDate(reader[27].ToString()).ToString("yyyy-MM-dd");
-                        bakim_bitis_tarihi.Value = getDate(reader[28].ToString()).ToString("yyyy-MM-dd");
-                        ozel_durumu.Value = reader[33].ToString();
-                        support.Value = reader[34].ToString();
-
-                    }
-                }
-            }
-        }
-        protected void updateRow()
-        {
-            try
-            {
-                using (SqlConnection con = new SqlConnection(connectionString))
-                {
-                    con.Open();
-                    string[] inputs = getInputs();
-                    SqlCommand cmd = con.CreateCommand();
-                    cmd.CommandType = CommandType.Text;
-                    cmd.CommandText = $"UPDATE fiziksel SET " +
-                        $"[Seri No]='{inputs[0]}',Açıklama='{inputs[1]}',[Üretici Firma]='{inputs[2]}'," +
-                        $"Model='{inputs[3]}',[CPU Soket Sayısı]='{inputs[4]}',[CPU Core Sayısı]='{inputs[5]}'," +
-                        $"[Toplam Core Adet]='{inputs[6]}',[Memory (GB)]='{inputs[7]}',[Cihaz Tipi]='{inputs[8]}'," +
-                        $"Hall='{inputs[9]}',Row='{inputs[10]}',Rack='{inputs[11]}',[Blade Şasi]='{inputs[12]}'," +
-                        $"[Domain Bilgisi (UCS-HP)]='{inputs[13]}',Enviroment='{inputs[14]}',Firma='{inputs[15]}',Sahiplik='{inputs[16]}'," +
-                        $"Lokasyon='{inputs[17]}',[Kapsam-BBVA Metrics]='{inputs[18]}',Cluster='{inputs[19]}'," +
-                        $"[İşletim Sistemi]='{inputs[20]}',[Sorumlu Grup]='{inputs[21]}',[Satın Alma Tarihi]='{inputs[22]}'," +
-                        $"[Planlanan Devreden Çıkarma Tarihi]='{inputs[23]}',[Bakım Başlangıç Tarihi]='{inputs[24]}'," +
-                        $"[Bakım Bitiş Tarihi]='{inputs[25]}',[Özel Durumu]='{inputs[26]}',Support='{inputs[27]}'" +
-                        $"WHERE Adı = '{hostName}'";
-                    cmd.ExecuteNonQuery();
-                }
-            }
-            catch (Exception ex)
-            {
-                Response.Write(ex.Message);
-            }
-
-        }
-        protected void save_Click(object sender, EventArgs e)
-        {
-            updateRow();
-            Response.Redirect("default.aspx");
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buton Seçimi</title>
+    <style>
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
         }
 
-        protected void saveAndScks_Click(object sender, EventArgs e)
-        {
-            updateRow();
-            Response.Redirect("default.aspx");
+        .button {
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            border-right: none;
+            background-color: #f0f0f0;
+            color: #333;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
         }
 
-        protected void delete_Click(object sender, EventArgs e)
-        {
-            using (SqlConnection con = new SqlConnection(connectionString))
-            {
-                con.Open();
-                SqlCommand cmd = con.CreateCommand();
-                cmd.CommandType = CommandType.Text;
-                cmd.CommandText = $"DELETE FROM fiziksel WHERE Adı = '{hostName}'";
-                cmd.ExecuteNonQuery();
-                Response.Redirect("default.aspx");
-            }
-
+        .button:last-child {
+            border-right: 1px solid #ccc;
         }
-    }
-}
+
+        .button.active {
+            background-color: #4CAF50;
+            color: white;
+            border: 1px solid #4CAF50;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="button-container">
+        <div class="button active" onclick="selectButton(this)">10</div>
+        <div class="button" onclick="selectButton(this)">20</div>
+        <div class="button" onclick="selectButton(this)">50</div>
+    </div>
+
+    <script>
+        function selectButton(selectedButton) {
+            const buttons = document.querySelectorAll('.button');
+            buttons.forEach(button => button.classList.remove('active'));
+            selectedButton.classList.add('active');
+        }
+    </script>
+</body>
+
+</html>
