@@ -1,10 +1,10 @@
-const ROWS_PER_PAGE = 20;
 const MAX_PAGE = 10;
-var screenName = "";
+let ROWS_PER_PAGE = 10;
+let CURRENT_PAGE = 1;
 let data = [];
-let currentPage = 1;
 let ascending = true;
 let filteredData = [];
+
 
 
 function sortDatas(index) {
@@ -44,9 +44,6 @@ function renderPage(pageNumber) {
             const td = document.createElement('td');
             td.textContent = cellData;
             tr.appendChild(td);
-            tr.addEventListener('click', function () {
-                window.location.href = screenName + ".aspx" + "?id=" + row[Object.keys(row)[0]];
-            });
         }
         tableBody.appendChild(tr);
     });
@@ -86,15 +83,7 @@ function renderPagination() {
 
 function initializeTable() {
     filteredData = data;
-    document.querySelectorAll(".select-all-div input[type='checkbox']").forEach(selectAllCheckbox => {
-        selectAllCheckbox.addEventListener("change", () => {
-            const checkboxes = selectAllCheckbox.closest(".dropdown-content").querySelectorAll("input[type='checkbox']:not([style*='display: none'])");
-            const visibleCheckboxes = Array.from(checkboxes).filter(checkbox => checkbox.parentElement.style.display !== "none");
-            visibleCheckboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
-            filterTable();
-        });
-    });
-    document.querySelectorAll(".dropdown-content").forEach((column) => {
+    document.querySelectorAll(".filter-panel").forEach((column) => {
         generateColumnCheckboxes(column);
     });
     renderPagination();
@@ -102,9 +91,14 @@ function initializeTable() {
     sortDatas(0);
 }
 
+function getColumnIndex(columnName) {
+    var contentTable=document.getElementById("contentTable");
+    return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+}
+
 function generateColumnCheckboxes(dropdownContent) {
     const columnIndex = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(dropdownContent);
-    const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+    const checkboxesDiv = dropdownContent.querySelector(".checkbox-panel");
 
     checkboxesDiv.querySelectorAll("div").forEach((div) => {
         const checkbox = div.querySelector("input[type='checkbox']");
@@ -116,13 +110,6 @@ function generateColumnCheckboxes(dropdownContent) {
     const values = [...new Set(filteredData.map(row => row[Object.keys(row)[columnIndex]].toString().trim()))];
     values.sort(function (a, b) {
         if (!isNaN(a) && !isNaN(b)) {
-            return ascending ? a - b : b - a;
-        }
-        else if (columnIndex == 9) {
-            if (a == "-") return 1;
-            if (b == "-") return -1;
-            a = new Date(a);
-            b = new Date(b);
             return ascending ? a - b : b - a;
         }
         if (a == null) return -1;
@@ -159,69 +146,289 @@ function generateColumnCheckboxes(dropdownContent) {
     checkboxesDiv.appendChild(fragment);
 }
 
-function filterTable(checkbox) {
-    filteredData = data;
-    const lastSelectedColumn = checkbox ? checkbox.closest(".dropdown-content") : null;
 
-    const columns = document.querySelectorAll(".dropdown-content");
-    const checkedValues = Array.from(columns).map(column => {
-        return Array.from(column.querySelectorAll("input[type='checkbox']:checked")).map(checkbox => checkbox.value);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const panelContainer = document.getElementById("panel-container");
+const contentTable = document.getElementById("contentTable");
+const resetButton = document.getElementById("reset-button");
+const rowCountElement = document.getElementById("row-count");
+const tableRows = Array.from(contentTable.querySelectorAll('tr')).slice(1);
+let labels = [];
+let lastChangedColumn = null;
+
+function getColumnIndex(columnName) {
+    return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+}
+
+function updateRowCount() {
+    const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+    rowCountElement.textContent = visibleRows.length;
+}
+
+function calculateTotalValues(columnIndex) {
+    const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+
+    let totalValue = 0;
+
+    visibleRows.forEach(row => {
+        const cellValue = parseInt(row.cells[columnIndex].innerText.trim()) || 0;
+        totalValue += cellValue;
     });
-    const checkedValuesLength = checkedValues.map(values => values.length);
-    const sumOfArrayLengths = checkedValuesLength.reduce((total, length) => total + length, 0);
-    console.log(sumOfArrayLengths);
-    filteredData = data.filter(row => {
-        return checkedValues.every((values, columnIndex) => {
-            if (values.length === 0) return true;
-            return values.includes(row[Object.keys(row)[columnIndex]].toString());
+
+    return totalValue.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function createCheckbox(panel, labelFor, labelText) {
+    const cont = document.createElement("div");
+    cont.className = "checkbox-content";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = labelFor.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+    const label = document.createElement("label");
+    label.setAttribute("for", checkbox.id);
+    label.innerText = labelText;
+
+    if (panel.querySelector('[for="' + checkbox.id + '"]')) return;
+
+    cont.appendChild(checkbox);
+    cont.appendChild(label);
+    panel.querySelector('.checkbox-panel').appendChild(cont);
+}
+
+function populatePanelCheckboxes(panel, columnIndex) {
+    const visibleRows = tableRows.filter(row => row.classList.contains('visible'));
+
+    panel.querySelectorAll('input[type="checkbox"]').forEach(function (checkbox) {
+        if (checkbox.checked) {
+            return;
+        }
+        checkbox.closest('.checkbox-content').parentElement.removeChild(checkbox.closest('.checkbox-content'));
+    });
+
+    const uniqueValues = new Set(visibleRows.map(row => row.cells[columnIndex].innerText.trim()));
+    uniqueValues.forEach(function (cellContent, index) {
+        const checkboxId = "checkbox" + index + "-" + columnIndex;
+        createCheckbox(panel, checkboxId, cellContent);
+    });
+}
+
+function resetCheckboxes() {
+    lastChangedColumn = null;
+    labels = [];
+    panelContainer.querySelectorAll('.checkbox-panel input[type="checkbox"]').forEach(checkbox => checkbox.checked = false);
+    filterTable();
+    updateRowCount();
+}
+
+function filterTable(isBack) {
+    CURRENT_PAGE = 1;
+    Array.from(document.querySelectorAll('h5')).forEach(h5 => h5.classList.remove('filtered'));
+
+
+    if (labels.length === 0) {
+        tableRows.forEach(row => row.classList.add('visible'));
+        lastChangedColumn = null;
+
+    }
+    else {
+        if (isBack) {
+            tableRows.forEach(row => row.classList.add('visible'));
+        }
+
+        labels.forEach(function (label) {
+            const columnName = label.closest(".panel") ? label.closest(".panel").querySelector("h5") : label.closest(".extra-panel").querySelector("h5");
+            if (columnName.classList.contains('filtered')) {
+                tableRows.forEach(row => {
+                    if (row.classList.contains('visible')) return;
+                    const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
+                    if (cellValue == label.innerText) row.classList.add('visible');
+                    else row.classList.remove('visible');
+
+                });
+            }
+
+            else {
+                columnName.classList.add('filtered');
+
+                tableRows.forEach(row => {
+                    if (!row.classList.contains('visible')) return;
+
+                    const cellValue = row.cells[getColumnIndex(columnName.innerText)].innerText;
+                    if (cellValue == label.innerText) row.classList.add('visible');
+                    else row.classList.remove('visible');
+                });
+
+
+            }
         });
-    });
-    columns.forEach((column) => {
-        if (column !== lastSelectedColumn || sumOfArrayLengths == 0) {
-            generateColumnCheckboxes(column);
+    }
+
+    panelContainer.querySelectorAll('.panel').forEach(panel => {
+        const columnName = panel.querySelector('h5').innerText.trim();
+        const columnIndex = getColumnIndex(columnName);
+        if (columnName !== lastChangedColumn) {
+            populatePanelCheckboxes(panel, columnIndex);
         }
     });
 
-    currentPage = 1;
-    renderPagination();
-    renderPage(currentPage);
-    updateCounter();
+    if (lastChangedColumn != document.getElementById("column-dropdown").closest(".extra-panel").querySelector("h5").innerText) {
+        updateExtraPanel();
+    }
+    updateRowCount();
+    document.getElementById("soket-count").innerText = calculateTotalValues(6);
+    document.getElementById("core-count").innerText = calculateTotalValues(8);
+    document.getElementById("memory-count").innerText = calculateTotalValues(9);
+    displayRows();
+    
 }
 
-function searchCheckboxes(searchInput) {
-    const filter = searchInput.value.toUpperCase();
-    const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
-    const divs = checkboxesDiv.getElementsByTagName("div");
-    for (let i = 0; i < divs.length; i++) {
-        const label = divs[i].getElementsByTagName("label")[0];
-        const txtValue = label.textContent || label.innerText;
-        if (txtValue.toUpperCase().indexOf(filter) > -1) {
-            divs[i].style.display = "";
+
+function handleCheckboxChange(event) {
+    if (event.target.type === "checkbox") {
+        const label = document.querySelector('label[for="' + event.target.id + '"]');
+
+        if (event.target.checked) {
+            lastChangedColumn = label.closest(".panel") ? label.closest(".panel").querySelector("h5").innerText : label.closest(".extra-panel").querySelector("h5").innerText;
+            labels = [...labels, label];
+            filterTable();
+
+
         } else {
-            divs[i].style.display = "none";
+            labels = labels.filter(item => item !== label);
+            lastChangedColumn = null;
+            filterTable(true);
         }
     }
 }
 
-function updateCounter() {
-    document.getElementById('rowCounter').textContent = `${filteredData.length} Satır Listelendi..`;
+function handleSearchInput(event) {
+    const panel = event.currentTarget.parentNode;
+    const columnName = panel.querySelector('h5').innerText.trim();
+    const columnIndex = getColumnIndex(columnName);
+    const searchText = event.target.value.trim().toLowerCase();
+    console.log(searchText);
+    filterCheckboxes(panel, searchText);
 }
 
-document.querySelectorAll("th").forEach((th, index) => {
-    th.addEventListener('click', function (event) {
-        if (!event.target.closest('.dropdown-content')) {
-            ascending = !ascending;
-            sortDatas(index);
-        }
-    });
-});
+function filterCheckboxes(panel, searchText) {
+    const checkboxes = panel.querySelector('.checkbox-panel').querySelectorAll('.checkbox-content');
+    const lowerCaseSearchText = searchText.toLowerCase();
 
-document.getElementById('reset-button').addEventListener('click', () => {
-    event.preventDefault();
-    document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => { checkbox.checked = false; });
-    document.querySelectorAll("input[type='text']").forEach((input) => { input.value = ""; });
-    ascending = true;
+    checkboxes.forEach(function (checkbox) {
+        const label = checkbox.querySelector('label');
+        const labelText = label.innerText.toLowerCase();
+        const cont = checkbox.closest('.checkbox-content');
+        cont.style.display = labelText.includes(lowerCaseSearchText) ? "block" : "none";
+    });
+}
+
+function handleDropdownChange() {
+    const dropdown = document.getElementById('column-dropdown');
+    const extraCbs = Array.from(dropdown.closest(".extra-panel").querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox);
+    extraCbs.forEach(function (checkbox) {
+        const label = checkbox.closest('.checkbox-content').querySelector('label');
+        labels = labels.filter(item => item !== label);
+    });
+
+    dropdown.closest(".extra-panel").querySelector(".checkbox-panel").innerHTML = "";
+    dropdown.closest(".extra-panel").querySelector("h5").innerText = dropdown.value;
     filterTable();
-    sortDatas(0);
+}
+
+function updateExtraPanel() {
+    const dropdown = document.getElementById('column-dropdown');
+    if (dropdown.value != "Select Extra Column") {
+        dropdown.closest(".extra-panel").querySelector('.search-input').style.display = "";
+        const panel = dropdown.closest(".extra-panel");
+        const columnIndex = getColumnIndex(dropdown.value);
+        populatePanelCheckboxes(panel, columnIndex);
+    }
+    else {
+        dropdown.closest(".extra-panel").querySelector('.search-input').style.display = "none";
+
+    }
+}
+
+function addOptionsDropdown() {
+    const dropdown = document.getElementById('column-dropdown');
+    dropdown.innerHTML = '';
+    const firstOption = document.createElement('option');
+    firstOption.value = "Select Extra Column";
+    firstOption.textContent = "Select Extra Column";
+    dropdown.appendChild(firstOption);
+    contentTable.querySelectorAll('th').forEach(column => {
+        if (["", "Adı", "Üretici Firma", "Kapsam-BBVA Metrics", "Enviroment", "Özel Durumu", "İşletim Sistemi", "Model"].includes(column.innerText)) return;
+        const option = document.createElement('option');
+        option.value = column.innerText;
+        option.textContent = column.innerText;
+        dropdown.appendChild(option);
+    });
+}
+
+function editRow(rowName) {
+    window.location.href = "edit.aspx?name=" + rowName;
+
+}
+
+
+function setEditIcons() {
+    tableRows.forEach(row => {
+        icon = row.querySelectorAll('td')[0];
+        icon.classList.add('edit-icon');
+        icon.addEventListener('click', function () {
+            editRow(row.querySelectorAll('td')[1].innerText);
+        });
+    });
+}
+
+document.getElementById('add-button').addEventListener('click', function () {
+    event.preventDefault();
+    window.location.href = 'create.aspx';
 });
-        
+document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
+panelContainer.querySelectorAll('.panel').forEach(panel => {
+    const searchInput = panel.querySelector('.search-input');
+    searchInput.addEventListener('input', handleSearchInput);
+});
+document.querySelector('.right-panel').querySelector('.extra-panel').querySelector('.search-input').addEventListener('input', handleSearchInput);
+panelContainer.addEventListener("change", handleCheckboxChange);
+resetButton.addEventListener("click", resetCheckboxes);
+
+filterTable();
+setEditIcons();
+addOptionsDropdown();
+
+function selectRow(selectedButton) {
+    const buttons = document.querySelector(".button-container").querySelectorAll('.button');
+    buttons.forEach(button => button.classList.remove('active'));
+    selectedButton.classList.add('active');
+    ROWS_PER_PAGE = selectedButton.textContent;
+    CURRENT_PAGE = 1;
+    displayRows();
+
+}
