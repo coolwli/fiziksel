@@ -1,60 +1,45 @@
 using System;
-using System.Data;
-using System.Data.SqlClient;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq; // NuGet package for JSON handling
 
-
-namespace fiziksel
+namespace YourNamespace
 {
-    public partial class create : System.Web.UI.Page
+    public partial class Default : System.Web.UI.Page
     {
-        string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=gtreportdb;Integrated Security=True";
-
-        public void createNew()
+        protected void Page_Load(object sender, EventArgs e)
         {
-            try
+        }
+
+        protected async void btnFetchData_Click(object sender, EventArgs e)
+        {
+            string vropsServer = "https://<vrops-server>";
+            string endpoint = "/suite-api/api/resources";
+            string username = "your-username";
+            string password = "your-password";
+
+            string base64Auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
+
+            using (HttpClient client = new HttpClient())
             {
+                client.BaseAddress = new Uri(vropsServer);
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64Auth);
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-
-                using (SqlConnection con = new SqlConnection(connectionString))
+                HttpResponseMessage response = await client.GetAsync(endpoint);
+                if (response.IsSuccessStatusCode)
                 {
-                    con.Open();
-                    SqlCommand cmd = con.CreateCommand();
-                    cmd.CommandType = CommandType.Text;
-                    cmd.CommandText = $"INSERT INTO fiziksel  " +
-                        $"(Adı,[Seri No],Açıklama,[Üretici Firma],Model,[CPU Soket Sayısı],[CPU Core Sayısı],[Toplam Core Adet]," +
-                        $"[Memory (GB)],[Cihaz Tipi],Hall,Row,Rack,[Blade Şasi],[Domain Bilgisi (UCS-HP)],Enviroment,Firma,Sahiplik," +
-                        $"Lokasyon,[Kapsam-BBVA Metrics],Cluster,[İşletim Sistemi],[Sorumlu Grup],[Satın Alma Tarihi]," +
-                        $"[Planlanan Devreden Çıkarma Tarihi],[Bakım Başlangıç Tarihi],[Bakım Bitiş Tarihi],[Özel Durumu],Support) " +
-                        $"VALUES " +
-                        $"('{adi.Value}','{seri_no.Value}','{aciklama.Value}','{uretici_firma.Value}','{model.Value}'," +
-                        $"'{cpu_soket.Value}','{cpu_core.Value}','{toplam_core.Value}','{memory.Value}','{cihaz_tipi.Value}'," +
-                        $"'{hall.Value}','{row.Value}','{rack.Value}','{blade_schasi.Value}','{domain_bilgisi.Value}'," +
-                        $"'{enviroment.Value}','{firma.Value}','{sahiplik.Value}','{lokasyon.Value}','{kapsam_bbva_metrics.Value}'," +
-                        $"'{cluster.Value}','{isletim_sistemi.Value}','{sorumlu_grup.Value}','{satin_alma_tarihi.Value}'," +
-                        $"'{planlanan_devreden_cikarma_tarihi.Value}','{bakim_baslangic_tarihi.Value}','{bakim_bitis_tarihi.Value}'," +
-                        $"'{ozel_durumu.Value}','{support.Value}')";
-                    cmd.ExecuteNonQuery();
+                    string result = await response.Content.ReadAsStringAsync();
+                    JObject json = JObject.Parse(result);
+                    litResult.Text = json.ToString();
+                }
+                else
+                {
+                    litResult.Text = $"Error: {response.StatusCode}";
                 }
             }
-            catch (Exception ex)
-            {
-                Response.Write(ex.Message);
-            }
-        }
-
-        protected void onlyButton_Click(object sender, EventArgs e)
-        {
-            createNew();
-            Response.Redirect("default.aspx");
-
-        }
-
-        protected void bothButton_Click(object sender, EventArgs e)
-        {
-            createNew();
-            Response.Redirect("default.aspx");
-
-
         }
     }
 }
