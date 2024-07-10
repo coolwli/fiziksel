@@ -1,12 +1,33 @@
-$baseUri = "https://<vrops-server>/suite-api/api"
-$credentials = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("username:password"))
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+Add-Type @"
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class TrustAllCertsPolicy : ICertificatePolicy {
+    public bool CheckValidationResult(
+        ServicePoint srvPoint, X509Certificate certificate,
+        WebRequest request, int certificateProblem) {
+        return true;
+    }
+}
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+
+$vROpsServer = "https://vrops-server-address"
+$username = "your-username"
+$password = "your-password"
+
+$credentials = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$($username):$($password)"))
 
 $headers = @{
     Authorization = "Basic $credentials"
     Accept        = "application/json"
 }
 
-$response = Invoke-RestMethod -Uri "$baseUri/resources" -Method Get -Headers $headers
+$dashboardId = "your-dashboard-id"
+$url = "$vROpsServer/suite-api/api/dashboards/$dashboardId"
 
-# Çekilen verileri görüntüleme
+$response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers
+
+# Çekilen verileri görüntüleyin
 $response
