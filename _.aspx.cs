@@ -1,44 +1,47 @@
 using System;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.IO;
+using System.Net;
 using System.Text;
-using System.Threading.Tasks;
-using Newtonsoft.Json.Linq; // NuGet package for JSON handling
 
-namespace YourNamespace
+public partial class _Default : System.Web.UI.Page
 {
-    public partial class Default : System.Web.UI.Page
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        if (!IsPostBack)
         {
-        }
-
-        protected async void btnFetchData_Click(object sender, EventArgs e)
-        {
-            string vropsServer = "https://<vrops-server>";
-            string endpoint = "/suite-api/api/resources";
+            string serverUrl = "https://vrops-server-address";
+            string dashboardId = "your-dashboard-id";
             string username = "your-username";
             string password = "your-password";
 
-            string base64Auth = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
-
-            using (HttpClient client = new HttpClient())
+            try
             {
-                client.BaseAddress = new Uri(vropsServer);
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64Auth);
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                string dashboardData = GetDashboardData(serverUrl, dashboardId, username, password);
+                Label1.Text = dashboardData;
+            }
+            catch (Exception ex)
+            {
+                Label1.Text = "Error: " + ex.Message;
+            }
+        }
+    }
 
-                HttpResponseMessage response = await client.GetAsync(endpoint);
-                if (response.IsSuccessStatusCode)
-                {
-                    string result = await response.Content.ReadAsStringAsync();
-                    JObject json = JObject.Parse(result);
-                    litResult.Text = json.ToString();
-                }
-                else
-                {
-                    litResult.Text = $"Error: {response.StatusCode}";
-                }
+    private string GetDashboardData(string serverUrl, string dashboardId, string username, string password)
+    {
+        var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
+        var requestUrl = $"{serverUrl}/suite-api/api/dashboards/{dashboardId}";
+
+        var request = (HttpWebRequest)WebRequest.Create(requestUrl);
+        request.Method = "GET";
+        request.Headers["Authorization"] = $"Basic {authToken}";
+        request.Accept = "application/json";
+
+        using (var response = (HttpWebResponse)request.GetResponse())
+        {
+            using (var streamReader = new StreamReader(response.GetResponseStream()))
+            {
+                var result = streamReader.ReadToEnd();
+                return result;
             }
         }
     }
