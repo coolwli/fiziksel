@@ -1,53 +1,26 @@
-<!DOCTYPE html>
-<html lang="tr">
+try {
+    # vROps API URL ve kimlik bilgileri
+    $vROpsServer = "https://vrops-server-url"
+    $Username = "your-username"
+    $Password = "your-password"
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buton Seçimi</title>
-    <style>
-        .button-container {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
-        }
+    # Kimlik doğrulaması için temel (basic) kimlik bilgilerini base64 formatında oluşturma
+    $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("${Username}:${Password}")))
 
-        .button {
-            padding: 10px 20px;
-            border: 1px solid #ccc;
-            border-right: none;
-            background-color: #f0f0f0;
-            color: #333;
-            cursor: pointer;
-            transition: background-color 0.3s, color 0.3s;
-        }
+    # API endpoint URL'si
+    $apiUrl = "$vROpsServer/suite-api/api/clusters"
 
-        .button:last-child {
-            border-right: 1px solid #ccc;
-        }
+    # SSL sertifikası hatalarını atla (opsiyonel)
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
 
-        .button.active {
-            background-color: #4CAF50;
-            color: white;
-            border: 1px solid #4CAF50;
-        }
-    </style>
-</head>
+    # API çağrısı yapmak için Invoke-RestMethod kullanımı
+    $response = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers @{
+        Authorization = "Basic $base64AuthInfo"
+    } -ContentType "application/json"
 
-<body>
-    <div class="button-container">
-        <div class="button active" onclick="selectButton(this)">10</div>
-        <div class="button" onclick="selectButton(this)">20</div>
-        <div class="button" onclick="selectButton(this)">50</div>
-    </div>
+    # API çağrısından dönen sonuçları ekrana yazdırma
+    $response
+} catch {
+    Write-Host "Error: $($_.Exception.Message)"
+}
 
-    <script>
-        function selectButton(selectedButton) {
-            const buttons = document.querySelectorAll('.button');
-            buttons.forEach(button => button.classList.remove('active'));
-            selectedButton.classList.add('active');
-        }
-    </script>
-</body>
-
-</html>
