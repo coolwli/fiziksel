@@ -1,26 +1,46 @@
-try {
-    # vROps API URL ve kimlik bilgileri
-    $vROpsServer = "https://vrops-server-url"
-    $Username = "your-username"
-    $Password = "your-password"
+# TLS 1.2'yi etkinleştirme
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-    # Kimlik doğrulaması için temel (basic) kimlik bilgilerini base64 formatında oluşturma
-    $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("${Username}:${Password}")))
+# vROps API URL ve kimlik bilgileri
+$vROpsServer = "https://vrops-server-url"
+$username = "your-username"
+$password = "your-password"
 
-    # API endpoint URL'si
-    $apiUrl = "$vROpsServer/suite-api/api/clusters"
-
-    # SSL sertifikası hatalarını atla (opsiyonel)
-    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-
-    # API çağrısı yapmak için Invoke-RestMethod kullanımı
-    $response = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers @{
-        Authorization = "Basic $base64AuthInfo"
-    } -ContentType "application/json"
-
-    # API çağrısından dönen sonuçları ekrana yazdırma
-    $response
-} catch {
-    Write-Host "Error: $($_.Exception.Message)"
+# API oturumu açma
+$authUrl = "$vROpsServer/suite-api/api/auth/token/acquire"
+$authHeaders = @{
+    "Content-Type" = "application/json"
 }
+$authBody = @{
+    "username" = $username
+    "password" = $password
+}
+
+$response = Invoke-RestMethod -Method Post -Uri $authUrl -Headers $authHeaders -Body ($authBody | ConvertTo-Json)
+$token = $response.token
+
+# API isteklerinde kullanılacak yetkilendirme başlığı
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
+
+# Raporları listeleme
+$reportsUrl = "$vROpsServer/suite-api/api/reports"
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers
+
+$reportsResponse.reportDefinitions | Format-Table -Property name, description
+
+# Belirli bir raporu çalıştırma
+$reportId = "report-id"
+$runReportUrl = "$vROpsServer/suite-api/api/reportdefinitions/$reportId/executions"
+$runReportResponse = Invoke-RestMethod -Method Post -Uri $runReportUrl -Headers $headers
+
+$runReportResponse
+
+# Dashboardları listeleme
+$dashboardsUrl = "$vROpsServer/suite-api/api/dashboards"
+$dashboardsResponse = Invoke-RestMethod -Method Get -Uri $dashboardsUrl -Headers $headers
+
+$dashboardsResponse.resourceList | Format-Table -Property name, description
 
