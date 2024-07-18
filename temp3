@@ -1,11 +1,8 @@
-https://www.sportstyle.com.tr/new-balance-480-lifestyle-unisex-ayakkabi-bb480lwn?_gl=1*15ed5g*_up*MQ..*_ga*OTUyNzc5NDA5LjE3MjA3NzI0OTk.*_ga_7TVLRZBYD8*MTcyMDc3MjQ5OC4xLjEuMTcyMDc3MjcyMy4wLjAuNjA5ODAxNTU1
+$content = $content -replace "@\{", "{"
+$content = $content -replace "\}", "}"
+$content = $content -replace "=\(", ":["
+$content = $content -replace "\)", "]"
+$content = $content -replace "=", ":"
 
-https://www.sportstyle.com.tr/new-balance-480-lifestyle-unisex-gunluk-ayakkabi-bb480lgm?recommended_by=dynamic&recommended_code=adc12446ac9ea79dae1bc09c63085823&_gl=1*1yktwj5*_up*MQ..*_ga*MTg0Mzg1NzIxMy4xNzIwNzcyMjY2*_ga_7TVLRZBYD8*MTcyMDc3MjI2NS4xLjEuMTcyMDc3MjI4MC4wLjAuMTQ1MjQzNjU4MA..&gclid=EAIaIQobChMI1NuP8oehhwMV5kX_AR1JYwCcEAAYASAAEgJUMfD_BwE
-
-https://www.sportstyle.com.tr/new-balance-480-unisex-gunluk-ayakkabi-bb480ldb?recommended_by=dynamic&recommended_code=adc12446ac9ea79dae1bc09c63085823&_gl=1*1yktwj5*_up*MQ..*_ga*MTg0Mzg1NzIxMy4xNzIwNzcyMjY2*_ga_7TVLRZBYD8*MTcyMDc3MjI2NS4xLjEuMTcyMDc3MjI4MC4wLjAuMTQ1MjQzNjU4MA..&gclid=EAIaIQobChMI1NuP8oehhwMV5kX_AR1JYwCcEAAYASAAEgJUMfD_BwE
-
-https://www.sportstyle.com.tr/new-balance-408-lifestyle-unisex-gunluk-ayakkabi-ml408ws?recommended_by=dynamic&recommended_code=54788ef0e242c7020b522dec71249d32&_gl=1*nhh9r1*_up*MQ..*_ga*MTg0Mzg1NzIxMy4xNzIwNzcyMjY2*_ga_7TVLRZBYD8*MTcyMDc3MjI2NS4xLjEuMTcyMDc3MjQ5Ni4wLjAuMTQ1MjQzNjU4MA..&gclid=EAIaIQobChMI1NuP8oehhwMV5kX_AR1JYwCcEAAYASAAEgJUMfD_BwE
-
-https://www.sportstyle.com.tr/diadora-b-560-used-unisex-gunluk-ayakkabi-201-180117-c1161?_gl=1*diov4t*_up*MQ..*_ga*OTUyNzc5NDA5LjE3MjA3NzI0OTk.*_ga_7TVLRZBYD8*MTcyMDc3MjQ5OC4xLjEuMTcyMDc3MjYxNi4wLjAuNjA5ODAxNTU1
-
-https://www.sportstyle.com.tr/new-balance-565-erkek-gunluk-ayakkabi-ml565ant?_gl=1*1tp6mpj*_up*MQ..*_ga*OTUyNzc5NDA5LjE3MjA3NzI0OTk.*_ga_7TVLRZBYD8*MTcyMDc3MjQ5OC4xLjEuMTcyMDc3MjcwMS4wLjAuNjA5ODAxNTU1
+# PowerShell nesnesine dönüştür
+$data = Invoke-Expression $content
