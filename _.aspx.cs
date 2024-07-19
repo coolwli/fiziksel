@@ -2,46 +2,50 @@ using System;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
+using System.Web.UI;
 
-public partial class _Default : System.Web.UI.Page
+public partial class Default : Page
 {
     protected void Page_Load(object sender, EventArgs e)
     {
-        if (!IsPostBack)
-        {
-            string serverUrl = "https://vrops-server-address";
-            string dashboardId = "your-dashboard-id";
-            string username = "your-username";
-            string password = "your-password";
+    }
 
-            try
-            {
-                string dashboardData = GetDashboardData(serverUrl, dashboardId, username, password);
-                Label1.Text = dashboardData;
-            }
-            catch (Exception ex)
-            {
-                Label1.Text = "Error: " + ex.Message;
-            }
+    protected async void btnGetApiToken_Click(object sender, EventArgs e)
+    {
+        string apiUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/auth/token/acquire?_no_links=true";
+        string requestBody = "{ \"username\": \"kullanici_adiniz\", \"password\": \"sifreniz\" }"; // Kullanıcı adı ve şifre bilgilerinizi buraya ekleyin
+
+        try
+        {
+            string result = await GetApiTokenAsync(apiUrl, requestBody);
+            lblTokenResponse.Text = "Token Yanıtı: " + result;
+        }
+        catch (Exception ex)
+        {
+            lblTokenResponse.Text = "Hata: " + ex.Message;
         }
     }
 
-    private string GetDashboardData(string serverUrl, string dashboardId, string username, string password)
+    private async Task<string> GetApiTokenAsync(string url, string requestBody)
     {
-        var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
-        var requestUrl = $"{serverUrl}/suite-api/api/dashboards/{dashboardId}";
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+        request.Method = "POST";
+        request.ContentType = "application/json";
 
-        var request = (HttpWebRequest)WebRequest.Create(requestUrl);
-        request.Method = "GET";
-        request.Headers["Authorization"] = $"Basic {authToken}";
-        request.Accept = "application/json";
+        byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
+        request.ContentLength = byteArray.Length;
 
-        using (var response = (HttpWebResponse)request.GetResponse())
+        using (Stream dataStream = await request.GetRequestStreamAsync())
         {
-            using (var streamReader = new StreamReader(response.GetResponseStream()))
+            dataStream.Write(byteArray, 0, byteArray.Length);
+        }
+
+        using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
+        {
+            using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
-                var result = streamReader.ReadToEnd();
-                return result;
+                return await reader.ReadToEndAsync();
             }
         }
     }
