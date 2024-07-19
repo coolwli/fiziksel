@@ -1,51 +1,54 @@
 using System;
-using System.IO;
-using System.Net;
-using System.Text;
+using System.Net.Http;
 using System.Threading.Tasks;
-using System.Web.UI;
 
-public partial class Default : Page
+namespace YourNamespace
 {
-    protected void Page_Load(object sender, EventArgs e)
+    public partial class Default : System.Web.UI.Page
     {
-    }
+        private const string VROPS_URL = "https://vrops.example.com/suite-api/api/auth/token";
+        private const string USERNAME = "your_username";
+        private const string PASSWORD = "your_password";
 
-    protected async void btnGetApiToken_Click(object sender, EventArgs e)
-    {
-        string apiUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/auth/token/acquire?_no_links=true";
-        string requestBody = "{ \"username\": \"kullanici_adiniz\", \"password\": \"sifreniz\" }"; // Kullanıcı adı ve şifre bilgilerinizi buraya ekleyin
-
-        try
+        protected void Page_Load(object sender, EventArgs e)
         {
-            string result = await GetApiTokenAsync(apiUrl, requestBody);
-            lblTokenResponse.Text = "Token Yanıtı: " + result;
-        }
-        catch (Exception ex)
-        {
-            lblTokenResponse.Text = "Hata: " + ex.Message;
-        }
-    }
-
-    private async Task<string> GetApiTokenAsync(string url, string requestBody)
-    {
-        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-        request.Method = "POST";
-        request.ContentType = "application/json";
-
-        byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
-        request.ContentLength = byteArray.Length;
-
-        using (Stream dataStream = await request.GetRequestStreamAsync())
-        {
-            dataStream.Write(byteArray, 0, byteArray.Length);
         }
 
-        using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
+        protected async void GetTokenButton_Click(object sender, EventArgs e)
         {
-            using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+            try
             {
-                return await reader.ReadToEndAsync();
+                string token = await GetTokenAsync();
+                TokenLabel.Text = "Token: " + token;
+            }
+            catch (Exception ex)
+            {
+                TokenLabel.Text = "Error: " + ex.Message;
+            }
+        }
+
+        private async Task<string> GetTokenAsync()
+        {
+            using (var client = new HttpClient())
+            {
+                var requestContent = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("username", USERNAME),
+                    new KeyValuePair<string, string>("password", PASSWORD),
+                    new KeyValuePair<string, string>("grant_type", "password")
+                });
+
+                var response = await client.PostAsync(VROPS_URL, requestContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    return responseContent; // JSON response
+                }
+                else
+                {
+                    throw new HttpRequestException($"Token retrieval failed. Status Code: {response.StatusCode}");
+                }
             }
         }
     }
