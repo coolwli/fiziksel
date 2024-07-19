@@ -1,8 +1,32 @@
-$content = $content -replace "@\{", "{"
-$content = $content -replace "\}", "}"
-$content = $content -replace "=\(", ":["
-$content = $content -replace "\)", "]"
-$content = $content -replace "=", ":"
+# 1 yıllık zaman aralığını belirleyin
+$startTime = (Get-Date).AddYears(-1)
+$endTime = Get-Date
 
-# PowerShell nesnesine dönüştür
-$data = Invoke-Expression $content
+# Sanal makine isimlerini içeren liste
+$vmNames = @("VM1", "VM2", "VM3")  # Buraya VM isimlerinizi ekleyin
+
+# Her sanal makine için CPU ve bellek kullanım verilerini alın ve yazdırın
+foreach ($vmName in $vmNames) {
+    # Sanal makineyi alın
+    $vm = Get-VM -Name $vmName
+
+    # CPU ve bellek kullanım verilerini alın
+    $cpuMetrics = Get-Stat -Entity $vm -Stat cpu.usage.average -Start $startTime -Finish $endTime
+    $memMetrics = Get-Stat -Entity $vm -Stat mem.usage.average -Start $startTime -Finish $endTime
+
+    # Ortalama ve maksimum CPU kullanımını hesaplayın
+    $cpuAverage = $cpuMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $cpuMax = $cpuMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Ortalama ve maksimum bellek kullanımını hesaplayın
+    $memAverage = $memMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $memMax = $memMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Sonuçları yazdırın
+    Write-Host "VM Name: $vmName"
+    Write-Host "CPU Average Usage (%):" $cpuAverage
+    Write-Host "CPU Maximum Usage (%):" $cpuMax
+    Write-Host "Memory Average Usage (%):" $memAverage
+    Write-Host "Memory Maximum Usage (%):" $memMax
+    Write-Host "--------------------------------------------"
+}
