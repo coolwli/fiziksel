@@ -1,33 +1,62 @@
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+# 1 yıllık zaman aralığını belirleyin
+$startTime = (Get-Date).AddYears(-1)
+$endTime = Get-Date
 
-Add-Type @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class TrustAllCertsPolicy : ICertificatePolicy {
-    public bool CheckValidationResult(
-        ServicePoint srvPoint, X509Certificate certificate,
-        WebRequest request, int certificateProblem) {
-        return true;
-    }
+# Sanal makine isimlerini içeren liste
+$vmNames = @("VM1", "VM2", "VM3")  # Buraya VM isimlerinizi ekleyin
+
+# Her sanal makine için CPU, bellek, disk ve network kullanım verilerini alın ve yazdırın
+foreach ($vmName in $vmNames) {
+    # Sanal makineyi alın
+    $vm = Get-VM -Name $vmName
+
+    # CPU kullanım verilerini alın
+    $cpuMetrics = Get-Stat -Entity $vm -Stat cpu.usage.average -Start $startTime -Finish $endTime
+
+    # Bellek kullanım verilerini alın
+    $memMetrics = Get-Stat -Entity $vm -Stat mem.usage.average -Start $startTime -Finish $endTime
+
+    # Disk kullanım verilerini alın (okuma ve yazma IOPS)
+    $diskReadMetrics = Get-Stat -Entity $vm -Stat disk.numberReadAveraged.average -Start $startTime -Finish $endTime
+    $diskWriteMetrics = Get-Stat -Entity $vm -Stat disk.numberWriteAveraged.average -Start $startTime -Finish $endTime
+
+    # Network kullanım verilerini alın (giriş ve çıkış Mbps)
+    $netInMetrics = Get-Stat -Entity $vm -Stat net.received.average -Start $startTime -Finish $endTime
+    $netOutMetrics = Get-Stat -Entity $vm -Stat net.transmitted.average -Start $startTime -Finish $endTime
+
+    # Ortalama ve maksimum CPU kullanımını hesaplayın
+    $cpuAverage = $cpuMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $cpuMax = $cpuMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Ortalama ve maksimum bellek kullanımını hesaplayın
+    $memAverage = $memMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $memMax = $memMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Ortalama ve maksimum disk okuma ve yazma kullanımını hesaplayın
+    $diskReadAverage = $diskReadMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $diskReadMax = $diskReadMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+    $diskWriteAverage = $diskWriteMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $diskWriteMax = $diskWriteMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Ortalama ve maksimum network giriş ve çıkış kullanımını hesaplayın
+    $netInAverage = $netInMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $netInMax = $netInMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+    $netOutAverage = $netOutMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+    $netOutMax = $netOutMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+
+    # Sonuçları yazdırın
+    Write-Host "VM Name: $vmName"
+    Write-Host "CPU Average Usage (%):" $cpuAverage
+    Write-Host "CPU Maximum Usage (%):" $cpuMax
+    Write-Host "Memory Average Usage (%):" $memAverage
+    Write-Host "Memory Maximum Usage (%):" $memMax
+    Write-Host "Disk Read Average (IOPS):" $diskReadAverage
+    Write-Host "Disk Read Maximum (IOPS):" $diskReadMax
+    Write-Host "Disk Write Average (IOPS):" $diskWriteAverage
+    Write-Host "Disk Write Maximum (IOPS):" $diskWriteMax
+    Write-Host "Network In Average (Mbps):" $netInAverage
+    Write-Host "Network In Maximum (Mbps):" $netInMax
+    Write-Host "Network Out Average (Mbps):" $netOutAverage
+    Write-Host "Network Out Maximum (Mbps):" $netOutMax
+    Write-Host "--------------------------------------------"
 }
-"@
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-
-$vROpsServer = "https://vrops-server-address"
-$username = "your-username"
-$password = "your-password"
-
-$credentials = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$($username):$($password)"))
-
-$headers = @{
-    Authorization = "Basic $credentials"
-    Accept        = "application/json"
-}
-
-$dashboardId = "your-dashboard-id"
-$url = "$vROpsServer/suite-api/api/dashboards/$dashboardId"
-
-$response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers
-
-# Çekilen verileri görüntüleyin
-$response
