@@ -2,18 +2,33 @@
 $startTime = (Get-Date).AddYears(-1)
 $endTime = Get-Date
 
-# Sanal makine isimlerini içeren liste
-$vmNames = @("VM1", "VM2", "VM3")  # Buraya VM isimlerinizi ekleyin
+# Küme adını belirtin
+$clusterName = "YourClusterName"
+
+# Küme içindeki sanal makineleri alın
+$vms = Get-Cluster -Name $clusterName | Get-VM
+
+# Kümenin toplam CPU ve bellek bilgilerini alın
+$cluster = Get-Cluster -Name $clusterName
+$totalCpuMhz = $cluster.ExtensionData.Summary.TotalCpu
+$totalMemoryMb = $cluster.ExtensionData.Summary.TotalMemory / 1MB
+$freeCpuMhz = $totalCpuMhz - ($cluster | Get-VM | Get-Stat -Stat cpu.usage.average -Start $startTime -Finish $endTime | Measure-Object -Property Value -Sum | Select-Object -ExpandProperty Sum)
+$freeMemoryMb = $totalMemoryMb - ($cluster | Get-VM | Get-Stat -Stat mem.usage.average -Start $startTime -Finish $endTime | Measure-Object -Property Value -Sum | Select-Object -ExpandProperty Sum)
+
+# Küme bilgilerini yazdırın
+Write-Host "Cluster: $clusterName"
+Write-Host "Total CPU (MHz):" $totalCpuMhz
+Write-Host "Free CPU (MHz):" $freeCpuMhz
+Write-Host "Total Memory (MB):" $totalMemoryMb
+Write-Host "Free Memory (MB):" $freeMemoryMb
+Write-Host "--------------------------------------------"
 
 # Her sanal makine için CPU, bellek, disk ve network kullanım verilerini alın ve yazdırın
-foreach ($vmName in $vmNames) {
-    # Sanal makineyi alın
-    $vm = Get-VM -Name $vmName
+foreach ($vm in $vms) {
+    $vmName = $vm.Name
 
-    # CPU kullanım verilerini alın
+    # CPU ve bellek kullanım verilerini alın
     $cpuMetrics = Get-Stat -Entity $vm -Stat cpu.usage.average -Start $startTime -Finish $endTime
-
-    # Bellek kullanım verilerini alın
     $memMetrics = Get-Stat -Entity $vm -Stat mem.usage.average -Start $startTime -Finish $endTime
 
     # Disk kullanım verilerini alın (okuma ve yazma IOPS)
