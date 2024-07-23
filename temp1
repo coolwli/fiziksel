@@ -1,77 +1,137 @@
-# 1 yıllık zaman aralığını belirleyin
-$startTime = (Get-Date).AddYears(-1)
-$endTime = Get-Date
+param(
+    [int]$start=0
+)
+$a=Get-Date
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+foreach($vcenter in $vcenters){
+    for($i=0;$i -lt 1;$i++){
+        "-----$i-----"
+        $vmInfoArray = @()
+        $vccon=Connect-VIServer -Server $vcenter 
+        $vms= Get-VM | Select-Object -Skip (($start*1000)+($i*200)) -First 100
+        foreach($vm in $vms){
+            $vmInfo = [PSCustomObject]@{
+                vmNotes=$vm.Notes -replace "[(),'\n]"," " -replace ";","."
+                vmName=$vm.Name
+                vmOwner=$vm.CustomFields.Value[5]
+                vmPowerState=$vm.PowerState
+                vmGuestOS=$vm.Guest.OSFullName
+                vmCreatedDate=if($vm.CreateDate -eq "01/01/1970 00:00:00"){ "NULL" } else{ ($vm.CreateDate -split' ')[0] }
+                vmCoresPerSocket=$vm.CoresPerSocket
+                vmNumCPU=$vm.NumCpu 
+                vmMemory=$vm.MemoryGB
+                vmCluster=$vm.VMHost.Parent.Name-replace '#',''
+                vmDataCenter=$vm.VMHost.Parent.ParentFolder.Parent.Name
+                vmHost=$vm.VMHost.Name
+                VMHostModel=$vm.VMHost.Model
+                lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+                adapterName=""
+                networkName=""
+                adapterMACAddress=""
+                adapterType=""
+                diskName=""
+                diskFormat=""
+                diskCapacity=""
+                diskDS=""
+                totalStorage=0
+                usedStorage="{0:F2}" -f [decimal]$vm.UsedSpaceGB
+                cpuAverageUsage=""
+                cpuMaxUsage=""
+                diskAverageUsage=""
+                diskMaxUsage=""
+                networkAverageOut=""
+                networkMaxOut=""
+                memoryAverageUsage=""
+                memoryMaxUsage=""
+                eventDate=""
+                eventMessage=""
+            }
+            foreach ($adapter in $vm | Get-NetworkAdapter) {
+                $vmInfo.adapterName += "$($adapter.Name)~"
+                $vmInfo.networkName += "$($adapter.NetworkName)~"
+                $vmInfo.adapterMACAddress += "$($adapter.MacAddress)~"
+                $vmInfo.AdapterType += "$($adapter.Type)~"
+            }
+            foreach ($disk in $vm | Get-HardDisk) {
+                $vmInfo.diskName += "$($disk.Name)~"
+                $vmInfo.diskFormat += "$($disk.StorageFormat)~"
+                $vmInfo.diskCapacity += "$($disk.CapacityGB)~"
+                $vmInfo.diskDS += "$(($disk.Filename -split ' ')[0].Trim('[', ']'))~"
+                $vmInfo.totalStorage += $disk.CapacityGB
+            }
+            if ($vmInfo.vmPowerState -eq "PoweredOn") {
+                $days=@(-1,-7,-30,-90,-360)
 
-# Küme adını belirtin
-$clusterName = "YourClusterName"
+                foreach($day in $days){
+                    $startTime = (Get-Date).AddDays($day)
+                    $endTime = Get-Date
 
-# Küme içindeki sanal makineleri alın
-$vms = Get-Cluster -Name $clusterName | Get-VM
+                    $cpuMetrics = Get-Stat -Entity $vm -Stat cpu.usage.average -Start $startTime -Finish $endTime
 
-# Kümenin toplam CPU ve bellek bilgilerini alın
-$cluster = Get-Cluster -Name $clusterName
-$totalCpuMhz = $cluster.ExtensionData.Summary.TotalCpu
-$totalMemoryMb = $cluster.ExtensionData.Summary.TotalMemory / 1MB
-$freeCpuMhz = $totalCpuMhz - ($cluster | Get-VM | Get-Stat -Stat cpu.usage.average -Start $startTime -Finish $endTime | Measure-Object -Property Value -Sum | Select-Object -ExpandProperty Sum)
-$freeMemoryMb = $totalMemoryMb - ($cluster | Get-VM | Get-Stat -Stat mem.usage.average -Start $startTime -Finish $endTime | Measure-Object -Property Value -Sum | Select-Object -ExpandProperty Sum)
+                    $memMetrics = Get-Stat -Entity $vm -Stat mem.usage.average -Start $startTime -Finish $endTime 
 
-# Küme bilgilerini yazdırın
-Write-Host "Cluster: $clusterName"
-Write-Host "Total CPU (MHz):" $totalCpuMhz
-Write-Host "Free CPU (MHz):" $freeCpuMhz
-Write-Host "Total Memory (MB):" $totalMemoryMb
-Write-Host "Free Memory (MB):" $freeMemoryMb
-Write-Host "--------------------------------------------"
+                    $netOutMetrics = Get-Stat -Entity $vm -Stat net.usage.average -Start $startTime -Finish $endTime 
 
-# Her sanal makine için CPU, bellek, disk ve network kullanım verilerini alın ve yazdırın
-foreach ($vm in $vms) {
-    $vmName = $vm.Name
+                    $diskMetrics = Get-Stat -Entity $vm -Stat disk.usage.average -Start $startTime -Finish $endTime
 
-    # CPU ve bellek kullanım verilerini alın
-    $cpuMetrics = Get-Stat -Entity $vm -Stat cpu.usage.average -Start $startTime -Finish $endTime
-    $memMetrics = Get-Stat -Entity $vm -Stat mem.usage.average -Start $startTime -Finish $endTime
+                    $cpuAverage = $cpuMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+                    $cpuMax = $cpuMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
 
-    # Disk kullanım verilerini alın (okuma ve yazma IOPS)
-    $diskReadMetrics = Get-Stat -Entity $vm -Stat disk.numberReadAveraged.average -Start $startTime -Finish $endTime
-    $diskWriteMetrics = Get-Stat -Entity $vm -Stat disk.numberWriteAveraged.average -Start $startTime -Finish $endTime
+                    $memAverage = $memMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+                    $memMax = $memMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+                    
+                    $diskAverage = $diskMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+                    $diskMax = $diskMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
 
-    # Network kullanım verilerini alın (giriş ve çıkış Mbps)
-    $netInMetrics = Get-Stat -Entity $vm -Stat net.received.average -Start $startTime -Finish $endTime
-    $netOutMetrics = Get-Stat -Entity $vm -Stat net.transmitted.average -Start $startTime -Finish $endTime
+                    $netOutAverage = $netOutMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
+                    $netOutMax = $netOutMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
 
-    # Ortalama ve maksimum CPU kullanımını hesaplayın
-    $cpuAverage = $cpuMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $cpuMax = $cpuMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+                    $vmInfo.cpuAverageUsage +="$("{0:F2}" -f [decimal]$cpuAverage)~"
+                    $vmInfo.cpuMaxUsage +="$("{0:F2}" -f [decimal]$cpuMax)~"
+                    $vmInfo.memoryAverageUsage +="$("{0:F2}" -f [decimal]$memAverage)~"
+                    $vmInfo.memoryMaxUsage +="$("{0:F2}" -f [decimal]$memMax)~"
+                    $vmInfo.diskAverageUsage +="$("{0:F2}" -f [decimal]$diskAverage)~"
+                    $vmInfo.DiskMaxUsage +="$("{0:F2}" -f [decimal]$diskMax)~"
+                    $vmInfo.networkAverageOut +="$("{0:F2}" -f [decimal]$netOutAverage)~"
+                    $vmInfo.networkMaxOut +="$("{0:F2}" -f [decimal]$netOutMax)~"
+                }
+            } 
+            foreach ($eventLog in Get-VIEvent -Entity $vm -Start (Get-Date).AddDays(-3)) {
+                $vmInfo.eventDate += "$($eventLog.CreatedTime)~"
+                $log=$eventLog.FullFormattedMessage -replace "[(),']"," "
+                $vmInfo.eventMessage += "$($log)~"
+            }
+            
 
-    # Ortalama ve maksimum bellek kullanımını hesaplayın
-    $memAverage = $memMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $memMax = $memMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
+            $vmInfoArray += $vmInfo
+        }
+        Disconnect-VIServer -Server $vcenter -Confirm:$false
 
-    # Ortalama ve maksimum disk okuma ve yazma kullanımını hesaplayın
-    $diskReadAverage = $diskReadMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $diskReadMax = $diskReadMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
-    $diskWriteAverage = $diskWriteMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $diskWriteMax = $diskWriteMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
-
-    # Ortalama ve maksimum network giriş ve çıkış kullanımını hesaplayın
-    $netInAverage = $netInMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $netInMax = $netInMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
-    $netOutAverage = $netOutMetrics | Measure-Object -Property Value -Average | Select-Object -ExpandProperty Average
-    $netOutMax = $netOutMetrics | Measure-Object -Property Value -Maximum | Select-Object -ExpandProperty Maximum
-
-    # Sonuçları yazdırın
-    Write-Host "VM Name: $vmName"
-    Write-Host "CPU Average Usage (%):" $cpuAverage
-    Write-Host "CPU Maximum Usage (%):" $cpuMax
-    Write-Host "Memory Average Usage (%):" $memAverage
-    Write-Host "Memory Maximum Usage (%):" $memMax
-    Write-Host "Disk Read Average (IOPS):" $diskReadAverage
-    Write-Host "Disk Read Maximum (IOPS):" $diskReadMax
-    Write-Host "Disk Write Average (IOPS):" $diskWriteAverage
-    Write-Host "Disk Write Maximum (IOPS):" $diskWriteMax
-    Write-Host "Network In Average (Mbps):" $netInAverage
-    Write-Host "Network In Maximum (Mbps):" $netInMax
-    Write-Host "Network Out Average (Mbps):" $netOutAverage
-    Write-Host "Network Out Maximum (Mbps):" $netOutMax
-    Write-Host "--------------------------------------------"
-}
+        if($vms.Length -gt 0){
+            $sqlValues = $vmInfoArray | ForEach-Object {
+                "('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}', '{15}', '{16}', '{17}', '{18}', '{19}',
+                    '{20}', '{21}', '{22}', '{23}', '{24}', '{25}', '{26}', '{27}', '{28}', '{29}', '{30}', '{31}', '{32}', '{33}', '{34}', '{35}')" -f 
+                $_.vmName, $_.vmOwner, $vcenter, $_.vmPowerState, $_.vmGuestOS, $_.vmNotes, $_.cpuAverageUsage, $_.cpuMaxUsage, $_.diskAverageUsage, $_.diskMaxUsage, $_.networkAverageOut,$_.networkMaxOut,
+                $_.memoryAverageUsage, $_.memoryMaxUsage, $_.adapterName, $_.networkName,  $_.adapterType, $_.adapterMACAddress, $_.diskName, $_.diskCapacity, $_.diskFormat, $_.diskDS, $_.vmCreatedDate, 
+                $_.vmNumCPU,$_.vmCoresPerSocket,$_.vmMemory, $_.vmCluster, $_.vmDataCenter, $_.vmHost,$_.lastWriteTime,$_.totalStorage, $_.freeStorage, $_.vmHostModel, $_.eventDate, $_.eventMessage
+            }
+            $sqlValuesString = $sqlValues -join ','
+            $sql = @"
+            INSERT INTO VMInfos2 (VMName,VMOwner,vCenter,VMPowerState,VMGuestOS,VMNotes,VMCpuAverageUsage,VMCpuMaxUsage,VMDiskAverageUsage,VMDiskMaxUsage,VMNetworkAverageUsage,VMNetworkMaxUsage,
+                    VMMemoryAverage,VMMemoryMaxUsage,VMNetworkAdapterName,VMNetworkName,VMNetworkCardType,VMNetworkAdapterMacAddress,VMDiskName,VMDiskTotalSize,VMDiskStorageFormat,VMDiskDataStore,
+                    VMCreatedDate,VMNumCPU,VMCoresPerSocket,VMMemoryCapacity,VMCluster,VMDataCenter,VMHost,LastWriteTime,VMTotalStorage,VMFreeStorage,VMHostModel,VMEventDates,VMEventMessages)
+            VALUES $sqlValuesString
+"@
+            $command = $conn.CreateCommand()
+            $command.CommandText = $sql
+            $sql
+            #$command.ExecuteNonQuery()
+        }  
+    }     
+} 
+$conn.Close()
+$b=Get-Date
+($b-$a).TotalMinutes
+$vmInfoArray
