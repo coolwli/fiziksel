@@ -1,122 +1,70 @@
 using System;
-using System.Threading.Tasks;
 using System.IO;
 using System.Net;
 using System.Text;
-using System.Linq;
 using System.Web.UI;
-using System.Xml.Linq;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
+using System.Web.Script.Serialization;
 
-namespace blank_page
+public partial class GetResourceId : Page
 {
-
-    public partial class _default : System.Web.UI.Page
+    protected void btnGetResourceId_Click(object sender, EventArgs e)
     {
-        string token = "";
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            ServicePointManager.ServerCertificateValidationCallback += new RemoteCertificateValidationCallback(validateServerCertificate);
-        }
-        private static bool validateServerCertificate(Object sender,X509Certificate certificate,X509Chain chain,SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
-        }
+        string apiUrl = "https://your-vrops-server/suite-api/api/resources";
+        string username = "your-username";
+        string password = "your-password";
+        string vmName = txtVMName.Text;
 
-        protected async void Button1_Click(object sender, EventArgs e)
+        try
         {
-            if (token == "")
+            // Create a request
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(apiUrl);
+            request.Method = "GET";
+            string authInfo = Convert.ToBase64String(Encoding.Default.GetBytes($"{username}:{password}"));
+            request.Headers["Authorization"] = "Basic " + authInfo;
+
+            // Get the response
+            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
             {
-                string apiUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/auth/token/acquire?_no_links=true";
-                string requestBody = "{ \"username\": \"admin\", \"password\": \"VMware123!\" }"; 
-
-                try
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
                 {
-                    string tokenXml = await getApiToken(apiUrl, requestBody);
-                    Button1_Click(sender, e);
-                    XDocument xdoc = XDocument.Parse(tokenXml);
+                    string responseText = reader.ReadToEnd();
+                    var resources = new JavaScriptSerializer().Deserialize<dynamic>(responseText);
+                    string resourceId = FindResourceId(resources, vmName);
 
-                    XNamespace opsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-
-                    XElement tokenElement = xdoc.Descendants(opsNamespace + "token").FirstOrDefault();
-
-                    if (tokenElement != null)
+                    if (!string.IsNullOrEmpty(resourceId))
                     {
-                        token = tokenElement.Value;
-                        Label.InnerText="Token: " + token; 
+                        ltlResourceId.Text = $"<p>Resource ID for VM '{vmName}': {resourceId}</p>";
                     }
                     else
                     {
-                        Label.InnerText="Token bulunamadı.";
+                        ltlResourceId.Text = $"<p>VM '{vmName}' not found.</p>";
                     }
-
-                }
-                catch (Exception ex)
-                {
-                    Label.InnerText = "Error1: " + ex.Message;
                 }
             }
-            else 
-            {
-                string vmname = "testvm";
-                string apiUrl = "";
-
-                try
-                {
-                    string result = await getApiResponse(apiUrl, token);
-                    Label.InnerText =result;
-                }
-                catch (Exception ex)
-                {
-                    Label.InnerText = "Error2: " + ex.Message;
-
-                }
-            }
-            
         }
-
-        private async Task<string> getVMID(string vmName, string token)
+        catch (WebException webEx)
         {
-            // vROps API'sine VM bilgilerini almak için istek yapacağımız URL
-            string apiUrl = $"https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources?resourceName={vmName}";
-
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(apiUrl);
-            request.Method = "GET";
-            request.Headers.Add("Authorization", "Bearer " + token);
-
-            using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
+            using (StreamReader reader = new StreamReader(webEx.Response.GetResponseStream()))
             {
-                using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                {
-                    return await reader.ReadToEndAsync();                    
-                }
+                string errorText = reader.ReadToEnd();
+                ltlResourceId.Text = $"<pre>Error: {errorText}</pre>";
             }
         }
-
-
-
-        private async Task<string> getApiToken(string url, string requestBody)
+        catch (Exception ex)
         {
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "POST";
-            request.ContentType = "application/json";
+            ltlResourceId.Text = $"<pre>Error: {ex.Message}</pre>";
+        }
+    }
 
-            byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
-            request.ContentLength = byteArray.Length;
-
-            using (Stream dataStream = await request.GetRequestStreamAsync())
+    private string FindResourceId(dynamic resources, string vmName)
+    {
+        foreach (var resource in resources["resourceList"])
+        {
+            if (resource["resourceKey"]["name"] == vmName)
             {
-                dataStream.Write(byteArray, 0, byteArray.Length);
-            }
-
-            using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
-            {
-                using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                {
-                    return await reader.ReadToEndAsync();
-                }
+                return resource["identifier"];
             }
         }
+        return null;
     }
 }
