@@ -1,70 +1,67 @@
 using System;
-using System.IO;
-using System.Net;
-using System.Text;
-using System.Web.UI;
-using System.Web.Script.Serialization;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Threading.Tasks;
 
-public partial class GetResourceId : Page
+public partial class YourPage : System.Web.UI.Page
 {
-    protected void btnGetResourceId_Click(object sender, EventArgs e)
+    protected async void Page_Load(object sender, EventArgs e)
     {
-        string apiUrl = "https://your-vrops-server/suite-api/api/resources";
+        string vropsUrl = "https://<vrops-server>/suite-api/api/resources";
         string username = "your-username";
         string password = "your-password";
-        string vmName = txtVMName.Text;
+        string vmName = "name-of-your-vm";
 
         try
         {
-            // Create a request
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(apiUrl);
-            request.Method = "GET";
-            string authInfo = Convert.ToBase64String(Encoding.Default.GetBytes($"{username}:{password}"));
-            request.Headers["Authorization"] = "Basic " + authInfo;
-
-            // Get the response
-            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-            {
-                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
-                {
-                    string responseText = reader.ReadToEnd();
-                    var resources = new JavaScriptSerializer().Deserialize<dynamic>(responseText);
-                    string resourceId = FindResourceId(resources, vmName);
-
-                    if (!string.IsNullOrEmpty(resourceId))
-                    {
-                        ltlResourceId.Text = $"<p>Resource ID for VM '{vmName}': {resourceId}</p>";
-                    }
-                    else
-                    {
-                        ltlResourceId.Text = $"<p>VM '{vmName}' not found.</p>";
-                    }
-                }
-            }
-        }
-        catch (WebException webEx)
-        {
-            using (StreamReader reader = new StreamReader(webEx.Response.GetResponseStream()))
-            {
-                string errorText = reader.ReadToEnd();
-                ltlResourceId.Text = $"<pre>Error: {errorText}</pre>";
-            }
+            string resourceId = await GetResourceIdAsync(vropsUrl, username, password, vmName);
+            Response.Write($"Resource ID: {resourceId}");
         }
         catch (Exception ex)
         {
-            ltlResourceId.Text = $"<pre>Error: {ex.Message}</pre>";
+            Response.Write($"Error: {ex.Message}");
         }
     }
 
-    private string FindResourceId(dynamic resources, string vmName)
+    private async Task<string> GetResourceIdAsync(string url, string username, string password, string vmName)
     {
-        foreach (var resource in resources["resourceList"])
+        using (var client = new HttpClient())
         {
-            if (resource["resourceKey"]["name"] == vmName)
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            // Basic authentication
+            var byteArray = new System.Text.ASCIIEncoding().GetBytes($"{username}:{password}");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+
+            HttpResponseMessage response = await client.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            string responseBody = await response.Content.ReadAsStringAsync();
+
+            // Parse JSON response manually
+            using (JsonDocument doc = JsonDocument.Parse(responseBody))
             {
-                return resource["identifier"];
+                JsonElement root = doc.RootElement;
+
+                if (root.TryGetProperty("resources", out JsonElement resources))
+                {
+                    foreach (JsonElement resource in resources.EnumerateArray())
+                    {
+                        if (resource.TryGetProperty("name", out JsonElement nameElement) &&
+                            nameElement.GetString() == vmName)
+                        {
+                            if (resource.TryGetProperty("resourceId", out JsonElement resourceIdElement))
+                            {
+                                return resourceIdElement.GetString();
+                            }
+                        }
+                    }
+                }
             }
+
+            return null; // VM not found
         }
-        return null;
     }
 }
