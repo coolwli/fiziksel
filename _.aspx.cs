@@ -59,7 +59,8 @@ namespace blank_page
             }
             else 
             {
-                string apiUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/97a71f3c-98c2-44fb-8b2b-233925936368/data/export?resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+                string vmname = "testvm";
+                string apiUrl = "";
 
                 try
                 {
@@ -75,20 +76,26 @@ namespace blank_page
             
         }
 
-        private async Task<string> getApiResponse(string url, string token)
+        private async Task<string> getVMID(string vmName, string token)
         {
-            HttpWebRequest request = (HttpWebRequest)WebRequest.CreateHttp(url);
+            // vROps API'sine VM bilgilerini almak için istek yapacağımız URL
+            string apiUrl = $"https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources?resourceName={vmName}";
+
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(apiUrl);
             request.Method = "GET";
-            request.Headers["Authorization"] = "Bearer " + token;
+            request.Headers.Add("Authorization", "Bearer " + token);
 
             using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
             {
                 using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
                 {
-                    return await reader.ReadToEndAsync();
+                    return await reader.ReadToEndAsync();                    
                 }
             }
         }
+
+
+
         private async Task<string> getApiToken(string url, string requestBody)
         {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
