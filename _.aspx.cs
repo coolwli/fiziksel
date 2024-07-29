@@ -1,67 +1,84 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Text.Json;
+using System.Text;
 using System.Threading.Tasks;
+using System.Web.UI;
 
-public partial class YourPage : System.Web.UI.Page
+public partial class Default : Page
 {
     protected async void Page_Load(object sender, EventArgs e)
     {
-        string vropsUrl = "https://<vrops-server>/suite-api/api/resources";
-        string username = "your-username";
-        string password = "your-password";
-        string vmName = "name-of-your-vm";
-
-        try
+        if (!IsPostBack)
         {
-            string resourceId = await GetResourceIdAsync(vropsUrl, username, password, vmName);
-            Response.Write($"Resource ID: {resourceId}");
-        }
-        catch (Exception ex)
-        {
-            Response.Write($"Error: {ex.Message}");
+            string token = await GetVROpsTokenAsync("https://vrops-server-url", "kullanici_adi", "parola");
+            if (!string.IsNullOrEmpty(token))
+            {
+                await GetVMCPUUsageAsync("https://vrops-server-url", token, "vm_name");
+            }
         }
     }
 
-    private async Task<string> GetResourceIdAsync(string url, string username, string password, string vmName)
+    private async Task<string> GetVROpsTokenAsync(string vropsServer, string username, string password)
     {
-        using (var client = new HttpClient())
+        string tokenUrl = $"{vropsServer}/suite-api/api/auth/token/acquire";
+        string base64AuthInfo = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
+
+        using (HttpClient client = new HttpClient())
         {
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64AuthInfo);
+            HttpResponseMessage response = await client.PostAsync(tokenUrl, null);
 
-            // Basic authentication
-            var byteArray = new System.Text.ASCIIEncoding().GetBytes($"{username}:{password}");
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-
-            HttpResponseMessage response = await client.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-
-            string responseBody = await response.Content.ReadAsStringAsync();
-
-            // Parse JSON response manually
-            using (JsonDocument doc = JsonDocument.Parse(responseBody))
+            if (response.IsSuccessStatusCode)
             {
-                JsonElement root = doc.RootElement;
-
-                if (root.TryGetProperty("resources", out JsonElement resources))
-                {
-                    foreach (JsonElement resource in resources.EnumerateArray())
-                    {
-                        if (resource.TryGetProperty("name", out JsonElement nameElement) &&
-                            nameElement.GetString() == vmName)
-                        {
-                            if (resource.TryGetProperty("resourceId", out JsonElement resourceIdElement))
-                            {
-                                return resourceIdElement.GetString();
-                            }
-                        }
-                    }
-                }
+                dynamic jsonResponse = await response.Content.ReadAsAsync<dynamic>();
+                return jsonResponse.token;
             }
-
-            return null; // VM not found
         }
+
+        return null;
+    }
+
+    private async Task GetVMCPUUsageAsync(string vropsServer, string token, string vmName)
+    {
+        string vmId = await GetVMIdAsync(vropsServer, token, vmName);
+        if (string.IsNullOrEmpty(vmId)) return;
+
+        DateTime startTime = DateTime.Now.AddDays(-30);
+        DateTime endTime = DateTime.Now;
+
+        string metricsUrl = $"{vropsServer}/suite-api/api/resources/{vmId}/statistics?statKey=cpu|usage_average&begin={startTime:yyyy-MM-ddTHH:mm:ss.fffZ}&end={endTime:yyyy-MM-ddTHH:mm:ss.fffZ}";
+
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("vRealizeOpsToken", token);
+            HttpResponseMessage response = await client.GetAsync(metricsUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string cpuUsage = await response.Content.ReadAsStringAsync();
+                // CPU kullanım verilerini işleme veya görüntüleme
+                Response.Write($"CPU Usage: {cpuUsage}");
+            }
+        }
+    }
+
+    private async Task<string> GetVMIdAsync(string vropsServer, string token, string vmName)
+    {
+        string resourceUrl = $"{vropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+        using (HttpClient client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("vRealizeOpsToken", token);
+            HttpResponseMessage response = await client.GetAsync(resourceUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                dynamic jsonResponse = await response.Content.ReadAsAsync<dynamic>();
+                return jsonResponse.resourceList.resource[0].identifier;
+            }
+        }
+
+        return null;
     }
 }
