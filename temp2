@@ -1,41 +1,8 @@
-using System;
-using System.Linq;
-using System.Web.UI;
-using System.Xml.Linq;
-
-public partial class MyPage : Page
+private string ParseVmIdentifier(string xmlData)
 {
-    protected void Page_Load(object sender, EventArgs e)
-    {
-        // XML verisini içeren string
-        string xmlResponse = @"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>
-                               <ops:auth-token xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" 
-                               xmlns:xs=""http://www.w3.org/2001/XMLSchema"" 
-                               xmlns:ops=""http://webservice.vmware.com/vRealizeOpsMgr/1.0/"">
-                                   <ops:token>f267bd72-f77d-43ee-809c-c081d9a62dbe::fc7ef6d2-1d01-4355-9592-2f90e99d3887</ops:token>
-                                   <ops:validity>1722111766191</ops:validity>
-                                   <ops:expiresAt>Saturday, July 27, 2024 at 8:22:46 PM Coordinated Universal Time</ops:expiresAt>
-                                   <ops:roles/>
-                               </ops:auth-token>";
+    XDocument xdoc = XDocument.Parse(xmlData);
+    XNamespace opsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
 
-        // XML stringini XDocument ile yükleyin
-        XDocument xdoc = XDocument.Parse(xmlResponse);
-
-        // Namespace'i tanımlayın
-        XNamespace opsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-
-        // Token elementini bulun
-        XElement tokenElement = xdoc.Descendants(opsNamespace + "token").FirstOrDefault();
-
-        // Token değerini kontrol edin ve kullanın
-        if (tokenElement != null)
-        {
-            string token = tokenElement.Value;
-            Response.Write("Token: " + token); // ASP.NET sayfasında token'ı yazdırır
-        }
-        else
-        {
-            Response.Write("Token bulunamadı.");
-        }
-    }
+    var identifier = xdoc.XPathSelectElement("//ops:resource/ops:identifier", new XmlNamespaceManager(new NameTable()));
+    return identifier?.Value;
 }
