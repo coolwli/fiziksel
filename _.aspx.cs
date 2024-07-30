@@ -1,218 +1,216 @@
 using System;
-using System.Threading.Tasks;
+using System.Web.UI.HtmlControls;
+using System.Web.UI.WebControls;
+using System.Data;
 using System.IO;
-using System.Net;
-using System.Xml;
-using System.Xml.Linq;
-using System.Text;
-using System.Linq;
-using System.Collections.Generic;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
-using System.Configuration;
+using System.Web.UI;
+using System.Data.SqlClient;
 
-namespace blank_page
+namespace vminfo
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class vmscreen : System.Web.UI.Page
     {
-        private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
-        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _token = "";
-        private string _username;
-        private string _password;
-
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
+        public string hostName;
         protected void Page_Load(object sender, EventArgs e)
         {
-            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            _username = ConfigurationManager.AppSettings["VropsUsername"];
-            _password = ConfigurationManager.AppSettings["VropsPassword"];
-        }
 
-        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
-        }
-
-        protected async void Button1_Click(object sender, EventArgs e)
-        {
-            await AcquireTokenAsync();
-        }
-
-        private async Task AcquireTokenAsync()
-        {
-            string apiUrl = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            string requestBody = $"{{ \"username\": \"{_username}\", \"password\": \"{_password}\" }}";
-
-            try
+            hostName = Request.QueryString["id"];
+            if (string.IsNullOrEmpty(hostName))
             {
-                string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
-                _token = ExtractTokenFromXml(tokenXml);
-                if (!string.IsNullOrEmpty(_token))
-                {
-                    await FetchVmUsageDataAsync();
-                }
-                else
-                {
-                    DisplayMessage("Token bulunamadı.");
-                }
+                hostNameError();
+                return;
             }
-            catch (Exception ex)
+            if (con.State == ConnectionState.Open)
             {
-                DisplayMessage($"Error acquiring token: {ex.Message}");
+                con.Close();
             }
-        }
+            con.Open();
+            showHost();
 
-        private async Task FetchVmUsageDataAsync()
+
+        }
+        public void hostNameError()
         {
-            try
+            form1.InnerHtml = "";
+            Response.Write("ID Bulunamadı");
+        }
+        public void showHost()
+        {
+            DataTable dt = new DataTable();
+            using (SqlCommand command = new SqlCommand("SELECT * FROM vminfoVMs WHERE VMName = @name", con))
             {
-                string vmId = await GetVmIdAsync("tekscr1");
-                if (!string.IsNullOrEmpty(vmId))
+                command.Parameters.AddWithValue("@name", hostName);
+                using (SqlDataReader reader = command.ExecuteReader())
                 {
-                    var usageData = await GetUsageDataAsync(vmId);
-                    SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
-                }
-                else
-                {
-                    DisplayMessage("VM ID not found.");
+                    if (reader.Read())
+                    {
+                        PopulateHostDetails(reader);
+
+                        ShowNetwork();
+                        ShowDisks();
+                        ShowEvents();
+                    }
+                    else
+                        hostNameError();
                 }
             }
-            catch (Exception ex)
-            {
-                DisplayMessage($"Error fetching VM data: {ex.Message}");
-            }
+
+
         }
-
-        private async Task<string> PostApiDataAsync(string url, string requestBody)
+        public void PopulateHostDetails(SqlDataReader reader)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "POST";
-            request.ContentType = "application/json";
+            vcenter.InnerText = reader["vCenter"].ToString();
+            host.InnerText = reader["VMHost"].ToString();
+            cluster.InnerText = reader["VMCluster"].ToString();
+            datacenter.InnerText = reader["VMDataCenter"].ToString();
+            power.InnerText = reader["VMPowerState"].ToString();
+            notes.InnerText = reader["VMNotes"].ToString();
 
-            byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
-            request.ContentLength = byteArray.Length;
+            numcpu.InnerText = reader["VMNumCPU"].ToString();
+            totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
+            usedStorage.InnerText = reader["VMUsedStorage"].ToString();
+            totalStorage.InnerText = reader["VMTotalStorage"].ToString();
+            
+            lasttime.InnerText = reader["LastWriteTime"].ToString();
+            hostmodel.InnerText = reader["VMHostModel"].ToString();
+            os.InnerText = reader["VMGuestOS"].ToString();
+            createdDate.InnerText = reader["VMCreatedDate"].ToString();
+            reader.Close();
 
-            using (var dataStream = await request.GetRequestStreamAsync())
-            {
-                dataStream.Write(byteArray, 0, byteArray.Length);
-            }
+    }
 
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
-            {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                {
-                    return await reader.ReadToEndAsync();
-                }
-            }
-        }
-
-        private async Task<string> GetVmIdAsync(string vmName)
+        private void ShowEvents()
         {
-            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-
-            var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            using (SqlCommand cmd = new SqlCommand("SELECT VMEventDates, VMEventMessages FROM vminfoVMs WHERE VMName = @name", con))
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                cmd.Parameters.AddWithValue("@name", hostName);
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    string responseText = await reader.ReadToEndAsync();
+                    if (reader.Read())
+                    {
+                        string[] eventDates = reader["VMEventDates"].ToString().Split('~');
+                        string[] eventMessages = reader["VMEventMessages"].ToString().Split('~');
 
-                    var xmlDoc = new XmlDocument();
-                    xmlDoc.LoadXml(responseText);
-
-                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                    nsManager.AddNamespace("ops", OpsNamespace);
-
-                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                    return identifierNode?.Value;
+                        for (int i = 0; i < eventDates.Length - 1; i++)
+                        {
+                            HtmlTableRow newRow = new HtmlTableRow();
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = eventDates[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = eventMessages[i] });
+                            eventsTable.Rows.Add(newRow);
+                        }
+                    }
                 }
             }
         }
 
-        private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
+        private void ShowNetwork()
         {
-            DateTime startTime = DateTime.UtcNow.AddDays(-30);
-            DateTime endTime = DateTime.UtcNow;
-
-            string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
-            string memoryMetricsUrl = BuildMetricsUrl(vmId, "mem|usage_average", startTime, endTime);
-
-            var cpuUsageData = await GetMetricsDataAsync(cpuMetricsUrl);
-            var memoryUsageData = await GetMetricsDataAsync(memoryMetricsUrl);
-
-            return new Tuple<double[], double[], DateTime[]>(cpuUsageData.Item1, memoryUsageData.Item1, cpuUsageData.Item2);
-        }
-
-        private string BuildMetricsUrl(string vmId, string statKey, DateTime startTime, DateTime endTime)
-        {
-            long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
-
-            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=3&intervalType=HOURS&rollUpType=AVG";
-        }
-
-        private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            using (SqlCommand cmd = new SqlCommand("SELECT VMNetworkAdapterName, VMNetworkName, VMNetworkCardType, VMNetworkAdapterMacAddress FROM vminfoVMs WHERE VMName = @name", con))
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                cmd.Parameters.AddWithValue("@name", hostName);
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
                 {
-                    string responseXml = await reader.ReadToEndAsync();
-                    return ParseUsageData(responseXml);
+                    if (reader.Read())
+                    {
+                        string[] adapterNames = reader["VMNetworkAdapterName"].ToString().Split('~');
+                        string[] networkNames = reader["VMNetworkName"].ToString().Split('~');
+                        string[] macAddresses = reader["VMNetworkAdapterMacAddress"].ToString().Split('~');
+                        string[] networkCardTypes = reader["VMNetworkCardType"].ToString().Split('~');
+
+                        for (int i = 0; i < adapterNames.Length - 1; i++)
+                        {
+                            HtmlTableRow newRow = new HtmlTableRow();
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = adapterNames[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = networkNames[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = macAddresses[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = networkCardTypes[i] });
+                            networkTable.Rows.Add(newRow);
+                        }
+                    }
                 }
             }
         }
 
-        private Tuple<double[], DateTime[]> ParseUsageData(string xmlData)
+        private void ShowDisks()
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var stats = xdoc.Descendants(XName.Get("stat", OpsNamespace)).FirstOrDefault();
-
-            if (stats == null)
+            using (SqlCommand cmd = new SqlCommand("SELECT VMDiskName, VMDiskTotalSize, VMDiskStorageFormat, VMDiskDataStore FROM vminfoVMs WHERE VMName = @name", con))
             {
-                return new Tuple<double[], DateTime[]>(Array.Empty<double>(), Array.Empty<DateTime>());
+                cmd.Parameters.AddWithValue("@name", hostName);
+
+                using (SqlDataReader reader = cmd.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        string[] diskNames = reader["VMDiskName"].ToString().Split('~');
+                        string[] totalSizes = reader["VMDiskTotalSize"].ToString().Split('~');
+                        string[] formats = reader["VMDiskStorageFormat"].ToString().Split('~');
+                        string[] dataStores = reader["VMDiskDataStore"].ToString().Split('~');
+
+                        for (int i = 0; i < diskNames.Length - 1; i++)
+                        {
+                            HtmlTableRow newRow = new HtmlTableRow();
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = diskNames[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = totalSizes[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = formats[i] });
+                            newRow.Cells.Add(new HtmlTableCell { InnerText = dataStores[i] });
+                            disksTable.Rows.Add(newRow);
+                        }
+                    }
+                }
+            }
+        }
+
+        protected void exportToExcelClick(object sender, EventArgs e)
+        {
+
+            SqlCommand cmd = con.CreateCommand();
+            cmd.CommandType = CommandType.Text;
+            cmd.CommandText = "SELECT * FROM vminfoVMs WHERE VMName = @name";
+            cmd.Parameters.AddWithValue("@name", hostName);
+            cmd.ExecuteNonQuery();
+            DataTable dt = new DataTable();
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            da.Fill(dt);
+
+            foreach (DataColumn col in dt.Columns)
+            {
+                string[] keys = dt.Rows[0][col].ToString().Split('~');
+                for (int i = 1; i < keys.Length; i++)
+                {
+                    if (dt.Rows.Count < keys.Length)
+                        dt.Rows.Add();
+                    dt.Rows[i][col.ColumnName] = keys[i - 1].Trim();
+                }
+                dt.Rows[0][col] = keys[0];
+
+
+            }
+            DataGrid dg = new DataGrid();
+            dg.DataSource = dt;
+            dg.DataBind();
+
+            Response.Clear();
+            Response.Buffer = true;
+            Response.Charset = "";
+            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            Response.AddHeader("content-disposition", ("attachment;filename=" + hostName + ".xls"));
+
+            using (StringWriter sw = new StringWriter())
+            {
+                using (HtmlTextWriter htw = new HtmlTextWriter(sw))
+                {
+                    dg.RenderControl(htw);
+                    Response.Output.Write(sw.ToString());
+                    Response.Flush();
+                    Response.End();
+                }
+
             }
 
-            var timestamps = stats.Element(XName.Get("timestamps", OpsNamespace)).Value.Split(' ').Select(long.Parse).ToArray();
-            var data = stats.Element(XName.Get("data", OpsNamespace)).Value.Split(' ').Select(double.Parse).ToArray();
 
-            var dateTimes = timestamps.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
-
-            return new Tuple<double[], DateTime[]>(data, dateTimes);
-        }
-
-        private string ExtractTokenFromXml(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
-        }
-
-        private void SendUsageDataToClient(double[] cpuUsage, double[] memoryUsage, DateTime[] timestamps)
-        {
-            string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString()).ToArray());
-            string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString()).ToArray());
-            string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-dd HH:mm:ss}\"").ToArray());
-
-            string script = $@"
-                var date = [{dateArray}];
-                var cpuUsage = [{cpuUsageArray}];
-                var memoryUsage = [{memoryUsageArray}];
-                console.log(date, cpuUsage, memoryUsage);";
-
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
-        }
-
-        private void DisplayMessage(string message)
-        {
-            Label.InnerText = message;
         }
     }
 }
