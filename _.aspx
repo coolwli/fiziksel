@@ -1,242 +1,221 @@
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+using System;
+using System.Threading.Tasks;
+using System.IO;
+using System.Net;
+using System.Xml;
+using System.Xml.Linq;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Configuration;
 
-<head>
-    <title>Cloud United</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
+namespace blank_page
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private string _token = "";
+        private string _username;
+        private string _password;
+
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+            _username = ConfigurationManager.AppSettings["VropsUsername"];
+            _password = ConfigurationManager.AppSettings["VropsPassword"];
+            Button1_Click(sender, e);
         }
 
-        canvas {
-            max-width: 100%;
-            max-height: 100%;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #fff;
+        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            return true;
         }
 
-        .chart-container {
-            width: 80%;
-            height: 80%;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+        protected async void Button1_Click(object sender, EventArgs e)
+        {
+            await AcquireTokenAsync();
+
         }
-    </style>
-</head>
 
-<body>
-    <form id="form1" runat="server" style="width: 100%;height: 100%;">
-        <p runat="server" id="Label"></p>
-        <div class="chart-container">
-            <canvas id="cpuChart"></canvas>
-            <canvas id="memoryChart"></canvas>
-        </div>
-        <script>
-            const createChart = (ctx, data, dates, label, borderColor) => {
-                const min = Math.min(...data.map(d => d.y));
-                const max = Math.max(...data.map(d => d.y));
+        private async Task AcquireTokenAsync()
+        {
+            string apiUrl = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            string requestBody = $"{{ \"username\": \"{_username}\", \"password\": \"{_password}\" }}";
 
-                const minIndex = data.findIndex(d => d.y === min);
-                const maxIndex = data.findIndex(d => d.y === max);
-
-                const config = {
-                    type: 'line',
-                    data: {
-                        labels: dates,
-                        datasets: [
-                            {
-                                label: 'Minimum: %' + min,
-                                data: [{
-                                    x: dates[minIndex],
-                                    y: min
-                                }],
-                                borderColor: 'red',
-                                fill: true,
-                                pointRadius: 6,
-                                pointHoverRadius: 4,
-                                pointBackgroundColor: 'red'
-                            }, {
-                                label: 'Maximum: %' + max,
-                                data: [{
-                                    x: dates[maxIndex],
-                                    y: max
-                                }],
-                                borderColor: 'black',
-                                fill: true,
-                                pointRadius: 6,
-                                pointHoverRadius: 4,
-                                pointBackgroundColor: 'black'
-                            },
-                            {
-                                label: label,
-                                data: data,
-                                borderColor: borderColor,
-                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                                fill: true,
-                                pointRadius: 0,
-                                pointHoverRadius: 4,
-                                borderWidth: 1,
-                                tension: 0.01
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: `Chart.js Line Chart - ${label}`
-                            },
-                        },
-                        interaction: {
-                            intersect: false,
-                        },
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: {
-                                    unit: 'day'
-                                },
-                                display: true,
-                                title: {
-                                    display: true,
-                                    text: 'Date'
-                                }
-                            },
-                            y: {
-                                display: true,
-                                title: {
-                                    display: true,
-                                    text: 'Value'
-                                },
-                                suggestedMin: Math.max(0, Math.min(...data.map(d => d.y)) - 10),
-                                suggestedMax: Math.max(...data.map(d => d.y)) + 10
-                            }
-                        }
-                    },
-                };
-
-                return new Chart(ctx, config);
-            };
-
-            const fetchData = async () => {
-                // API'den veri çekme simülasyonu
-                for (let i = 0; i < 5500; i++) {
-                    const date = new Date();
-                    date.setDate(date.getDate() + i);
-                    dates.push(date);
-                    cpuDatas.push(Math.random() * 100 + 10);
-                    memoryDatas.push(Math.random() * 30 + 20);
+            try
+            {
+                string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
+                _token = ExtractTokenFromXml(tokenXml);
+                if (!string.IsNullOrEmpty(_token))
+                {
+                    await FetchVmUsageDataAsync();
                 }
-
-                // Veriyi işle
-                const processedCPUData = processLargeData(cpuDatas, dates);
-                const processedMemoryData = processLargeData(memoryDatas, dates);
-
-                // Processed dates should be the same for both datasets, ensuring synchronization
-                createChart(cpuCtx, processedCPUData.data, processedCPUData.dates, 'CPU Usage', 'rgba(75, 192, 192, 1)');
-                createChart(memoryCtx, processedMemoryData.data, processedMemoryData.dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
-            };
-
-            const processLargeData = (data, dates) => {
-                if (data.length <= 250) {
-                    return {
-                        data: data.map((value, index) => ({
-                            x: dates[index],
-                            y: value
-                        })),
-                        dates: dates
-                    };
+                else
+                {
+                    DisplayMessage("Token bulunamadı.");
                 }
+            }
+            catch (Exception ex)
+            {
+                DisplayMessage($"Error acquiring token: {ex.Message}");
+            }
+        }
 
-                const reducedData = [];
-                const reducedDates = [];
-                const step = Math.ceil(data.length / 250);
-                let sum = 0;
-                let count = 0;
-                let sumDates = 0;
-
-                for (let i = 0; i < data.length; i++) {
-                    sum += data[i];
-                    sumDates += dates[i].getTime(); // Add date as time in milliseconds
-                    count++;
-
-                    if ((i + 1) % step === 0) {
-                        const average = sum / count;
-                        const averageDate = new Date(sumDates / count); // Calculate average date
-                        reducedData.push({
-                            x: averageDate,
-                            y: average
-                        });
-                        reducedDates.push(averageDate);
-                        sum = 0;
-                        sumDates = 0;
-                        count = 0;
-                    }
+        private async Task FetchVmUsageDataAsync()
+        {
+            try
+            {
+                string vmId = await GetVmIdAsync("tekscr1");
+                if (!string.IsNullOrEmpty(vmId))
+                {
+                    var usageData = await GetUsageDataAsync(vmId);
+                    SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
                 }
-
-                // Handle any remaining data after the loop
-                if (count > 0) {
-                    const average = sum / count;
-                    const averageDate = new Date(sumDates / count);
-                    reducedData.push({
-                        x: averageDate,
-                        y: average
-                    });
-                    reducedDates.push(averageDate);
+                else
+                {
+                    DisplayMessage("VM ID not found.");
                 }
+            }
+            catch (Exception ex)
+            {
+                DisplayMessage($"Error fetching VM data: {ex.Message}");
+            }
+        }
 
-                // Handle min and max values explicitly
-                const min = Math.min(...data);
-                const max = Math.max(...data);
-                const minIndex = data.indexOf(min);
-                const maxIndex = data.indexOf(max);
+        private async Task<string> PostApiDataAsync(string url, string requestBody)
+        {
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "POST";
+            request.ContentType = "application/json";
 
-                // Remove old min/max data if they exist
-                const minDate = dates[minIndex];
-                const maxDate = dates[maxIndex];
+            byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
+            request.ContentLength = byteArray.Length;
 
-                // Ensure min/max data is not duplicated
-                const isMinInReducedData = reducedData.some(d => d.x.getTime() === minDate.getTime());
-                const isMaxInReducedData = reducedData.some(d => d.x.getTime() === maxDate.getTime());
+            using (var dataStream = await request.GetRequestStreamAsync())
+            {
+                dataStream.Write(byteArray, 0, byteArray.Length);
+            }
 
-                if (!isMinInReducedData) {
-                    reducedData.push({ x: minDate, y: min });
-                    reducedDates.push(minDate);
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            {
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    return await reader.ReadToEndAsync();
                 }
-                if (!isMaxInReducedData) {
-                    reducedData.push({ x: maxDate, y: max });
-                    reducedDates.push(maxDate);
+            }
+        }
+
+        private async Task<string> GetVmIdAsync(string vmName)
+        {
+            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+            var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
+            request.Method = "GET";
+            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            {
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    string responseText = await reader.ReadToEndAsync();
+
+                    var xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(responseText);
+
+                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                    nsManager.AddNamespace("ops", OpsNamespace);
+
+                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                    return identifierNode?.Value;
                 }
+            }
+        }
 
-                // Sort by date to ensure the order is correct
-                reducedData.sort((a, b) => a.x - b.x);
-                reducedDates.sort((a, b) => a - b);
+        private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
+        {
+            DateTime startTime = DateTime.UtcNow.AddDays(-30);
+            DateTime endTime = DateTime.UtcNow;
 
-                return { dates: reducedDates, data: reducedData };
-            };
+            string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
+            string memoryMetricsUrl = BuildMetricsUrl(vmId, "mem|usage_average", startTime, endTime);
 
-            // Get context after DOM is loaded
-            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-            let dates = [];
-            let cpuDatas = [];
-            let memoryDatas = [];
+            var cpuUsageData = await GetMetricsDataAsync(cpuMetricsUrl);
+            var memoryUsageData = await GetMetricsDataAsync(memoryMetricsUrl);
 
-            fetchData();
-        </script>
+            return new Tuple<double[], double[], DateTime[]>(cpuUsageData.Item1, memoryUsageData.Item1, cpuUsageData.Item2);
+        }
 
-    </form>
-</body>
+        private string BuildMetricsUrl(string vmId, string statKey, DateTime startTime, DateTime endTime)
+        {
+            long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
 
-</html>
+            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+        }
+
+        private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
+        {
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            {
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    string responseXml = await reader.ReadToEndAsync();
+                    return ParseUsageData(responseXml);
+                }
+            }
+        }
+
+        private Tuple<double[], DateTime[]> ParseUsageData(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var stats = xdoc.Descendants(XName.Get("stat", OpsNamespace)).FirstOrDefault();
+
+            if (stats == null)
+            {
+                return new Tuple<double[], DateTime[]>(Array.Empty<double>(), Array.Empty<DateTime>());
+            }
+
+            var timestamps = stats.Element(XName.Get("timestamps", OpsNamespace)).Value.Split(' ').Select(long.Parse).ToArray();
+            var data = stats.Element(XName.Get("data", OpsNamespace)).Value.Split(' ').Select(double.Parse).ToArray();
+
+            var dateTimes = timestamps.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
+
+            return new Tuple<double[], DateTime[]>(data, dateTimes);
+        }
+
+        private string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            return tokenElement?.Value;
+        }
+
+        private void SendUsageDataToClient(double[] cpuUsage, double[] memoryUsage, DateTime[] timestamps)
+        {
+            string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString("F2")).ToArray());
+            string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString("F2")).ToArray());
+            string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"").ToArray());
+
+            string script = $@"
+                let dates = [{dateArray}];
+                let cpuDatas = [{cpuUsageArray}];
+                let memoryDatas = [{memoryUsageArray}];
+                fetchData();";
+
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
+
+        }
+
+        private void DisplayMessage(string message)
+        {
+            Label.InnerText = message;
+        }
+    }
+}
