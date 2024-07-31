@@ -1,1 +1,9 @@
-.ToString("F2");
+#logo {
+    background-image: url(logo.png);
+    background-repeat: no-repeat;
+    background-size: contain;
+    float: inline-start;
+    width: 55px;
+    height: 66px;
+    margin: 2px;
+}
