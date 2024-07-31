@@ -1,9 +1,50 @@
-#logo {
-    background-image: url(logo.png);
-    background-repeat: no-repeat;
-    background-size: contain;
-    float: inline-start;
-    width: 55px;
-    height: 66px;
-    margin: 2px;
-}
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="ajaxExample._default" %>
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title></title>
+    <script src="ajax.js"></script>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div>
+            <asp:Label
+                ID="Label1"
+                runat="server"
+                Text="This is a test page for AJAX call."></asp:Label>  
+            <button id="performanceButton">Get Performance Data</button>
+        </div>
+        <script>
+            function getPerformanceData() {
+                var hostName = 'vm1';
+                $.ajax({
+                    type: "POST",
+                    url: "default.aspx/GetPerformanceData",
+                    data: JSON.stringify({ hostName: hostName }),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                    success: function (response) {
+                        var data = response.d;
+                        var div = document.createElement("div");
+                        div.innerHTML = data.Result;
+                        document.body.appendChild(div); // Div'i body'e ekleyin
+                        console.log(data);
+                    },
+                    failure: function (response) {
+                        console.error(response.d);
+                    }
+                });
+            }
+
+            document.getElementById("performanceButton").addEventListener("click", function (event) {
+                event.preventDefault(); // event parametresini ekledik
+                getPerformanceData();
+            });
+
+        </script>
+    </form>
+</body>
+</html>
