@@ -8,7 +8,8 @@
     <title>VM Screen</title>
     <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
     <link rel="stylesheet" type="text/css" href="screenStyle.css" />
-
+    <script src="chart.js"></script>
+    <script src="chartjs-adapter-date-fns.js"></script>
 </head>
 <body>
     <form id="form1" runat="server">
@@ -20,8 +21,8 @@
                 <div class="panel" style="height:auto; padding-bottom: 20px; ">
                     <div class="tabs">
                         <button class="back-button" onclick="event.preventDefault(); window.location.href='default.aspx'">Go Back</button>
-                        <button class="tab-button active" onclick="openTab('dataColumn',this)">Datas</button>
-                        <button class="tab-button" onclick="openTab('performanceColumn',this)">Performances</button>
+                        <button class="tab-button active" onclick="openTab('dataColumn',this,0)">Datas</button>
+                        <button class="tab-button" onclick="openTab('performanceColumn',this,1)">Performances</button>
                     </div>
 
                     <table>
@@ -155,7 +156,11 @@
             </div>
             </div>
             <div class="columnRight" id="performanceColumn" style="display:none;">
-                a
+                
+                <div class="chart-panel">
+                    <canvas id="cpuChart"></canvas>
+                    <canvas id="memoryChart"></canvas>
+                </div>
             </div>
             
 
@@ -219,7 +224,7 @@
                 }
             }
 
-            function openTab(panelId, button) {
+            function openTab(panelId, button,performanceButton) {
                 event.preventDefault();
                 var i, tabcontent, tabbuttons;
                 tabcontent = document.getElementsByClassName("columnRight");
@@ -234,7 +239,9 @@
 
                 document.getElementById(panelId).style.display = "block";
                 button.classList.add("active");
+                
             }
+            
 
             document.getElementById("host").addEventListener("click", function () {
                 window.location.href = "hostscreen.aspx?id=" + document.getElementById("host").textContent;
@@ -242,6 +249,186 @@
             document.getElementById("cluster").addEventListener("click", function () {
                 window.location.href = "clusterscreen.aspx?id=" + document.getElementById("cluster").textContent;
             });
+        </script>
+        <script>
+            
+            const createChart = (ctx, data, dates, label, borderColor) => {
+                const min = Math.min(...data.map(d => d.y));
+                const max = Math.max(...data.map(d => d.y));
+
+                const minIndex = data.findIndex(d => d.y === min);
+                const maxIndex = data.findIndex(d => d.y === max);
+                
+                const config = {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [
+                            {
+                                label: 'Minimum: %' + min,
+                                data: [{
+                                    x: dates[minIndex],
+                                    y: min
+                                }],
+                                borderColor: 'red',
+                                fill: true,
+                                pointRadius: 6,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: 'red'
+                            }, {
+                                label: 'Maximum: %' + max,
+                                data: [{
+                                    x: dates[maxIndex],
+                                    y: max
+                                }],
+                                borderColor: 'black',
+                                fill: true,
+                                pointRadius: 6,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: 'black'
+                            },
+                            {
+                                label: label,
+                                data: data,
+                                borderColor: borderColor,
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                fill: true,
+                                pointRadius: 0,
+                                pointHoverRadius: 4,
+                                borderWidth: 1,
+                                tension: 0.01
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `${label}`
+                            },
+                        },
+                        interaction: {
+                            intersect: false,
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'day'
+                                },
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Date'
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Value'
+                                },
+                                suggestedMin: Math.max(0, Math.min(...data.map(d => d.y)) - 10),
+                                suggestedMax: Math.max(...data.map(d => d.y)) + 10
+                            }
+                        }
+                    },
+                };
+                console.log(config.data.labels.length);
+                return new Chart(ctx, config);
+            };
+
+            const fetchData = async () => {
+                const processedCPUData = processLargeData(cpuDatas, dates);
+                const processedMemoryData = processLargeData(memoryDatas, dates);
+
+                createChart(cpuCtx, processedCPUData.data, processedCPUData.dates, 'CPU Usage', 'rgba(75, 192, 192, 1)');
+                createChart(memoryCtx, processedMemoryData.data, processedMemoryData.dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
+            };
+
+            const processLargeData = (data, dates) => {
+                if (data.length <= 250) {
+                    return {
+                        data: data.map((value, index) => ({
+                            x: dates[index],
+                            y: value
+                        })),
+                        dates: dates
+                    };
+                }
+
+                const reducedData = [];
+                const reducedDates = [];
+                const step = Math.ceil(data.length / 250);
+                let sum = 0;
+                let count = 0;
+                let sumDates = 0;
+
+                for (let i = 0; i < data.length; i++) {
+                    sum += data[i];
+                    sumDates +=new Date(dates[i]).getTime(); // Add date as time in milliseconds
+                    count++;
+
+                    if ((i + 1) % step === 0) {
+                        const average = sum / count;
+                        const averageDate = new Date(sumDates / count); // Calculate average date
+                        reducedData.push({
+                            x: averageDate,
+                            y: average
+                        });
+                        reducedDates.push(averageDate);
+                        sum = 0;
+                        sumDates = 0;
+                        count = 0;
+                    }
+                }
+
+                // Handle any remaining data after the loop
+                if (count > 0) {
+                    const average = sum / count;
+                    const averageDate = new Date(sumDates / count);
+                    reducedData.push({
+                        x: averageDate,
+                        y: average
+                    });
+                    reducedDates.push(averageDate);
+                }
+
+                // Handle min and max values explicitly
+                const min = Math.min(...data);
+                const max = Math.max(...data);
+                const minIndex = data.indexOf(min);
+                const maxIndex = data.indexOf(max);
+
+                // Remove old min/max data if they exist
+                const minDate = new Date(dates[minIndex]);
+                const maxDate = new Date(dates[maxIndex]);
+
+                // Ensure min/max data is not duplicated
+                const isMinInReducedData = reducedData.some(d => d.x.getTime() === minDate.getTime());
+                const isMaxInReducedData = reducedData.some(d => d.x.getTime() === maxDate.getTime());
+
+                if (!isMinInReducedData) {
+                    reducedData.push({ x: minDate, y: min });
+                    reducedDates.push(minDate);
+                }
+                if (!isMaxInReducedData) {
+                    reducedData.push({ x: maxDate, y: max });
+                    reducedDates.push(maxDate);
+                }
+
+                // Sort by date to ensure the order is correct
+                reducedData.sort((a, b) => a.x - b.x);
+                reducedDates.sort((a, b) => a - b);
+
+                return { dates: reducedDates, data: reducedData };
+            };
+
+
+            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+
         </script>
 
     </form>
