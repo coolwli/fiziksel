@@ -23,7 +23,6 @@ namespace vminfo
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private SqlConnection con;
         private string hostName;
-        private static string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
 
@@ -41,10 +40,9 @@ namespace vminfo
 
             if (!IsPostBack)
             {
-                await AcquireTokenAsync();
+                await EnsureTokenAsync();
 
                 ShowHost();
-
             }
         }
 
@@ -65,6 +63,19 @@ namespace vminfo
             Response.Write("ID Bulunamadı");
         }
 
+        private async Task EnsureTokenAsync()
+        {
+            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
+            {
+                await AcquireTokenAsync();
+            }
+            else
+            {
+                // Token mevcut ve geçerli
+                _token = Session["Token"].ToString();
+            }
+        }
+
         private async Task AcquireTokenAsync()
         {
             string apiUrl = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
@@ -76,12 +87,15 @@ namespace vminfo
                 string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
                 _token = ExtractTokenFromXml(tokenXml);
                 if (string.IsNullOrEmpty(_token))
+                {
                     Response.Write("Error: Token is empty");
-
+                }
                 else
+                {
+                    Session["Token"] = _token;
+                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(30); // Örneğin token'ın 30 dakika geçerli olduğunu varsayıyoruz
                     await FetchVmUsageDataAsync();
-
-
+                }
             }
             catch (Exception ex)
             {
@@ -122,9 +136,9 @@ namespace vminfo
             numcpu.InnerText = reader["VMNumCPU"].ToString();
             totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
             usedDisk.InnerHtml = "Used Disk: <strong>" + reader["VMUsedStorage"].ToString() + "GB </strong >";
-            freeDisk.InnerHtml = "Free Disk: <strong>" + (Convert.ToDouble(reader["VMTotalStorage"])- Convert.ToDouble(reader["VMUsedStorage"])).ToString("F2") + "GB </strong >";
-            totalDisk.InnerText ="Total Disk "+ reader["VMTotalStorage"].ToString()+ " GB";
-            usedPercentage.Style["width"] = ((Convert.ToDouble(reader["VMUsedStorage"]))/(Convert.ToDouble(reader["VMTotalStorage"]))*100).ToString()+"%";
+            freeDisk.InnerHtml = "Free Disk: <strong>" + (Convert.ToDouble(reader["VMTotalStorage"]) - Convert.ToDouble(reader["VMUsedStorage"])).ToString("F2") + "GB </strong >";
+            totalDisk.InnerText = "Total Disk " + reader["VMTotalStorage"].ToString() + " GB";
+            usedPercentage.Style["width"] = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString() + "%";
             usedBar.InnerText = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString("F2") + "%";
             lasttime.InnerText = reader["LastWriteTime"].ToString();
             hostmodel.InnerText = reader["VMHostModel"].ToString();
@@ -151,7 +165,6 @@ namespace vminfo
                 table.Rows.Add(row);
             }
         }
-
 
         private async Task FetchVmUsageDataAsync()
         {
