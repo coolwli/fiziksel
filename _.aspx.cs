@@ -23,7 +23,7 @@ namespace vminfo
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private SqlConnection con;
         private string hostName;
-        private string _token;
+        private static string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
 
@@ -42,7 +42,9 @@ namespace vminfo
             if (!IsPostBack)
             {
                 await AcquireTokenAsync();
+
                 ShowHost();
+
             }
         }
 
@@ -70,16 +72,20 @@ namespace vminfo
 
             try
             {
+                Response.Write(requestBody);
                 string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
                 _token = ExtractTokenFromXml(tokenXml);
                 if (string.IsNullOrEmpty(_token))
-                {
-                    DisplayMessage("Token bulunamadı.");
-                }
+                    Response.Write("Error: Token is empty");
+
+                else
+                    await FetchVmUsageDataAsync();
+
+
             }
             catch (Exception ex)
             {
-                DisplayMessage($"Error acquiring token: {ex.Message}");
+                Response.Write($"Error acquiring token: {ex.Message}");
             }
         }
 
@@ -146,10 +152,6 @@ namespace vminfo
             }
         }
 
-        protected async void FetchDataButton_Click(object sender, EventArgs e)
-        {
-            await FetchVmUsageDataAsync();
-        }
 
         private async Task FetchVmUsageDataAsync()
         {
@@ -163,12 +165,12 @@ namespace vminfo
                 }
                 else
                 {
-                    DisplayMessage("VM ID not found.");
+                    Response.Write("VM ID not found.");
                 }
             }
             catch (Exception ex)
             {
-                DisplayMessage($"Error fetching VM data: {ex.Message}");
+                Response.Write($"Error fetching VM data: {ex.Message}");
             }
         }
 
@@ -214,7 +216,7 @@ namespace vminfo
 
         private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
         {
-            DateTime startTime = DateTime.UtcNow.AddDays(-30);
+            DateTime startTime = DateTime.UtcNow.AddDays(-3);
             DateTime endTime = DateTime.UtcNow;
 
             string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
@@ -276,7 +278,6 @@ namespace vminfo
             string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString("F2")));
             string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString("F2")));
             string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
-
             string script = $@"
                 let dates = [{dateArray}];
                 let cpuDatas = [{cpuUsageArray}];
@@ -286,9 +287,5 @@ namespace vminfo
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
         }
 
-        private void DisplayMessage(string message)
-        {
-            baslik.InnerText = message;
-        }
     }
 }
