@@ -1,4 +1,3 @@
-
 using System;
 using System.Net;
 using System.Xml;
@@ -36,9 +35,10 @@ namespace vminfo
                 DisplayHostNameError();
                 return;
             }
+
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
 
-            string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+            string connectionString = ConfigurationManager.ConnectionStrings["MyDbConn"].ConnectionString;
             con = new SqlConnection(connectionString);
 
             if (!IsPostBack)
@@ -50,7 +50,7 @@ namespace vminfo
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true; 
+            return true;
         }
 
         private void DisplayHostNameError()
@@ -61,19 +61,14 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
-            //_token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::3f0521a0-45e5-433f-ad0f-0afe4c65861c";
             if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
-            //if (_token=="")
             {
-                Response.Write("yok");
                 await AcquireTokenAsync();
             }
             else
             {
                 _token = Session["Token"].ToString();
                 await FetchVmUsageDataAsync();
-
-
             }
         }
 
@@ -93,7 +88,7 @@ namespace vminfo
                 else
                 {
                     Session["Token"] = _token;
-                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(30); 
+                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(30);
                     await FetchVmUsageDataAsync();
                 }
             }
@@ -106,29 +101,30 @@ namespace vminfo
         private void ShowHost()
         {
             string query = "SELECT * FROM vminfoVMs WHERE VMName = @name";
-            con.Open();
-            using (var command = new SqlCommand(query, con))
+            using (var connection = new SqlConnection(ConfigurationManager.ConnectionStrings["MyDbConn"].ConnectionString))
             {
-                command.Parameters.AddWithValue("@name", hostName);
-                using (var reader = command.ExecuteReader())
+                using (var command = new SqlCommand(query, connection))
                 {
-                    if (reader.Read())
+                    command.Parameters.AddWithValue("@name", hostName);
+                    connection.Open();
+                    using (var reader = command.ExecuteReader())
                     {
-                        PopulateDetails(reader);
-                    }
-                    else
-                    {
-                        DisplayHostNameError();
+                        if (reader.Read())
+                        {
+                            PopulateDetails(reader);
+                        }
+                        else
+                        {
+                            DisplayHostNameError();
+                        }
                     }
                 }
             }
-            con.Close();
         }
 
         private void PopulateDetails(SqlDataReader reader)
         {
             vcenter.InnerText = reader["vCenter"].ToString();
-            //vRopsServer = reader["vCenter"].ToString() == "ptekvcs01"?  "https://ptekvrops01.fw.garanti.com.tr": "https://ptekvrops01.fw.garanti.com.tr";
             host.InnerText = reader["VMHost"].ToString();
             cluster.InnerText = reader["VMCluster"].ToString();
             datacenter.InnerText = reader["VMDataCenter"].ToString();
@@ -136,11 +132,6 @@ namespace vminfo
             notes.InnerText = reader["VMNotes"].ToString();
             numcpu.InnerText = reader["VMNumCPU"].ToString();
             totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
-            usedDisk.InnerHtml = "Used Disk: <strong>" + reader["VMUsedStorage"].ToString() + "GB </strong >";
-            freeDisk.InnerHtml = "Free Disk: <strong>" + (Convert.ToDouble(reader["VMTotalStorage"]) - Convert.ToDouble(reader["VMUsedStorage"])).ToString("F2") + "GB </strong >";
-            totalDisk.InnerText = "Total Disk " + reader["VMTotalStorage"].ToString() + " GB";
-            usedPercentage.Style["width"] = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString() + "%";
-            usedBar.InnerText = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString("F2") + "%";
             lasttime.InnerText = reader["LastWriteTime"].ToString();
             hostmodel.InnerText = reader["VMHostModel"].ToString();
             os.InnerText = reader["VMGuestOS"].ToString();
@@ -175,7 +166,7 @@ namespace vminfo
                 if (!string.IsNullOrEmpty(vmId))
                 {
                     var usageData = await GetUsageDataAsync(vmId);
-                    SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
+                    SendUsageDataToClient(usageData.Item1, usageData.Item2);
                 }
                 else
                 {
@@ -228,78 +219,55 @@ namespace vminfo
             }
         }
 
-        private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
+        private async Task<Tuple<double[], double[]>> GetUsageDataAsync(string vmId)
         {
-            DateTime startTime = DateTime.UtcNow.AddDays(-365);
-            DateTime endTime = DateTime.UtcNow;
-
-            string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
-            string memoryMetricsUrl = BuildMetricsUrl(vmId, "mem|usage_average", startTime, endTime);
-
-            var cpuUsageData = await GetMetricsDataAsync(cpuMetricsUrl);
-            var memoryUsageData = await GetMetricsDataAsync(memoryMetricsUrl);
-
-            return new Tuple<double[], double[], DateTime[]>(cpuUsageData.Item1, memoryUsageData.Item1, cpuUsageData.Item2);
-        }
-
-        private string BuildMetricsUrl(string vmId, string statKey, DateTime startTime, DateTime endTime)
-        {
-            long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
-            return $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-        }
-
-        private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
+            string getStatsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats";
+            var request = (HttpWebRequest)WebRequest.Create(getStatsUrl);
             request.Method = "GET";
             request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
 
             using (var response = (HttpWebResponse)await request.GetResponseAsync())
             using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
-                string responseXml = await reader.ReadToEndAsync();
-                return ParseUsageData(responseXml);
+                string responseText = await reader.ReadToEndAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var cpuValues = xmlDoc.SelectNodes("//ops:stat[@name='cpu|usage_average']/ops:data/ops:datum", nsManager)
+                    .Cast<XmlNode>()
+                    .Select(node => Convert.ToDouble(node.InnerText))
+                    .ToArray();
+
+                var memoryValues = xmlDoc.SelectNodes("//ops:stat[@name='mem|usage_average']/ops:data/ops:datum", nsManager)
+                    .Cast<XmlNode>()
+                    .Select(node => Convert.ToDouble(node.InnerText))
+                    .ToArray();
+
+                return new Tuple<double[], double[]>(cpuValues, memoryValues);
             }
         }
 
-        private Tuple<double[], DateTime[]> ParseUsageData(string xmlData)
+        private void SendUsageDataToClient(double[] cpuValues, double[] memoryValues)
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var stats = xdoc.Descendants(XName.Get("stat", OpsNamespace)).FirstOrDefault();
-
-            if (stats == null)
+            var usageData = new
             {
-                return new Tuple<double[], DateTime[]>(Array.Empty<double>(), Array.Empty<DateTime>());
-            }
-
-            var timestamps = stats.Element(XName.Get("timestamps", OpsNamespace)).Value.Split(' ').Select(long.Parse).ToArray();
-            var data = stats.Element(XName.Get("data", OpsNamespace)).Value.Split(' ').Select(double.Parse).ToArray();
-            var dateTimes = timestamps.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
-
-            return new Tuple<double[], DateTime[]>(data, dateTimes);
+                CpuValues = cpuValues,
+                MemoryValues = memoryValues
+            };
+            var jsonData = Newtonsoft.Json.JsonConvert.SerializeObject(usageData);
+            ScriptManager.RegisterStartupScript(this, GetType(), "sendData", $"window.chartData = {jsonData};", true);
         }
 
-        private string ExtractTokenFromXml(string xmlData)
+        private string ExtractTokenFromXml(string tokenXml)
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
+            var xmlDoc = new XmlDocument();
+            xmlDoc.LoadXml(tokenXml);
+            var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+            nsManager.AddNamespace("ops", OpsNamespace);
+            var tokenNode = xmlDoc.SelectSingleNode("//ops:token", nsManager);
+            return tokenNode?.InnerText;
         }
-
-        private void SendUsageDataToClient(double[] cpuUsage, double[] memoryUsage, DateTime[] timestamps)
-        {
-            string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString("F2")));
-            string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString("F2")));
-            string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
-            string script = $@"
-                let dates = [{dateArray}];
-                let cpuDatas = [{cpuUsageArray}];
-                let memoryDatas = [{memoryUsageArray}];
-                fetchData();";
-
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
-        }
-
     }
 }
