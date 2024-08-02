@@ -252,3 +252,6 @@
             let cpuChart, memoryChart;
 
         </script>
+
+
+
