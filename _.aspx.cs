@@ -1,3 +1,4 @@
+
 using System;
 using System.Net;
 using System.Xml;
@@ -19,10 +20,11 @@ namespace vminfo
 {
     public partial class vmscreen : System.Web.UI.Page
     {
-        private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private SqlConnection con;
         private string hostName;
+        private string vRopsServer;
+        public string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
 
@@ -34,27 +36,21 @@ namespace vminfo
                 DisplayHostNameError();
                 return;
             }
-
-            InitializeDatabaseConnection();
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+
+            string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+            con = new SqlConnection(connectionString);
 
             if (!IsPostBack)
             {
-                await EnsureTokenAsync();
-
                 ShowHost();
+                await EnsureTokenAsync();
             }
-        }
-
-        private void InitializeDatabaseConnection()
-        {
-            string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-            con = new SqlConnection(connectionString);
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true; // Note: In production, implement proper certificate validation.
+            return true; 
         }
 
         private void DisplayHostNameError()
@@ -65,25 +61,29 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
+            //_token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::3f0521a0-45e5-433f-ad0f-0afe4c65861c";
             if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
+            //if (_token=="")
             {
+                Response.Write("yok");
                 await AcquireTokenAsync();
             }
             else
             {
-                // Token mevcut ve geçerli
                 _token = Session["Token"].ToString();
+                await FetchVmUsageDataAsync();
+
+
             }
         }
 
         private async Task AcquireTokenAsync()
         {
-            string apiUrl = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            string apiUrl = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
             string requestBody = $"{{ \"username\": \"{_username}\", \"password\": \"{_password}\" }}";
 
             try
             {
-                Response.Write(requestBody);
                 string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
                 _token = ExtractTokenFromXml(tokenXml);
                 if (string.IsNullOrEmpty(_token))
@@ -93,7 +93,7 @@ namespace vminfo
                 else
                 {
                     Session["Token"] = _token;
-                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(30); // Örneğin token'ın 30 dakika geçerli olduğunu varsayıyoruz
+                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(30); 
                     await FetchVmUsageDataAsync();
                 }
             }
@@ -128,6 +128,7 @@ namespace vminfo
         private void PopulateDetails(SqlDataReader reader)
         {
             vcenter.InnerText = reader["vCenter"].ToString();
+            //vRopsServer = reader["vCenter"].ToString() == "ptekvcs01"?  "https://ptekvrops01.fw.garanti.com.tr": "https://ptekvrops01.fw.garanti.com.tr";
             host.InnerText = reader["VMHost"].ToString();
             cluster.InnerText = reader["VMCluster"].ToString();
             datacenter.InnerText = reader["VMDataCenter"].ToString();
@@ -209,7 +210,7 @@ namespace vminfo
 
         private async Task<string> GetVmIdAsync(string vmName)
         {
-            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
             var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
             request.Method = "GET";
             request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
@@ -229,7 +230,7 @@ namespace vminfo
 
         private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
         {
-            DateTime startTime = DateTime.UtcNow.AddDays(-3);
+            DateTime startTime = DateTime.UtcNow.AddDays(-365);
             DateTime endTime = DateTime.UtcNow;
 
             string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
@@ -245,7 +246,7 @@ namespace vminfo
         {
             long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
-            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+            return $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
         }
 
         private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
