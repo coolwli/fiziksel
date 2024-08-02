@@ -1,67 +1,4 @@
 <script>
-    // URL Parametresinden ID'yi Alma
-    const urlParams = new URLSearchParams(window.location.search);
-    const id = urlParams.get("id");
-    document.getElementById("baslik").textContent = id;
-
-    // Tablo Sıralama Fonksiyonu
-    function sortTable(columnIndex, column) {
-        const table = column.closest('table');
-        const rows = Array.from(table.rows).slice(1);
-        let switching = true;
-        let dir = "asc";
-
-        while (switching) {
-            switching = false;
-            for (let i = 0; i < rows.length - 1; i++) {
-                let shouldSwitch = false;
-                let xValue = rows[i].getElementsByTagName("td")[columnIndex].innerText;
-                let yValue = rows[i + 1].getElementsByTagName("td")[columnIndex].innerText;
-
-                if (!isNaN(xValue) && !isNaN(yValue)) {
-                    xValue = parseFloat(xValue);
-                    yValue = parseFloat(yValue);
-                }
-                if ((dir === "asc" && xValue > yValue) || (dir === "desc" && xValue < yValue)) {
-                    shouldSwitch = true;
-                    break;
-                }
-            }
-            if (shouldSwitch) {
-                [rows[i], rows[i + 1]] = [rows[i + 1], rows[i]];
-                switching = true;
-            } else if (dir === "asc") {
-                dir = "desc";
-                switching = true;
-            }
-        }
-        rows.forEach(row => table.appendChild(row));
-    }
-
-    // Sekme Açma Fonksiyonu
-    function openTab(event, panelId, button) {
-        event.preventDefault();
-        const tabContent = document.getElementsByClassName("columnRight");
-        const tabButtons = document.getElementsByClassName("tab-button");
-
-        Array.from(tabContent).forEach(content => content.style.display = "none");
-        Array.from(tabButtons).forEach(btn => btn.classList.remove("active"));
-
-        document.getElementById(panelId).style.display = "flex";
-        button.classList.add("active");
-    }
-
-    // Host ve Cluster Navigasyonu
-    document.getElementById("host").addEventListener("click", function () {
-        window.location.href = `hostscreen.aspx?id=${this.textContent}`;
-    });
-    document.getElementById("cluster").addEventListener("click", function () {
-        window.location.href = `clusterscreen.aspx?id=${this.textContent}`;
-    });
-</script>
-
-
-<script>
     const createChart = (ctx, data, dates, label, borderColor) => {
         const min = Math.min(...data.map(d => d.y));
         const max = Math.max(...data.map(d => d.y));
@@ -146,30 +83,12 @@
         const reducedDates = [];
 
         for (let i = 0; i < data.length; i += step) {
-            const chunk = data.slice(i, i + step);
-            const avgValue = chunk.reduce((acc, curr) => acc + curr, 0) / chunk.length;
-            const avgDate = new Date(dates.slice(i, i + step).reduce((acc, curr) => acc + new Date(curr).getTime(), 0) / chunk.length);
+            const avgValue = data.slice(i, i + step).reduce((acc, curr) => acc + curr, 0) / step;
+            const avgDate = new Date(dates.slice(i, i + step).reduce((acc, curr) => acc + new Date(curr).getTime(), 0) / step);
 
             reducedData.push({ x: avgDate, y: avgValue });
             reducedDates.push(avgDate);
         }
-
-        // Min ve max değerleri indirgenmiş verilere ekleme
-        const minValues = [];
-        const maxValues = [];
-        for (let i = 0; i < data.length; i++) {
-            if (data[i] === Math.min(...data)) {
-                minValues.push({ x: new Date(dates[i]), y: data[i] });
-            }
-            if (data[i] === Math.max(...data)) {
-                maxValues.push({ x: new Date(dates[i]), y: data[i] });
-            }
-        }
-
-        // Min ve max değerleri indirgenmiş verilere ekleyelim ve tekrar sıraya koyalım
-        reducedData.push(...minValues, ...maxValues);
-        reducedData.sort((a, b) => a.x - b.x);
-        reducedDates.sort((a, b) => a - b);
 
         return { data: reducedData, dates: reducedDates };
     };
@@ -193,9 +112,3 @@
     const memoryCtx = document.getElementById('memoryChart').getContext('2d');
     let cpuChart, memoryChart;
 </script>
-
-
-
-
-
-
