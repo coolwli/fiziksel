@@ -1,8 +1,100 @@
-Cluster için Metrik URL'si:
 
-resourceKind değeri "ClusterComputeResource" olmalıdır.
-Metrik anahtarı (statKey) cluster'a uygun olmalıdır.
-ESXi Host için Metrik URL'si:
 
-resourceKind değeri "HostSystem" olmalıdır.
-Metrik anahtarı host'a uygun olmalıdır.
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ops:resource-property xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ops="http://webser
+vice.vmware.com/vRealizeOpsMgr/1.0/" resourceId="fc892664-4ad5-43d6-8f83-a355c0c31dbe"><ops:property name="config|security|disable_unexposed_features_unitypush">none</ops:property><ops:property name="
+config|numVMDKs">3.0</ops:property><ops:property name="config|security|disable_console_dnd">true</ops:property><ops:property name="virtualDisk:scsi0:2|isRDM">false</ops:property><ops:property name="co
+nfig|numVMDKsOnly">3.0</ops:property><ops:property name="config|memoryAllocation|limit">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-2|name">VM Snapshot 3%2f28%2f2023, 4:4
+2:16 PM</ops:property><ops:property name="virtualDisk:scsi0:4|datastore">[Deleted]</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-67|mor">snapshot-2275497</ops:property><ops:prop
+erty name="virtualDisk:scsi0:3|configuredGB">2000.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-66|numberOfDays">-1.0</ops:property><ops:property name="virtualDisk:scsi0:0|pro
+visioning_type">Thin Provision</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-63|mor">snapshot-2250912</ops:property><ops:property name="diskspace:1648|snapshot:snapshot-1|name">
+__GX_BACKUP__</ops:property><ops:property name="summary|customTag:OwnerDiv|customTagValue">Veri ve Platform Yonetimi ve Operasyon</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-5
+9|mor">snapshot-2234071</ops:property><ops:property name="diskspace:1648|snapshot:snapshot-1|mor">snapshot-2284773</ops:property><ops:property name="config|security|disable_hgfs">none</ops:property><o
+ps:property name="diskspace:161998|snapshot:snapshot-21|name">__GX_BACKUP__</ops:property><ops:property name="virtualDisk:scsi0:2|provisioning_type">Thin Provision</ops:property><ops:property name="vi
+rtualDisk:scsi0:1|provisioning_type">[Deleted]</ops:property><ops:property name="config|security|disable_unexposed_features_versionset">true</ops:property><ops:property name="config|security|disable_a
+utoinstall">false</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-52|mor">snapshot-2197471</ops:property><ops:property name="config|security|disable_unexposed_features_unity_unity
+active">none</ops:property><ops:property name="diskspace:8186|snapshot:snapshot-1|mor">snapshot-1162535</ops:property><ops:property name="virtualDisk:scsi0:3|datastore">GBCL2_VSP5600_P04_02R</ops:prop
+erty><ops:property name="virtualDisk:scsi0:3|label">Hard disk 3</ops:property><ops:property name="config|security|disable_unexposed_features_toporequest">none</ops:property><ops:property name="virtual
+Disk:scsi0:2|datastore">GBCL2_VSP5600_P04_05R</ops:property><ops:property name="config|security|disable_unexposed_features_unity_windowcontents">none</ops:property><ops:property name="virtualDisk:scsi
+0:4|provisioning_type">[Deleted]</ops:property><ops:property name="config|extraConfig|mem_tps_share">false</ops:property><ops:property name="config|hardware|numCoresPerSocket">8.0</ops:property><ops:p
+roperty name="System Properties|resource_kind_subtype">GENERAL</ops:property><ops:property name="summary|customTag:VM group|customTagValue"></ops:property><ops:property name="diskspace:161998|snapshot
+:snapshot-64|name">__GX_BACKUP__</ops:property><ops:property name="net:4004|ip_address">-</ops:property><ops:property name="summary|guest|toolsVersion">12.3.5</ops:property><ops:property name="summary
+|datastore">GBCL2_VSP5600_P04_02R,GBCL2_VSP5600_P04_03R,GBCL2_VSP5600_P04_05R</ops:property><ops:property name="config|security|disable_unexposed_features_launchmenu">true</ops:property><ops:property 
+name="diskspace:1630|snapshot:snapshot-1|numberOfDays">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-52|name">__GX_BACKUP__</ops:property><ops:property name="diskspace:1619
+98|snapshot:snapshot-2|mor">snapshot-1612770</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-58|name">__GX_BACKUP__</ops:property><ops:property name="summary|parentDatacenter">Pen
+dik</ops:property><ops:property name="config|security|disable_unexposed_features_unity">none</ops:property><ops:property name="virtualDisk:scsi0:5|datastore">[Deleted]</ops:property><ops:property name
+="config|security|disable_unexposed_features_trayicon">none</ops:property><ops:property name="config|security|limit_log_number">2.147483647E9</ops:property><ops:property name="config|security|tools_gu
+est_desktop_autolock">FALSE</ops:property><ops:property name="diskspace:1672|snapshot:snapshot-1|numberOfDays">-1.0</ops:property><ops:property name="config|security|disable_unexposed_features_protoco
+lhandler">none</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-59|name">__GX_BACKUP__</ops:property><ops:property name="net:4002|ip_address">10.235.248.252</ops:property><ops:prop
+erty name="config|security|limit_log_size">2.147483647E9</ops:property><ops:property name="cpu|limit">-1.0</ops:property><ops:property name="summary|config|type">default</ops:property><ops:property na
+me="net:4005|ip_address">10.230.245.192</ops:property><ops:property name="config|hardware|numSockets">2.0</ops:property><ops:property name="config|extraConfig|mem_hotadd">true</ops:property><ops:prope
+rty name="virtualDisk:scsi0:5|configuredGB">-1.0</ops:property><ops:property name="virtualDisk:scsi0:4|label">[Deleted]</ops:property><ops:property name="config|security|disable_unexposed_features_uni
+ty_interlock">none</ops:property><ops:property name="config|security|disable_unexposed_features_shellaction">none</ops:property><ops:property name="config|security|disable_independent_nonpersistent">t
+rue</ops:property><ops:property name="virtualDisk:scsi0:1|configuredGB">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-58|mor">snapshot-2224073</ops:property><ops:property n
+ame="diskspace:161998|snapshot:snapshot-64|numberOfDays">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-63|numberOfDays">-1.0</ops:property><ops:property name="runtime|memor
+yCap">5.0331648E7</ops:property><ops:property name="config|security|enable_vga_only_mode">false</ops:property><ops:property name="config|security|disable_unexposed_features_autologon">none</ops:proper
+ty><ops:property name="virtualDisk:scsi0:3|isRDM">false</ops:property><ops:property name="diskspace:165025|snapshot:snapshot-8|name">__GX_BACKUP__</ops:property><ops:property name="diskspace:161998|sn
+apshot:snapshot-64|mor">snapshot-2254311</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-21|mor">snapshot-1846756</ops:property><ops:property name="diskspace:165025|snapshot:snaps
+hot-1|numberOfDays">-1.0</ops:property><ops:property name="summary|customTag:Last Backup|customTagValue">3.08.2024 00:45:22</ops:property><ops:property name="config|security|disable_console_copy">TRUE
+</ops:property><ops:property name="virtualDisk:scsi0:0|isRDM">false</ops:property><ops:property name="diskspace:165025|snapshot:snapshot-8|numberOfDays">-1.0</ops:property><ops:property name="summary|
+runtime|isIdle">0.0</ops:property><ops:property name="diskspace:8186|snapshot:snapshot-1|numberOfDays">-1.0</ops:property><ops:property name="config|security|disable_console_paste">TRUE</ops:property>
+<ops:property name="diskspace:161998|snapshot:snapshot-53|numberOfDays">-1.0</ops:property><ops:property name="diskspace:1630|snapshot:snapshot-1|mor">snapshot-2284773</ops:property><ops:property name
+="diskspace:161998|snapshot:snapshot-53|mor">snapshot-2207909</ops:property><ops:property name="config|extraConfig|vcpu_hotremove">false</ops:property><ops:property name="summary|guest|toolsVersionSta
+tus2">Guest Tools Current</ops:property><ops:property name="virtualDisk:scsi0:2|label">Hard disk 2</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-2|numberOfDays">-1.0</ops:proper
+ty><ops:property name="diskspace:161998|snapshot:snapshot-67|numberOfDays">-1.0</ops:property><ops:property name="diskspace:174483|snapshot:snapshot-1|numberOfDays">-1.0</ops:property><ops:property na
+me="virtualDisk:scsi0:3|provisioning_type">Thick Provision Lazy Zeroed</ops:property><ops:property name="virtualDisk:scsi0:2|configuredGB">601.0</ops:property><ops:property name="diskspace:161998|snap
+shot:snapshot-63|name">__GX_BACKUP__</ops:property><ops:property name="config|security|enable_host_info">false</ops:property><ops:property name="virtualDisk:scsi0:1|isRDM">[Deleted]</ops:property><ops
+:property name="virtualDisk:scsi0:1|label">[Deleted]</ops:property><ops:property name="config|cpuAllocation|reservation">0.0</ops:property><ops:property name="diskspace:165025|snapshot:snapshot-1|name
+">__GX_BACKUP__</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-1|mor">snapshot-2284773</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-57|numberOfDays">-1.0<
+/ops:property><ops:property name="diskspace:1672|snapshot:snapshot-1|mor">snapshot-2284773</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-58|numberOfDays">-1.0</ops:property><ops
+:property name="config|extraConfig|vcpu_hotadd">true</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-1|name">__GX_BACKUP__</ops:property><ops:property name="virtualDisk:scsi0:0|la
+bel">Hard disk 1</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-53|name">__GX_BACKUP__</ops:property><ops:property name="config|security|network_filter_enable">false</ops:propert
+y><ops:property name="summary|MOID">vm-288486</ops:property><ops:property name="virtualDisk:scsi0:5|isRDM">[Deleted]</ops:property><ops:property name="diskspace:165025|snapshot:snapshot-8|mor">snapsho
+t-2356314</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-57|mor">snapshot-2222300</ops:property><ops:property name="mem|host_limit">-1.0</ops:property><ops:property name="diskspa
+ce:161998|snapshot:snapshot-67|name">__GX_BACKUP__</ops:property><ops:property name="config|version">vmx-19</ops:property><ops:property name="config|security|disable_disk_shrinking_wiper">true</ops:pr
+operty><ops:property name="config|security|disable_unexposed_features_versionget">true</ops:property><ops:property name="net:4000|ip_address">10.230.46.162</ops:property><ops:property name="config|har
+dware|numCpu">16.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-61|numberOfDays">-1.0</ops:property><ops:property name="config|boot_options_efi_secure_boot_enabled">false</ops:
+property><ops:property name="summary|runtime|connectionState">connected</ops:property><ops:property name="diskspace:165025|snapshot:snapshot-1|mor">snapshot-2284773</ops:property><ops:property name="d
+iskspace:174483|snapshot:snapshot-1|name">__GX_BACKUP__</ops:property><ops:property name="summary|smbiosUUID">4231757a-2838-f81b-d79e-a491adfe9a06</ops:property><ops:property name="diskspace:161998|sn
+apshot:snapshot-51|name">__GX_BACKUP__</ops:property><ops:property name="summary|parentVcenter">PTEKVCS01</ops:property><ops:property name="config|hardware|diskSpace">3625.0</ops:property><ops:propert
+y name="summary|guest|ipAddress">10.230.76.57</ops:property><ops:property name="summary|guest|toolsRunningStatus">Guest Tools Running</ops:property><ops:property name="net:4006|ip_address">10.80.241.2
+41</ops:property><ops:property name="config|memoryAllocation|reservation">0.0</ops:property><ops:property name="net:4004|mac_address">00:50:56:bf:c8:57</ops:property><ops:property name="summary|guest|
+fullName">Microsoft Windows Server 2019 (64-bit)</ops:property><ops:property name="net:4003|mac_address">00:50:56:bf:2f:89</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-48|name"
+>__GX_BACKUP__</ops:property><ops:property name="virtualDisk:scsi0:5|label">[Deleted]</ops:property><ops:property name="summary|parentHost">gbesxpc335.fw.garanti.com.tr</ops:property><ops:property nam
+e="config|createDate">1.657131760662E12</ops:property><ops:property name="cpu|reservation">0.0</ops:property><ops:property name="net:4006|mac_address">00:50:56:bf:2b:f3</ops:property><ops:property nam
+e="net:4005|mac_address">00:50:56:bf:08:29</ops:property><ops:property name="config|memoryAllocation|shares|shares">491520.0</ops:property><ops:property name="summary|folder">Windows Platformlari,GT-A
+gile CloudUnited</ops:property><ops:property name="net:4001|ip_address">10.230.76.57</ops:property><ops:property name="config|security|disconnect_devices_parallel">true</ops:property><ops:property nam
+e="summary|parentCluster">GBCL2</ops:property><ops:property name="virtualDisk:scsi0:4|isRDM">[Deleted]</ops:property><ops:property name="summary|tag">[&lt;CommvaultBackup-No_Backup_Over3TB&gt;]</ops:p
+roperty><ops:property name="config|security|disable_vix_messages">false</ops:property><ops:property name="config|security|disconnect_devices_serial">true</ops:property><ops:property name="summary|runt
+ime|powerState">Powered On</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-55|name">__GX_BACKUP__</ops:property><ops:property name="config|security|limit_console_connection">1.0</
+ops:property><ops:property name="diskspace:1648|snapshot:snapshot-8|numberOfDays">-1.0</ops:property><ops:property name="config|security|enable_console_gui_options">false</ops:property><ops:property n
+ame="net:4000|mac_address">00:50:56:b1:73:5f</ops:property><ops:property name="summary|tagJson">[{"category":"CommvaultBackup","name":"No_Backup_Over3TB"}]</ops:property><ops:property name="net:4002|m
+ac_address">00:50:56:bf:3a:f2</ops:property><ops:property name="summary|config|numEthernetCards">7.0</ops:property><ops:property name="summary|customTag:Location|customTagValue">Pendik</ops:property><
+ops:property name="net:4001|mac_address">00:50:56:bf:6a:9a</ops:property><ops:property name="config|security|limit_setinfo_size">1048576.0</ops:property><ops:property name="diskspace:161998|snapshot:s
+napshot-52|numberOfDays">-1.0</ops:property><ops:property name="config|security|enable_console_VNC">false</ops:property><ops:property name="summary|UUID">503132b3-d754-702e-16ac-40409c25e8ce</ops:prop
+erty><ops:property name="diskspace:161998|snapshot:snapshot-61|name">__GX_BACKUP__</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-66|mor">snapshot-2262176</ops:property><ops:prop
+erty name="virtualDisk:scsi0:0|datastore">GBCL2_VSP5600_P04_02R</ops:property><ops:property name="mem|guestOSMemNotCollecting">0.0</ops:property><ops:property name="summary|config|isSrmPlaceholder">fa
+lse</ops:property><ops:property name="diskspace|snapshot|snapshotAge">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-48|numberOfDays">-1.0</ops:property><ops:property name="
+diskspace:1672|snapshot:snapshot-1|name">__GX_BACKUP__</ops:property><ops:property name="summary|guest|guestFamily">windowsGuest</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-1|
+numberOfDays">-1.0</ops:property><ops:property name="summary|customTag:Type|customTagValue">Production</ops:property><ops:property name="summary|datastoreClusters">GBCL2_VSP5600_Replication_Pool_04,GB
+CL2_VSP5600_Replication_Pool_04,GBCL2_VSP5600_Replication_Pool_04</ops:property><ops:property name="config|security|disable_unexposed_features_memsfss">true</ops:property><ops:property name="diskspace
+:8186|snapshot:snapshot-1|name">Upgrade_Ãncesi</ops:property><ops:property name="diskspace:1630|snapshot:snapshot-8|name">__GX_BACKUP__</ops:property><ops:property name="config|cpuAllocation|shares|s
+hares">16000.0</ops:property><ops:property name="config|security|disable_unexposed_features_getcreds">false</ops:property><ops:property name="summary|customTag:Backup Status|customTagValue">Backup Job
+ ID [36029359]  Client: [Garanti-VCenter], Backup Set: [defaultBackupSet], Subclient: [GAR-PND-PRD_VM_Weekly_1] Parent Backup Job ID [36028669]</ops:property><ops:property name="System Properties|reso
+urce_kind_type">GENERAL</ops:property><ops:property name="config|hardware|memoryKB">5.0331648E7</ops:property><ops:property name="config|security|disconnect_devices_floppy">true</ops:property><ops:pro
+perty name="config|name">TEKSCR1</ops:property><ops:property name="config|numRDMs">0.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-51|mor">snapshot-2184640</ops:property><ops:
+property name="diskspace:1630|snapshot:snapshot-8|mor">snapshot-2356314</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-48|mor">snapshot-2171806</ops:property><ops:property name="
+summary|customTag:OwnerDept|customTagValue">GT-Intel Platformlari ve Sanallastirma</ops:property><ops:property name="summary|guest|hostName">TEKSCR1.fw.garanti.com.tr</ops:property><ops:property name=
+"cpu|speed">4.1502493168E10</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-57|name">__GX_BACKUP__</ops:property><ops:property name="summary|customTag:Company|customTagValue">Gara
+nti BBVA</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-21|numberOfDays">-1.0</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-59|numberOfDays">-1.0</ops:prop
+erty><ops:property name="diskspace:1630|snapshot:snapshot-1|name">__GX_BACKUP__</ops:property><ops:property name="summary|parentFolder">GT-Agile CloudUnited</ops:property><ops:property name="config|se
+curity|disable_unexposed_features_trashfolderstate">false</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-55|numberOfDays">-1.0</ops:property><ops:property name="diskspace:161998|
+snapshot:snapshot-61|mor">snapshot-2242100</ops:property><ops:property name="diskspace:1648|snapshot:snapshot-8|mor">snapshot-2356314</ops:property><ops:property name="config|security|disable_unexpose
+d_features_biosbbs">false</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-51|numberOfDays">-1.0</ops:property><ops:property name="config|cpuAllocation|limit">-1.0</ops:property><o
+ps:property name="virtualDisk:scsi0:4|configuredGB">-1.0</ops:property><ops:property name="config|security|disable_device_interaction_edit">none</ops:property><ops:property name="virtualDisk:scsi0:0|c
+onfiguredGB">1024.0</ops:property><ops:property name="diskspace:1648|snapshot:snapshot-1|numberOfDays">-1.0</ops:property><ops:property name="diskspace:174483|snapshot:snapshot-1|mor">snapshot-2284773
+</ops:property><ops:property name="config|security|disable_unexposed_features_unity_taskbar">none</ops:property><ops:property name="config|security|enable_non_essential_3D_features">false</ops:propert
+y><ops:property name="virtualDisk:scsi0:1|datastore">[Deleted]</ops:property><ops:property name="config|security|disable_device_interaction_connect">none</ops:property><ops:property name="diskspace:16
+1998|snapshot:snapshot-66|name">__GX_BACKUP__</ops:property><ops:property name="diskspace:161998|snapshot:snapshot-55|mor">snapshot-2212977</ops:property><ops:property name="summary|config|isTemplate"
+>false</ops:property><ops:property name="config|guestFullName">Microsoft Windows Server 2012 (64-bit)</ops:property><ops:property name="virtualDisk:scsi0:5|provisioning_type">[Deleted]</ops:property><
+ops:property name="config|security|disable_disk_shrinking_shrink">true</ops:property><ops:property name="config|migrateEncryption">opportunistic</ops:property><ops:property name="diskspace:1648|snapsh
+ot:snapshot-8|name">__GX_BACKUP__</ops:property><ops:property name="diskspace:1630|snapshot:snapshot-8|numberOfDays">-1.0</ops:property></ops:resource-property> 
