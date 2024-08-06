@@ -1,184 +1,330 @@
-<script>
-const createChart = (ctx, data, dates, label, borderColor) => {
-            const min = Math.min(...data.map(d => d.y));
-            const max = Math.max(...data.map(d => d.y));
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
 
-            const minIndex = data.findIndex(d => d.y === min);
-            const maxIndex = data.findIndex(d => d.y === max);
+<head>
+    <title>Cloud United</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
 
-            const backgroundColor = borderColor.substring(0, 19) + " 0.2)";
-            const config = {
-                type: 'line',
-                data: {
-                    labels: dates,
-                    datasets: [
-                        {
-                            label: 'Minimum: %' + min,
-                            data: [{ x: dates[minIndex], y: min }],
-                            borderColor: 'red',
-                            fill: true,
-                            pointRadius: 6,
-                            pointHoverRadius: 4,
-                            pointBackgroundColor: 'red'
-                        },
-                        {
-                            label: 'Maximum: %' + max,
-                            data: [{ x: dates[maxIndex], y: max }],
-                            borderColor: 'black',
-                            fill: true,
-                            pointRadius: 6,
-                            pointHoverRadius: 4,
-                            pointBackgroundColor: 'black'
-                        },
-                        {
-                            label: label,
-                            data: data,
-                            borderColor: borderColor,
-                            backgroundColor: backgroundColor,
-                            fill: true,
-                            pointRadius: 0,
-                            pointHoverRadius: 4,
-                            borderWidth: 1,
-                            tension: 0.01
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: `${label} Using Average %`
-                        }
-                    },
-                    interaction: {
-                        intersect: false
-                    },
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'day'
+        .chart-container {
+            width: 80%;
+            height: 80%;
+        }
+
+        .charts {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #ffffff;
+        }
+
+        .disk-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .disk-canvas {
+            width: 85%;
+            height: 85%;
+        }
+
+        .dropdown-container {
+            margin-bottom: 20px;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        .panel-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 250px;
+        }
+
+        .panel-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .panel {
+            background-color: #eeeeee;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            border: 1px solid transparent;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel.active {
+            background-color: #cccccc;
+            font-weight: bold;
+            border: 1px solid #aaa;
+        }
+
+        .panel-value {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <form id="form1" runat="server" style="width: 100%; height: 100%;">
+        <p runat="server" id="Label"></p>
+        <div class="dropdown-container">
+            <label for="timeRange">Select Time Range: </label>
+            <select id="timeRange" onchange="fetchData()">
+                <option value="1">1 Day</option>
+                <option value="7">7 Days</option>
+                <option value="30" selected>30 Days</option>
+                <option value="90">90 Days</option>
+                <option value="360">1 Year</option>
+            </select>
+        </div>
+        <div class="charts">
+            <div>
+                <canvas id="cpuChart"></canvas>
+            </div>
+            <div>
+                <canvas id="memoryChart"></canvas>
+            </div>
+            <div class="disk-panel">
+                <div class="panel-group" id="diskPanelContainer">
+                    <!-- Disk panels will be dynamically inserted here -->
+                </div>
+                <div class="disk-canvas">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const createChart = (ctx, data, dates, label, borderColor) => {
+                const min = Math.min(...data.map(d => d.y));
+                const max = Math.max(...data.map(d => d.y));
+
+                const minIndex = data.findIndex(d => d.y === min);
+                const maxIndex = data.findIndex(d => d.y === max);
+
+                const backgroundColor = borderColor.replace('1)', '0.2)'); // Adjusted for a consistent color
+
+                const config = {
+                    type: 'line',
+                    data: {
+                        labels: dates,
+                        datasets: [
+                            {
+                                label: `Minimum: ${min.toFixed(2)}%`,
+                                data: [{ x: dates[minIndex], y: min }],
+                                borderColor: 'red',
+                                fill: true,
+                                pointRadius: 6,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: 'red'
                             },
-                            display: true,
+                            {
+                                label: `Maximum: ${max.toFixed(2)}%`,
+                                data: [{ x: dates[maxIndex], y: max }],
+                                borderColor: 'black',
+                                fill: true,
+                                pointRadius: 6,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: 'black'
+                            },
+                            {
+                                label: label,
+                                data: data,
+                                borderColor: borderColor,
+                                backgroundColor: backgroundColor,
+                                fill: true,
+                                pointRadius: 0,
+                                pointHoverRadius: 4,
+                                borderWidth: 1,
+                                tension: 0.1 // Slightly adjusted for a smoother line
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
                             title: {
                                 display: true,
-                                text: 'Date'
+                                text: `${label} Usage`
+                            },
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                backgroundColor: '#333',
+                                titleColor: '#fff',
+                                bodyColor: '#fff'
                             }
                         },
-                        y: {
-                            display: true,
-                            title: {
+                        interaction: {
+                            intersect: false
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'day'
+                                },
                                 display: true,
-                                text: 'Value'
+                                title: {
+                                    display: true,
+                                    text: 'Date'
+                                },
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
                             },
-                            suggestedMin: Math.max(0, min - 10),
-                            suggestedMax: max + 10
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Value'
+                                },
+                                suggestedMin: Math.max(0, min - 10),
+                                suggestedMax: max + 10,
+                                grid: {
+                                    color: '#e0e0e0'
+                                }
+                            }
                         }
                     }
-                }
-            };
-
-            return new Chart(ctx, config);
-        };
-
-        const processLargeData = (data, dates, numExtremePoints = 3, maxPoints = 350) => {
-            if (data.length !== dates.length) {
-                throw new Error("Data and dates arrays must have the same length");
-            }
-
-            if (data.length <= maxPoints) {
-                return {
-                    data: data.map((value, index) => ({ x: new Date(dates[index]), y: value })),
-                    dates: dates.map(date => new Date(date))
                 };
-            }
 
-            const step = Math.ceil(data.length / maxPoints);
-            const reducedData = [];
-            const reducedDates = [];
-            let sum = 0, count = 0, sumDates = 0;
-
-            for (let i = 0; i < data.length; i++) {
-                sum += data[i];
-                sumDates += new Date(dates[i]).getTime();
-                count++;
-
-                if ((i + 1) % step === 0) {
-                    const average = sum / count;
-                    const averageDate = new Date(sumDates / count);
-                    reducedData.push({ x: averageDate, y: average });
-                    reducedDates.push(averageDate);
-                    sum = 0;
-                    sumDates = 0;
-                    count = 0;
-                }
-            }
-
-            if (count > 0) {
-                const average = sum / count;
-                const averageDate = new Date(sumDates / count);
-                reducedData.push({ x: averageDate, y: average });
-                reducedDates.push(averageDate);
-            }
-
-            const addExtremePoints = (data, dates, numPoints, comparator) => {
-                const extremePoints = [];
-                for (let i = 0; i < data.length; i++) {
-                    if (extremePoints.length < numPoints) {
-                        extremePoints.push({ x: new Date(dates[i]), y: data[i] });
-                        extremePoints.sort(comparator);
-                    } else if (comparator({ y: data[i] }, extremePoints[numPoints - 1])) {
-                        extremePoints[numPoints - 1] = { x: new Date(dates[i]), y: data[i] };
-                        extremePoints.sort(comparator);
-                    }
-                }
-                return extremePoints;
+                return new Chart(ctx, config);
             };
 
-            const minPoints = addExtremePoints(data, dates, numExtremePoints, (a, b) => a.y - b.y);
-            const maxPoints = addExtremePoints(data, dates, numExtremePoints, (a, b) => b.y - a.y);
+            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+            const diskCtx = document.getElementById('diskChart').getContext('2d');
 
-            minPoints.forEach(point => {
-                if (!reducedData.some(d => d.x.getTime() === point.x.getTime())) {
-                    reducedData.push(point);
-                    reducedDates.push(point.x);
+            let cpuChart;
+            let memoryChart;
+            let diskChart;
+            let diskDataMap = {};
+
+            const generateRandomData = (numPoints, minValue, maxValue) => {
+                const data = [];
+                const now = new Date();
+                for (let i = 0; i < numPoints; i++) {
+                    const date = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
+                    data.push({ x: date, y: Math.random() * (maxValue - minValue) + minValue });
                 }
-            });
+                return data.reverse();
+            };
 
-            maxPoints.forEach(point => {
-                if (!reducedData.some(d => d.x.getTime() === point.x.getTime())) {
-                    reducedData.push(point);
-                    reducedDates.push(point.x);
-                }
-            });
+            const generateDiskData = (diskLabel, numPoints) => {
+                return generateRandomData(numPoints, 50, 70); // Adjusted for realistic disk usage
+            };
 
-            reducedData.sort((a, b) => a.x - b.x);
-            reducedDates.sort((a, b) => a - b);
+            const calculateAverage = (data) => {
+                const sum = data.reduce((acc, d) => acc + d.y, 0);
+                return (sum / data.length).toFixed(2); // Average value rounded to 2 decimal places
+            };
 
-            return { dates: reducedDates, data: reducedData };
-        };
+            const fetchData = () => {
+                const range = parseInt(document.getElementById('timeRange').value);
+                const numPoints = range;
+                const dates = [];
+                const cpuData = generateRandomData(numPoints, 10, 30);
+                const memoryData = generateRandomData(numPoints, 20, 40);
 
-        const fetchData = () => {
-            const timeRange = parseInt(document.getElementById('timeRange').value);
-            const filteredDates = dates.filter(dateString => {
-                return new Date() - new Date(dateString) <= (timeRange * 24 * 60 * 60 * 1000);
-            });
-            const filteredCpuData = cpuDatas.slice(-filteredDates.length);
-            console.log(dates.length, filteredDates.length, filteredCpuData.length);
-            const filteredMemoryData = memoryDatas.slice(-filteredDates.length);
-            const processedCPUData = processLargeData(filteredCpuData, filteredDates);
-            const processedMemoryData = processLargeData(filteredMemoryData, filteredDates);
+                const diskLabels = ['C', 'D', 'E', 'fe'];
+                diskDataMap = {};
+                diskLabels.forEach(label => {
+                    const diskData = generateDiskData(label, numPoints);
+                    diskDataMap[label] = diskData;
+                });
 
-            if (cpuChart) cpuChart.destroy();
-            if (memoryChart) memoryChart.destroy();
+                cpuData.forEach(d => dates.push(d.x));
+                memoryData.forEach(d => dates.push(d.x));
 
-            cpuChart = createChart(cpuCtx, processedCPUData.data, processedCPUData.dates, 'CPU Usage', 'rgba(84, 175, 228, 1)');
-            memoryChart = createChart(memoryCtx, processedMemoryData.data, processedMemoryData.dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
-        };
+                if (cpuChart) cpuChart.destroy();
+                if (memoryChart) memoryChart.destroy();
+                if (diskChart) diskChart.destroy();
 
-        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-        const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+                cpuChart = createChart(cpuCtx, cpuData, dates, 'CPU Usage', 'rgba(75, 192, 192, 1)');
+                memoryChart = createChart(memoryCtx, memoryData, dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
 
-        let cpuChart, memoryChart;
-    </script>
+                updateDiskPanels(diskLabels);
+                diskChart = createChart(diskCtx, diskDataMap['C'], dates, 'Disk C Usage', 'rgba(255, 159, 64, 1)');
+            };
+
+            const updateDiskPanels = (diskLabels) => {
+                const container = document.getElementById('diskPanelContainer');
+                container.innerHTML = '';
+
+                diskLabels.forEach(label => {
+                    const panel = document.createElement('div');
+                    panel.className = 'panel';
+                    panel.setAttribute('data-disk', label);
+
+                    const averageUsage = calculateAverage(diskDataMap[label]);
+
+                    panel.innerHTML = `
+                        Disk ${label} <span class="panel-value">${averageUsage}%</span>
+                    `;
+
+                    panel.addEventListener('click', () => handlePanelClick(label));
+                    container.appendChild(panel);
+                });
+            };
+
+            const updateDiskChart = (diskLabel) => {
+                const range = parseInt
+
+                    (document.getElementById('timeRange').value);
+                const numPoints = range;
+                const dates = [];
+                const diskData = diskDataMap[diskLabel];
+
+                if (!diskData) return;
+
+                diskData.forEach(d => dates.push(d.x));
+
+                if (diskChart) diskChart.destroy();
+
+                diskChart = createChart(diskCtx, diskData, dates, `Disk ${diskLabel} Usage`, 'rgba(255, 159, 64, 1)');
+            };
+
+            const handlePanelClick = (diskLabel) => {
+                document.querySelectorAll('.panel').forEach(panel => {
+                    panel.classList.remove('active');
+                });
+                document.querySelector(`.panel[data-disk="${diskLabel}"]`).classList.add('active');
+                updateDiskChart(diskLabel);
+            };
+
+            // Initial fetch on page load
+            fetchData();
+        </script>
+    </form>
+</body>
+
+</html>
