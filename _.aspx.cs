@@ -1,11 +1,11 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using System.Net;
-using System.Xml;
-using System.Xml.Linq;
 using System.Text;
-using System.Linq;
+using System.Xml.Linq;
+using System.Xml;
 using System.Collections.Generic;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
@@ -17,34 +17,29 @@ namespace blank_page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _token = "";
-        private string _username;
-        private string _password;
+        private string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" }; // Filtrelemek istediğiniz metrikler
 
         protected void Page_Load(object sender, EventArgs e)
         {
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            _username = ConfigurationManager.AppSettings["VropsUsername"];
-            _password = ConfigurationManager.AppSettings["VropsPassword"];
             Button1_Click(sender, e);
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true;
+            return true; // Gerçek ortamda sertifika doğrulamasını yapmalısınız.
         }
 
         protected async void Button1_Click(object sender, EventArgs e)
         {
             await AcquireTokenAsync();
-
         }
 
         private async Task AcquireTokenAsync()
         {
-            _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
+            // Token işlemi yapıldıktan sonra veri çekme işlemi yapılır
             await FetchVmUsageDataAsync();
-
         }
 
         private async Task FetchVmUsageDataAsync()
@@ -54,8 +49,9 @@ namespace blank_page
                 string vmId = await GetVmIdAsync("tekscr1");
                 if (!string.IsNullOrEmpty(vmId))
                 {
-                    var usageData = await GetUsageDataAsync(vmId);
-                    SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
+                    string metricsData = await GetAllMetricsDataAsync(vmId);
+                    var (metrics, timestamps) = ParseMetricsData(metricsData);
+                    SendUsageDataToClient(metrics, timestamps);
                 }
                 else
                 {
@@ -68,18 +64,36 @@ namespace blank_page
             }
         }
 
+        private async Task<string> GetAllMetricsDataAsync(string vmId)
+        {
+            DateTime startTime = DateTime.UtcNow.AddDays(-30);
+            DateTime endTime = DateTime.UtcNow;
+
+            string statsUrl = BuildAllMetricsUrl(vmId, startTime, endTime);
+
+            return await PostApiDataAsync(statsUrl, string.Empty); // POST yerine GET de olabilir
+        }
+
+        private string BuildAllMetricsUrl(string vmId, DateTime startTime, DateTime endTime)
+        {
+            long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
+
+            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+        }
+
         private async Task<string> PostApiDataAsync(string url, string requestBody)
         {
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
-            request.ContentType = "application/json";
+            request.ContentType = "application/json"; // Sadece XML kullanacaksanız bu satırı "application/xml" olarak değiştirebilirsiniz.
 
             byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
             request.ContentLength = byteArray.Length;
 
             using (var dataStream = await request.GetRequestStreamAsync())
             {
-                dataStream.Write(byteArray, 0, byteArray.Length);
+                await dataStream.WriteAsync(byteArray, 0, byteArray.Length);
             }
 
             using (var response = (HttpWebResponse)await request.GetResponseAsync())
@@ -117,83 +131,47 @@ namespace blank_page
             }
         }
 
-        private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
+        private (Dictionary<string, double[]>, DateTime[]) ParseMetricsData(string xmlData)
         {
-            DateTime startTime = DateTime.UtcNow.AddDays(-30);
-            DateTime endTime = DateTime.UtcNow;
+            var xdoc = XDocument.Parse(xmlData);
+            var statsElements = xdoc.Descendants(XName.Get("stat", OpsNamespace)).ToList();
 
-            string cpuMetricsUrl = BuildMetricsUrl(vmId, "cpu|usage_average", startTime, endTime);
-            string memoryMetricsUrl = BuildMetricsUrl(vmId, "mem|usage_average", startTime, endTime);
+            var timestamps = statsElements.FirstOrDefault()?.Element(XName.Get("timestamps", OpsNamespace))?.Value.Split(' ').Select(long.Parse).ToArray();
+            var dataDictionary = new Dictionary<string, double[]>();
 
-            var cpuUsageData = await GetMetricsDataAsync(cpuMetricsUrl);
-            var memoryUsageData = await GetMetricsDataAsync(memoryMetricsUrl);
-
-            return new Tuple<double[], double[], DateTime[]>(cpuUsageData.Item1, memoryUsageData.Item1, cpuUsageData.Item2);
-        }
-
-        private string BuildMetricsUrl(string vmId, string statKey, DateTime startTime, DateTime endTime)
-        {
-            long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
-
-            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-        }
-
-        private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            foreach (var stat in statsElements)
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                var statKey = stat.Element(XName.Get("statKey", OpsNamespace))?.Value;
+
+                if (_metricsToFilter.Contains(statKey))
                 {
-                    string responseXml = await reader.ReadToEndAsync();
-                    return ParseUsageData(responseXml);
+                    var data = stat.Element(XName.Get("data", OpsNamespace))?.Value.Split(' ').Select(double.Parse).ToArray();
+                    if (statKey != null && data != null)
+                    {
+                        dataDictionary[statKey] = data;
+                    }
                 }
             }
+
+            var dateTimes = timestamps?.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
+            return (dataDictionary, dateTimes);
         }
 
-        private Tuple<double[], DateTime[]> ParseUsageData(string xmlData)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var stats = xdoc.Descendants(XName.Get("stat", OpsNamespace)).FirstOrDefault();
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
 
-            if (stats == null)
+            foreach (var metric in metricsData)
             {
-                return new Tuple<double[], DateTime[]>(Array.Empty<double>(), Array.Empty<DateTime>());
+                string key = metric.Key.Replace("|", "_");
+                string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
             }
 
-            var timestamps = stats.Element(XName.Get("timestamps", OpsNamespace)).Value.Split(' ').Select(long.Parse).ToArray();
-            var data = stats.Element(XName.Get("data", OpsNamespace)).Value.Split(' ').Select(double.Parse).ToArray();
+            scriptBuilder.AppendLine("fetchData();");
 
-            var dateTimes = timestamps.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
-
-            return new Tuple<double[], DateTime[]>(data, dateTimes);
-        }
-
-        private string ExtractTokenFromXml(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
-        }
-
-        private void SendUsageDataToClient(double[] cpuUsage, double[] memoryUsage, DateTime[] timestamps)
-        {
-            string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString("F2")).ToArray());
-            string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString("F2")).ToArray());
-            string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"").ToArray());
-
-            string script = $@"
-                let dates = [{dateArray}];
-                let cpuDatas = [{cpuUsageArray}];
-                let memoryDatas = [{memoryUsageArray}];
-                fetchData();";
-
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
-
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
         private void DisplayMessage(string message)
