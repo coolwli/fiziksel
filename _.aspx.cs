@@ -210,28 +210,32 @@ namespace vminfo
         }
 
         private Dictionary<string, double[]> ParseUsageData(string xmlData, params string[] patterns)
+{
+    var xdoc = XDocument.Parse(xmlData);
+    var statsElements = xdoc.Descendants(XName.Get("stat", OpsNamespace));
+
+    var dataDictionary = new Dictionary<string, double[]>();
+
+    foreach (var stat in statsElements)
+    {
+        var statKey = stat.Attribute("key")?.Value;
+        if (statKey == null || !patterns.Any(pattern => statKey.Contains(pattern)))
+            continue;
+
+        // Örneğin "guestfilesystem:C:\\percentage" gibi anahtarlar için yüzde olanları filtrele
+        if (statKey.Contains("guestfilesystem:") && statKey.EndsWith(":percentage"))
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var statsElements = xdoc.Descendants(XName.Get("stat", OpsNamespace));
-
-            var dataDictionary = new Dictionary<string, double[]>();
-
-            foreach (var stat in statsElements)
+            var dataXml = stat.Element(XName.Get("data", OpsNamespace))?.Value.Split(' ').Select(double.Parse).ToArray();
+            
+            if (dataXml != null)
             {
-                var statKey = stat.Attribute("key")?.Value;
-                if (statKey == null || !patterns.Any(pattern => statKey.Contains(pattern)))
-                    continue;
-
-                var dataXml = stat.Element(XName.Get("data", OpsNamespace))?.Value.Split(' ').Select(double.Parse).ToArray();
-                
-                if (dataXml != null)
-                {
-                    dataDictionary[statKey] = dataXml;
-                }
+                dataDictionary[statKey] = dataXml;
             }
-
-            return dataDictionary;
         }
+    }
+
+    return dataDictionary;
+}
 
         private async Task<string> PostApiDataAsync(string url, string requestBody)
         {
