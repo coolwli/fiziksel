@@ -7,12 +7,10 @@ using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
 using System.Xml.Linq;
-using System.Xml.XPath;
 
 namespace vminfo
 {
@@ -46,7 +44,7 @@ namespace vminfo
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            // Improve SSL certificate validation based on your needs
+            // SSL sertifika doğrulamayı ihtiyaçlarınıza göre iyileştirin
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
@@ -92,7 +90,7 @@ namespace vminfo
             }
             catch (Exception ex)
             {
-                // Log exception
+                // Hata günlüğü
                 DisplayHostNameError($"Error acquiring token: {ex.Message}");
             }
         }
@@ -180,7 +178,7 @@ namespace vminfo
             }
             catch (Exception ex)
             {
-                // Log exception
+                // Hata günlüğü
                 DisplayHostNameError($"Error fetching VM data: {ex.Message}");
             }
         }
@@ -208,7 +206,7 @@ namespace vminfo
             }
             catch (Exception ex)
             {
-                // Log exception
+                // Hata günlüğü
                 throw new InvalidOperationException("Error fetching metrics data", ex);
             }
         }
@@ -280,10 +278,11 @@ namespace vminfo
             string responseText = await response.Content.ReadAsStringAsync();
 
             var xmlDoc = XDocument.Parse(responseText);
-            var nsManager = new XmlNamespaceManager(xmlDoc.CreateReader().NameTable);
-            nsManager.AddNamespace("ops", OpsNamespace);
-            var identifierNode = xmlDoc.XPathSelectElement("//ops:resource/@identifier", nsManager);
-            return identifierNode?.Value;
+            var identifierNode = xmlDoc.Descendants(XName.Get("resource", OpsNamespace))
+                                        .FirstOrDefault()
+                                        ?.Attribute("identifier")?.Value;
+
+            return identifierNode;
         }
 
         private string ExtractTokenFromXml(string xmlData)
