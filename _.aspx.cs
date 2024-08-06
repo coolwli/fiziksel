@@ -32,7 +32,8 @@ namespace vminfo
                 return;
             }
 
-            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+            // Sertifika doğrulama işlemini güncelleyin
+            ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
 
             if (!IsPostBack)
             {
@@ -43,8 +44,8 @@ namespace vminfo
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            // Not: Sertifikaları doğru bir şekilde doğrulayın
-            return true;
+            // Sertifika doğrulama işlemini burada düzgün yapılandırın
+            return sslPolicyErrors == SslPolicyErrors.None;
         }
 
         private void DisplayHostNameError()
