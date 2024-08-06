@@ -1,3 +1,7 @@
+Severity	Code	Description	Project	File	Line	Suppression State
+Error	CS0234	The type or namespace name 'Http' does not exist in the namespace 'System.Net' (are you missing an assembly reference?)	vminfo	C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs	2	Active
+
+
 using System;
 using System.Net.Http;
 using System.Net.Security;
