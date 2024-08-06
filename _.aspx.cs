@@ -1,15 +1,12 @@
 using System;
-using System.Threading.Tasks;
-using System.IO;
-using System.Net;
-using System.Xml;
-using System.Xml.Linq;
-using System.Text;
-using System.Linq;
-using System.Collections.Generic;
+using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Configuration;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace blank_page
 {
@@ -17,25 +14,25 @@ namespace blank_page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" }; // Filtrelemek istediğiniz metrikler
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" };
 
+        private static readonly HttpClient HttpClient = new HttpClient();
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            Button1_Click(sender, e);
+            ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
+            Button1_Click(sender, e).GetAwaiter().GetResult(); // Ensure async call completes
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true;
+            return true; // For demo purposes, be cautious with this in production
         }
 
-        protected async void Button1_Click(object sender, EventArgs e)
+        protected async Task Button1_Click(object sender, EventArgs e)
         {
             await FetchVmUsageDataAsync();
-
         }
 
         private async Task FetchVmUsageDataAsync()
@@ -46,10 +43,8 @@ namespace blank_page
                 if (!string.IsNullOrEmpty(vmId))
                 {
                     var metricsData = await GetAllMetricsDataAsync(vmId);
-                    DisplayMessage(metricsData);
-                    //var parsedData = ParseMetricsData(metricsData);
-
-                    //SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
+                    var parsedData = ParseMetricsData(metricsData);
+                    SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
                 }
                 else
                 {
@@ -61,58 +56,73 @@ namespace blank_page
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
             }
         }
+
+        private async Task<string> GetVmIdAsync(string vmName)
+        {
+            var url = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+            return await SendRequestAsync(url);
+        }
+
         private async Task<string> GetAllMetricsDataAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-30)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
 
-            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+            var url = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
 
-            return await GetMetricsDataAsync(statsUrl);
+            return await SendRequestAsync(url);
         }
 
-        private async Task<string> GetVmIdAsync(string vmName)
+        private async Task<string> SendRequestAsync(string url)
         {
-            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
 
-            var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+            HttpResponseMessage response = await HttpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
 
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
+        {
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = XNamespace.Get(OpsNamespace);
+
+            // Parse metrics data
+            var metricElements = xmlDoc.Descendants(ns + "metric");
+            foreach (var metricElement in metricElements)
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                var metricName = (string)metricElement.Attribute("name");
+                if (_metricsToFilter.Contains(metricName))
                 {
-                    string responseText = await reader.ReadToEndAsync();
-
-                    var xmlDoc = new XmlDocument();
-                    xmlDoc.LoadXml(responseText);
-
-                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                    nsManager.AddNamespace("ops", OpsNamespace);
-
-                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                    return identifierNode?.Value;
+                    var values = metricElement.Elements(ns + "value")
+                                              .Select(v => (double)v)
+                                              .ToArray();
+                    metricsData[metricName] = values;
                 }
             }
-        }
 
-        private async Task<string> GetMetricsDataAsync(string url)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            // Parse timestamps
+            var timeElements = xmlDoc.Descendants(ns + "timestamp");
+            foreach (var timeElement in timeElements)
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                if (DateTime.TryParse((string)timeElement, out DateTime parsedDateTime))
                 {
-                    string responseXml = await reader.ReadToEndAsync();
-                    return responseXml;
+                    timestamps.Add(parsedDateTime);
+                }
+                else
+                {
+                    Console.WriteLine($"Unable to parse timestamp: {(string)timeElement}");
                 }
             }
-        }
 
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+        }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
