@@ -14,13 +14,14 @@ using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
 using System.Configuration;
+using System.Collections.Generic;
 
 namespace vminfo
 {
     public partial class vmscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string vRopsServer= "https://ptekvrops01.fw.garanti.com.tr";
+        private string vRopsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private string hostName;
         public string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
@@ -35,7 +36,6 @@ namespace vminfo
                 return;
             }
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-
 
             if (!IsPostBack)
             {
@@ -57,9 +57,7 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
-            //_token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::3f0521a0-45e5-433f-ad0f-0afe4c65861c";
             if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
-            //if (_token=="")
             {
                 await AcquireTokenAsync();
             }
@@ -67,8 +65,6 @@ namespace vminfo
             {
                 _token = Session["Token"].ToString();
                 await FetchVmUsageDataAsync();
-
-
             }
         }
 
@@ -170,8 +166,11 @@ namespace vminfo
                 string vmId = await GetVmIdAsync(hostName);
                 if (!string.IsNullOrEmpty(vmId))
                 {
-                    var usageData = await GetUsageDataAsync(vmId);
-                    SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
+                    // Belirli metrik desenlerini belirleyin
+                    string[] patterns = { "guestfilesystem:", "cpu|usage_average", "mem|usage_average" };
+
+                    var usageData = await GetUsageDataAsync(vmId, patterns);
+                    SendUsageDataToClient(usageData, new DateTime[0]); // Eğer timestamps gerekli değilse boş bir dizi gönderebilirsiniz
                 }
                 else
                 {
@@ -182,6 +181,56 @@ namespace vminfo
             {
                 Response.Write($"Error fetching VM data: {ex.Message}");
             }
+        }
+
+        private async Task<Dictionary<string, double[]>> GetUsageDataAsync(string vmId, params string[] patterns)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+
+            // Tek URL ile tüm statları çekme
+            string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+
+            var metricsData = await GetMetricsDataAsync(metricsUrl, patterns);
+            return metricsData;
+        }
+
+        private async Task<Dictionary<string, double[]>> GetMetricsDataAsync(string url, params string[] patterns)
+        {
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+            {
+                string responseXml = await reader.ReadToEndAsync();
+                return ParseUsageData(responseXml, patterns);
+            }
+        }
+
+        private Dictionary<string, double[]> ParseUsageData(string xmlData, params string[] patterns)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var statsElements = xdoc.Descendants(XName.Get("stat", OpsNamespace));
+
+            var dataDictionary = new Dictionary<string, double[]>();
+
+            foreach (var stat in statsElements)
+            {
+                var statKey = stat.Attribute("key")?.Value;
+                if (statKey == null || !patterns.Any(pattern => statKey.Contains(pattern)))
+                    continue;
+
+                var dataXml = stat.Element(XName.Get("data", OpsNamespace))?.Value.Split(' ').Select(double.Parse).ToArray();
+                
+                if (dataXml != null)
+                {
+                    dataDictionary[statKey] = dataXml;
+                }
+            }
+
+            return dataDictionary;
         }
 
         private async Task<string> PostApiDataAsync(string url, string requestBody)
@@ -224,51 +273,6 @@ namespace vminfo
             }
         }
 
-        private async Task<Tuple<double[], double[], DateTime[]>> GetUsageDataAsync(string vmId)
-        {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            string cpuMetricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey=cpu|usage_average&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-            string memoryMetricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey=mem|usage_average&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-
-            var cpuUsageData = await GetMetricsDataAsync(cpuMetricsUrl);
-            var memoryUsageData = await GetMetricsDataAsync(memoryMetricsUrl);
-
-            return new Tuple<double[], double[], DateTime[]>(cpuUsageData.Item1, memoryUsageData.Item1, cpuUsageData.Item2);
-        }
-
-
-        private async Task<Tuple<double[], DateTime[]>> GetMetricsDataAsync(string url)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
-            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-            {
-                string responseXml = await reader.ReadToEndAsync();
-                return ParseUsageData(responseXml);
-            }
-        }
-
-        private Tuple<double[], DateTime[]> ParseUsageData(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var stats = xdoc.Descendants(XName.Get("stat", OpsNamespace)).FirstOrDefault();
-
-            if (stats == null)
-            {
-                return new Tuple<double[], DateTime[]>(Array.Empty<double>(), Array.Empty<DateTime>());
-            }
-
-            var timestamps = stats.Element(XName.Get("timestamps", OpsNamespace)).Value.Split(' ').Select(long.Parse).ToArray();
-            var data = stats.Element(XName.Get("data", OpsNamespace)).Value.Split(' ').Select(double.Parse).ToArray();
-            var dateTimes = timestamps.Select(t => DateTimeOffset.FromUnixTimeMilliseconds(t).UtcDateTime).ToArray();
-
-            return new Tuple<double[], DateTime[]>(data, dateTimes);
-        }
-
         private string ExtractTokenFromXml(string xmlData)
         {
             var xdoc = XDocument.Parse(xmlData);
@@ -276,19 +280,24 @@ namespace vminfo
             return tokenElement?.Value;
         }
 
-        private void SendUsageDataToClient(double[] cpuUsage, double[] memoryUsage, DateTime[] timestamps)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
-            string cpuUsageArray = string.Join(",", cpuUsage.Select(u => u.ToString("F2")));
-            string memoryUsageArray = string.Join(",", memoryUsage.Select(u => u.ToString("F2")));
-            string dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
-            string script = $@"
-                let dates = [{dateArray}];
-                let cpuDatas = [{cpuUsageArray}];
-                let memoryDatas = [{memoryUsageArray}];
-                fetchData();";
+            var dataStrings = metricsData.ToDictionary(
+                kvp => kvp.Key,
+                kvp => string.Join(",", kvp.Value.Select(v => v.ToString("F2")))
+            );
+            var dateArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
+
+            var scripts = dataStrings.Select(kvp => 
+                $"let {kvp.Key}Datas = [{kvp.Value}];"
+            ).ToList();
+            
+            scripts.Add($"let dates = [{dateArray}];");
+            scripts.Add("fetchData();");
+
+            string script = string.Join("\n", scripts);
 
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
         }
-
     }
 }
