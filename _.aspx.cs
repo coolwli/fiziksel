@@ -11,17 +11,18 @@ using System.Security.Cryptography.X509Certificates;
 using System.Configuration;
 using System.Xml;
 
-namespace ajaxExample
+namespace blank_page
 {
     public partial class _default : System.Web.UI.Page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private string _token;
-        private List<string> _desiredMetrics =  new List<string>
+        private List<string> _desiredMetrics = new List<string>
             {
                 "cpu|usage_average",
-                "mem|usage_average"
+                "mem|usage_average",
+                "guestfilesystem:"
             };
 
         protected void Page_Load(object sender, EventArgs e)
@@ -47,8 +48,9 @@ namespace ajaxExample
 
             try
             {
-                var tokenXml = await PostApiDataAsync(apiUrl, requestBody);
-                _token = ExtractTokenFromXml(tokenXml);
+                //var tokenXml = await PostApiDataAsync(apiUrl, requestBody);
+                //_token = ExtractTokenFromXml(tokenXml);
+                _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
                 if (!string.IsNullOrEmpty(_token))
                 {
                     await FetchVmUsageDataAsync();
@@ -128,20 +130,21 @@ namespace ajaxExample
         {
             var startTime = DateTime.UtcNow.AddDays(-30);
             var endTime = DateTime.UtcNow;
-            var allMetricsKeys = _desiredMetrics.Concat(new[] { "guestfilesystem:*\\percentage" }).Distinct();
 
-            var metricsUrl = BuildMetricsUrl(vmId, "*", startTime, endTime);
+            var allMetricsKeys = //load _desiredMetrics and if metrics starting with guestfilesystem and check it has finished percentage??
+            Response.Write(allMetricsKeys);
+            var metricsUrl = BuildMetricsUrl(vmId, startTime, endTime);
             var metricData = await GetMetricDataAsync(metricsUrl);
 
             return ParseMetricsData(metricData, allMetricsKeys);
         }
 
-        private string BuildMetricsUrl(string vmId, string statKey, DateTime startTime, DateTime endTime)
+        private string BuildMetricsUrl(string vmId, DateTime startTime, DateTime endTime)
         {
             long startTimeMillis = new DateTimeOffset(startTime).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(endTime).ToUnixTimeMilliseconds();
 
-            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={statKey}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+            return $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
         }
 
         private async Task<string> GetMetricDataAsync(string url)
