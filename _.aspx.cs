@@ -1,16 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Data.SqlClient;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
 using System.Threading.Tasks;
 using System.Web.UI;
 using System.Web.UI.HtmlControls;
+using System.Web.Configuration;
+using System.Data.SqlClient;
 using System.Xml.Linq;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace vminfo
 {
@@ -29,29 +27,30 @@ namespace vminfo
             hostName = Request.QueryString["id"];
             if (string.IsNullOrEmpty(hostName))
             {
-                DisplayHostNameError("ID Bulunamadı");
+                DisplayHostNameError();
                 return;
             }
 
+            // Sertifika doğrulama işlemini güncelleyin
             ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
 
             if (!IsPostBack)
             {
-                await EnsureTokenAsync();
                 ShowHost();
+                await EnsureTokenAsync();
             }
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            // SSL sertifika doğrulamayı ihtiyaçlarınıza göre iyileştirin
+            // Sertifika doğrulama işlemini burada düzgün yapılandırın
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
-        private void DisplayHostNameError(string message)
+        private void DisplayHostNameError()
         {
             form1.InnerHtml = "";
-            Response.Write(message);
+            Response.Write("ID Bulunamadı");
         }
 
         private async Task EnsureTokenAsync()
@@ -79,7 +78,7 @@ namespace vminfo
 
                 if (string.IsNullOrEmpty(_token))
                 {
-                    DisplayHostNameError("Error: Token is empty");
+                    Response.Write("Error: Token is empty");
                 }
                 else
                 {
@@ -90,15 +89,15 @@ namespace vminfo
             }
             catch (Exception ex)
             {
-                // Hata günlüğü
-                DisplayHostNameError($"Error acquiring token: {ex.Message}");
+                // Log the exception and display a user-friendly message
+                Response.Write($"Error acquiring token: {ex.Message}");
             }
         }
 
         private void ShowHost()
         {
-            const string query = "SELECT * FROM vminfoVMs WHERE VMName = @name";
-            using (var connection = new SqlConnection(ConfigurationManager.ConnectionStrings["CloudUnitedConnectionString"].ConnectionString))
+            string query = "SELECT * FROM vminfoVMs WHERE VMName = @name";
+            using (var connection = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"))
             using (var command = new SqlCommand(query, connection))
             {
                 command.Parameters.AddWithValue("@name", hostName);
@@ -111,7 +110,7 @@ namespace vminfo
                     }
                     else
                     {
-                        DisplayHostNameError("Host not found");
+                        DisplayHostNameError();
                     }
                 }
             }
@@ -167,19 +166,19 @@ namespace vminfo
                 string vmId = await GetVmIdAsync(hostName);
                 if (!string.IsNullOrEmpty(vmId))
                 {
+                    // Define metric patterns
                     string[] patterns = { "guestfilesystem:", "cpu|usage_average", "mem|usage_average" };
                     var (usageData, timestamps) = await GetUsageDataAsync(vmId, patterns);
                     SendUsageDataToClient(usageData, timestamps);
                 }
                 else
                 {
-                    DisplayHostNameError("VM ID not found.");
+                    Response.Write("VM ID not found.");
                 }
             }
             catch (Exception ex)
             {
-                // Hata günlüğü
-                DisplayHostNameError($"Error fetching VM data: {ex.Message}");
+                Response.Write($"Error fetching VM data: {ex.Message}");
             }
         }
 
@@ -206,7 +205,7 @@ namespace vminfo
             }
             catch (Exception ex)
             {
-                // Hata günlüğü
+                // Log the exception and throw it to be handled upstream
                 throw new InvalidOperationException("Error fetching metrics data", ex);
             }
         }
@@ -238,6 +237,7 @@ namespace vminfo
                     }
                 }
 
+                // Handle timestamps if available
                 var timeStampsXml = stat.Element(XName.Get("timestamps", OpsNamespace))?.Value
                     .Split(' ')
                     .Select(t => DateTime.Parse(t))
@@ -249,7 +249,7 @@ namespace vminfo
                 }
             }
 
-            return (dataDictionary, timestamps.Distinct().ToArray());
+            return (dataDictionary, timestamps.Distinct().ToArray()); // Distinct to remove duplicates
         }
 
         private async Task<string> PostApiDataAsync(string url, object requestBody)
@@ -257,7 +257,7 @@ namespace vminfo
             var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
                 Content = new StringContent(
-                    JsonSerializer.Serialize(requestBody),
+                    Newtonsoft.Json.JsonConvert.SerializeObject(requestBody),
                     System.Text.Encoding.UTF8,
                     "application/json")
             };
@@ -278,11 +278,10 @@ namespace vminfo
             string responseText = await response.Content.ReadAsStringAsync();
 
             var xmlDoc = XDocument.Parse(responseText);
-            var identifierNode = xmlDoc.Descendants(XName.Get("resource", OpsNamespace))
-                                        .FirstOrDefault()
-                                        ?.Attribute("identifier")?.Value;
-
-            return identifierNode;
+            var nsManager = new XmlNamespaceManager(xmlDoc.CreateReader().NameTable);
+            nsManager.AddNamespace("ops", OpsNamespace);
+            var identifierNode = xmlDoc.XPathSelectElement("//ops:resource/@identifier", nsManager);
+            return identifierNode?.Value;
         }
 
         private string ExtractTokenFromXml(string xmlData)
@@ -318,3 +317,4 @@ namespace vminfo
         }
     }
 }
+bu kodu yeniden yazar mısın
