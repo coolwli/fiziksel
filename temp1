@@ -1,191 +1,182 @@
-private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+using System;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml;
+using System.Xml.Linq;
+using System.Linq;
+using System.Collections.Generic;
+
+namespace blank_page
 {
-    var scriptBuilder = new StringBuilder();
+    public partial class _default : System.Web.UI.Page
+    {
+        private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private static readonly HttpClient _httpClient = new HttpClient();
 
-    // Format timestamps as ISO 8601 strings
-    var formattedTimestamps = timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"");
-    scriptBuilder.AppendLine($"let dates = [{string.Join(",", formattedTimestamps)}];");
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+            if (!IsPostBack)
+                Button1_Click(sender, e);
+        }
 
-    // Create an object for metricsData
-    var metricsDataJson = JsonConvert.SerializeObject(metricsData);
-    scriptBuilder.AppendLine($"let metricsData = {metricsDataJson};");
+        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
 
-    ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
-}
+        protected async void Button1_Click(object sender, EventArgs e) => await FetchVmUsageDataAsync();
 
-<script>
-    const createChart = (ctx, data, dates, label, borderColor) => {
-        const min = Math.min(...data.map(d => d.y));
-        const max = Math.max(...data.map(d => d.y));
+        private async Task FetchVmUsageDataAsync()
+        {
+            try
+            {
+                string vmId = await GetVmIdAsync("gbsplp14");
+                if (!string.IsNullOrEmpty(vmId))
+                {
+                    string metricsData = await GetAllMetricsDataAsync(vmId);
+                    var parsedData = ParseMetricsData(metricsData);
+                    SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
+                }
+                else
+                {
+                    DisplayMessage("VM ID not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayMessage($"Error fetching VM data: {ex.Message}");
+            }
+        }
 
-        const minIndex = data.findIndex(d => d.y === min);
-        const maxIndex = data.findIndex(d => d.y === max);
+        private async Task<string> GetAllMetricsDataAsync(string vmId)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
 
-        const backgroundColor = borderColor.replace('1)', '0.2)'); // Adjusted for a consistent color
+            using (var request = new HttpRequestMessage(HttpMethod.Get, statsUrl))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("vRealizeOpsToken", _token);
+                
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+        }
 
-        const config = {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [
+        private async Task<string> GetVmIdAsync(string vmName)
+        {
+            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+            using (var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("vRealizeOpsToken", _token);
+                
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
+
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
+            }
+        }
+
+        private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
+        {
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            using (var reader = XmlReader.Create(new StringReader(xmlData)))
+            {
+                XNamespace ns = XNamespace.Get(OpsNamespace);
+                string currentKey = null;
+
+                while (reader.Read())
+                {
+                    if (reader.IsStartElement("timestamps", ns.NamespaceName))
                     {
-                        label: `Minimum: ${min.toFixed(2)}%`,
-                        data: [{ x: dates[minIndex], y: min }],
-                        borderColor: 'red',
-                        fill: true,
-                        pointRadius: 6,
-                        pointHoverRadius: 4,
-                        pointBackgroundColor: 'red'
-                    },
-                    {
-                        label: `Maximum: ${max.toFixed(2)}%`,
-                        data: [{ x: dates[maxIndex], y: max }],
-                        borderColor: 'black',
-                        fill: true,
-                        pointRadius: 6,
-                        pointHoverRadius: 4,
-                        pointBackgroundColor: 'black'
-                    },
-                    {
-                        label: label,
-                        data: data,
-                        borderColor: borderColor,
-                        backgroundColor: backgroundColor,
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        borderWidth: 1,
-                        tension: 0.1 // Slightly adjusted for a smoother line
+                        var timestampsStr = reader.ReadElementContentAsString();
+                        timestamps = timestampsStr.Split(' ')
+                                    .Select(ts => long.TryParse(ts, out long result)
+                                    ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                    : DateTime.MinValue)
+                                    .Where(t => t != DateTime.MinValue)
+                                    .ToList();
                     }
-                ]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: `${label} Usage`
-                    },
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        backgroundColor: '#333',
-                        titleColor: '#fff',
-                        bodyColor: '#fff'
-                    }
-                },
-                interaction: {
-                    intersect: false
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'day'
-                        },
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Date'
-                        },
-                        grid: {
-                            color: '#e0e0e0'
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Value'
-                        },
-                        suggestedMin: Math.max(0, min - 10),
-                        suggestedMax: max + 10,
-                        grid: {
-                            color: '#e0e0e0'
+
+                    if (reader.IsStartElement("stat", ns.NamespaceName))
+                    {
+                        reader.ReadToFollowing("statKey");
+                        var key = reader.ReadElementContentAsString();
+
+                        if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
+                        {
+                            reader.ReadToFollowing("data");
+                            var dataStr = reader.ReadElementContentAsString();
+                            var dataValues = dataStr.Split(' ')
+                                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                                           .ToArray();
+
+                            // Adjust data length to match timestamps
+                            if (timestamps.Count > dataValues.Length)
+                            {
+                                timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
+                            }
+                            else if (dataValues.Length > timestamps.Count)
+                            {
+                                dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
+                            }
+
+                            metricsData[key] = dataValues;
                         }
                     }
                 }
             }
-        };
 
-        return new Chart(ctx, config);
-    };
-
-    const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-    const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-    const diskCtx = document.getElementById('diskChart').getContext('2d');
-
-    let cpuChart;
-    let memoryChart;
-    let diskChart;
-
-    const updateDiskPanels = (diskLabels, diskDataMap) => {
-        const container = document.getElementById('diskPanelContainer');
-        container.innerHTML = '';
-
-        diskLabels.forEach(label => {
-            const panel = document.createElement('div');
-            panel.className = 'panel';
-            panel.setAttribute('data-disk', label);
-
-            const averageUsage = calculateAverage(diskDataMap[label]);
-
-            panel.innerHTML = 
-                `Disk ${label} <span class="panel-value">${averageUsage}%</span>`;
-
-            panel.addEventListener('click', () => handlePanelClick(label));
-            container.appendChild(panel);
-        });
-    };
-
-    const updateDiskChart = (diskLabel, diskDataMap) => {
-        const dates = [];
-        const diskData = diskDataMap[diskLabel];
-
-        if (!diskData) return;
-
-        diskData.forEach(d => dates.push(d.x));
-
-        if (diskChart) diskChart.destroy();
-
-        diskChart = createChart(diskCtx, diskData, dates, `Disk ${diskLabel} Usage`, 'rgba(255, 159, 64, 1)');
-    };
-
-    const handlePanelClick = (diskLabel) => {
-        document.querySelectorAll('.panel').forEach(panel => {
-            panel.classList.remove('active');
-        });
-        document.querySelector(`.panel[data-disk="${diskLabel}"]`).classList.add('active');
-        updateDiskChart(diskLabel, metricsData);
-    };
-
-    const calculateAverage = (data) => {
-        const sum = data.reduce((acc, d) => acc + d.y, 0);
-        return (sum / data.length).toFixed(2); // Average value rounded to 2 decimal places
-    };
-
-    const fetchData = () => {
-        const range = parseInt(document.getElementById('timeRange').value);
-        const numPoints = range;
-        const dates = [];
-
-        if (cpuChart) cpuChart.destroy();
-        if (memoryChart) memoryChart.destroy();
-        if (diskChart) diskChart.destroy();
-
-        // Create CPU and Memory charts
-        cpuChart = createChart(cpuCtx, metricsData['cpu'], dates, 'CPU Usage', 'rgba(75, 192, 192, 1)');
-        memoryChart = createChart(memoryCtx, metricsData['memory'], dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
-
-        // Update disk panels and chart
-        const diskLabels = Object.keys(metricsData).filter(key => key.startsWith('disk'));
-        updateDiskPanels(diskLabels, metricsData);
-        if (diskLabels.length > 0) {
-            updateDiskChart(diskLabels[0], metricsData);
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
-    };
 
-    // Initial fetch on page load
-    fetchData();
-</script>
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+        {
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
+
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
+            {
+                if (metric.Key.StartsWith("guestfilesystem"))
+                {
+                    string key = metric.Key.Split(':')[1].Split('|')[0];
+
+                    if (!processedDiskMetrics.Contains(key))
+                    {
+                        string diskDataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                        scriptBuilder.AppendLine($"diskDataMap['{key}'] = [{diskDataArray}];");
+                        processedDiskMetrics.Add(key);
+                    }
+                }
+                else
+                {
+                    string key = metric.Key.Substring(0, 3);
+
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+                }
+            }
+            scriptBuilder.AppendLine("fetchData();");
+
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+        }
+
+        private void DisplayMessage(string message) => Label.InnerText = message;
+    }
+}
