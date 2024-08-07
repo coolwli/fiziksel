@@ -18,7 +18,7 @@ namespace blank_page
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" }; // Filtrelemek istediğiniz metrikler
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" }; // Filtrelemek istediğiniz metrikler
 
 
         protected void Page_Load(object sender, EventArgs e)
@@ -47,7 +47,7 @@ namespace blank_page
                 {
                     var metricsData = await GetAllMetricsDataAsync(vmId);
                     var parsedData = ParseMetricsData(metricsData);
-                    //SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
+                    SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
                 }
                 else
                 {
@@ -106,22 +106,68 @@ namespace blank_page
         }
         private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
         {
-            
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            // Extract timestamps once
+            var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                                        .Elements(XName.Get("timestamps", ns.NamespaceName))
+                                        .FirstOrDefault();
+            if (timestampElems != null)
+            {
+                var timestampsStr = timestampElems.Value.Split(' ');
+                foreach (var timestamp in timestampsStr)
+                {
+                    if (long.TryParse(timestamp, out long ts))
+                    {
+                        timestamps.Add(DateTimeOffset.FromUnixTimeMilliseconds(ts).DateTime);
+                    }
+                }
+            }
+
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+
+            foreach (var stat in stats)
+            {
+                var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                              .Element(XName.Get("key", ns.NamespaceName))
+                              .Value;
+                if (_metricsToFilter.Contains(key))
+                {
+                    var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                    if (dataElems != null)
+                    {
+                        var dataStr = dataElems.Value.Split(' ');
+                        var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
+
+                        metricsData[key] = dataValues;
+                        Response.Write(metricsData[key].Length);
+                    }
+
+                }
+            }
+
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
             var scriptBuilder = new StringBuilder();
             scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
-
+            string parameters = "";
             foreach (var metric in metricsData)
             {
+
                 string key = metric.Key.Replace("|", "_");
+                parameters +=key+"Data ,";
                 string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
                 scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
             }
-
-            scriptBuilder.AppendLine("fetchData();");
+            parameters.Substring(0, parameters.Length - 2);
+            scriptBuilder.AppendLine("fetchData("+parameters+");");
 
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
