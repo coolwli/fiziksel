@@ -1,25 +1,62 @@
-private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
 {
-    var scriptBuilder = new StringBuilder();
+    var metricsData = new Dictionary<string, double[]>();
+    var timestamps = new List<DateTime>();
 
-    // Convert timestamps to JavaScript date strings
-    var timestampsJsArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
+    var xmlDoc = XDocument.Parse(xmlData);
+    var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-    scriptBuilder.AppendLine("let timestamps = [" + timestampsJsArray + "];");
-
-    // Convert metrics data to JavaScript arrays
-    foreach (var metric in metricsData)
+    // Extract timestamps
+    var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                                .Elements(XName.Get("timestamps", ns.NamespaceName))
+                                .FirstOrDefault();
+    if (timestampElems != null)
     {
-        string key = metric.Key.Replace("|", "_");
-        string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
-        scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+        var timestampsStr = timestampElems.Value.Split(' ');
+        foreach (var timestamp in timestampsStr)
+        {
+            if (long.TryParse(timestamp, out long ts))
+            {
+                timestamps.Add(DateTimeOffset.FromUnixTimeMilliseconds(ts).DateTime);
+            }
+        }
     }
 
-    // Call a JavaScript function to use the data
-    scriptBuilder.AppendLine("processData(timestamps, { " +
-                             string.Join(", ", metricsData.Keys.Select(k => $"{k.Replace("|", "_")}Data: {k.Replace("|", "_")}Data")) +
-                             " });");
+    // Extract all stat elements
+    var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+    
+    foreach (var stat in stats)
+    {
+        var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                      .Element(XName.Get("key", ns.NamespaceName))
+                      .Value;
 
-    // Register the script to be executed on the client side
-    ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+        // Filter metrics with guestfilesystem and percentage
+        if (key.StartsWith("guestfilesystem:") && key.EndsWith(":percentage"))
+        {
+            // Extract data
+            var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+            if (dataElems != null)
+            {
+                var dataStr = dataElems.Value.Split(' ');
+                var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
+
+                metricsData[key] = dataValues;
+            }
+        }
+        else if (_metricsToFilter.Contains(key))
+        {
+            // Extract data for other metrics in filter
+            var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+            if (dataElems != null)
+            {
+                var dataStr = dataElems.Value.Split(' ');
+                var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
+
+                metricsData[key] = dataValues;
+            }
+        }
+    }
+
+    return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
 }
