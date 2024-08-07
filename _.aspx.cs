@@ -4,7 +4,7 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using System.Xml;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -18,17 +18,23 @@ namespace blank_page
         private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
         private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" };
 
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromMinutes(2)
+        };
 
         protected void Page_Load(object sender, EventArgs e)
         {
             ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
-            Button1_Click(sender, e).GetAwaiter().GetResult(); // Ensure async call completes
+            if (!IsPostBack)
+            {
+                Button1_Click(sender, e).GetAwaiter().GetResult();
+            }
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true; // For demo purposes, be cautious with this in production
+            return true;
         }
 
         protected async Task Button1_Click(object sender, EventArgs e)
@@ -61,7 +67,6 @@ namespace blank_page
         private async Task<string> GetVmIdAsync(string vmName)
         {
             var url = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-
             return await SendRequestAsync(url);
         }
 
@@ -69,60 +74,74 @@ namespace blank_page
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-30)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-
             var url = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-
             return await SendRequestAsync(url);
         }
 
         private async Task<string> SendRequestAsync(string url)
         {
-            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            HttpResponseMessage response = await HttpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-
-            return await response.Content.ReadAsStringAsync();
+            try
+            {
+                using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                {
+                    request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+                    var response = await HttpClient.SendAsync(request);
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsStringAsync();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new Exception("Error while sending request.", ex);
+            }
         }
 
         private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
         {
-            var metricsData = new Dictionary<string, double[]>();
+            var metricsData = new Dictionary<string, List<double>>();
             var timestamps = new List<DateTime>();
 
-            var xmlDoc = XDocument.Parse(xmlData);
-            var ns = XNamespace.Get(OpsNamespace);
-
-            // Parse metrics data
-            var metricElements = xmlDoc.Descendants(ns + "metric");
-            foreach (var metricElement in metricElements)
+            using (var stringReader = new System.IO.StringReader(xmlData))
+            using (var xmlReader = XmlReader.Create(stringReader))
             {
-                var metricName = (string)metricElement.Attribute("name");
-                if (_metricsToFilter.Contains(metricName))
+                string currentMetricName = null;
+
+                while (xmlReader.Read())
                 {
-                    var values = metricElement.Elements(ns + "value")
-                                              .Select(v => (double)v)
-                                              .ToArray();
-                    metricsData[metricName] = values;
+                    if (xmlReader.NodeType == XmlNodeType.Element)
+                    {
+                        if (xmlReader.LocalName == "metric")
+                        {
+                            currentMetricName = xmlReader.GetAttribute("name");
+                            if (_metricsToFilter.Contains(currentMetricName))
+                            {
+                                metricsData[currentMetricName] = new List<double>();
+                            }
+                        }
+                        else if (xmlReader.LocalName == "value" && currentMetricName != null)
+                        {
+                            if (double.TryParse(xmlReader.ReadElementContentAsString(), out double value))
+                            {
+                                metricsData[currentMetricName].Add(value);
+                            }
+                        }
+                        else if (xmlReader.LocalName == "timestamp")
+                        {
+                            if (DateTime.TryParse(xmlReader.ReadElementContentAsString(), out DateTime parsedDateTime))
+                            {
+                                timestamps.Add(parsedDateTime);
+                            }
+                        }
+                    }
                 }
             }
 
-            // Parse timestamps
-            var timeElements = xmlDoc.Descendants(ns + "timestamp");
-            foreach (var timeElement in timeElements)
-            {
-                if (DateTime.TryParse((string)timeElement, out DateTime parsedDateTime))
-                {
-                    timestamps.Add(parsedDateTime);
-                }
-                else
-                {
-                    Console.WriteLine($"Unable to parse timestamp: {(string)timeElement}");
-                }
-            }
+            var metricsDataArray = metricsData.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.ToArray()
+            );
 
-            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsDataArray, timestamps.ToArray());
         }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
