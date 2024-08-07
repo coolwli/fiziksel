@@ -1,9 +1,5 @@
-<configuration>
-  <appSettings>
-    <add key="VropsServer1" value="https://vrops-server1.com" />
-    <add key="VropsServer2" value="https://vrops-server2.com" />
-    <add key="VropsServer3" value="https://vrops-server3.com" />
-    <add key="VropsServer4" value="https://vrops-server4.com" />
-    <add key="VcenterToVropsMapping" value="vcenter1:vrops-server1.com,vcenter2:vrops-server2.com,vcenter3:vrops-server3.com,vcenter4:vrops-server4.com" />
-  </appSettings>
-</configuration>
+private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+{
+    // Implement actual certificate validation logic here
+    return sslPolicyErrors == SslPolicyErrors.None;
+}
