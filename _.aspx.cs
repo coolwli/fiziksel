@@ -2,14 +2,13 @@ using System;
 using System.Threading.Tasks;
 using System.IO;
 using System.Net;
-using System.Xml;
-using System.Xml.Linq;
 using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Configuration;
+using System.Xml.Linq;
+using System.Xml;
 
 namespace blank_page
 {
@@ -17,35 +16,28 @@ namespace blank_page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" }; // Filtrelemek istediğiniz metrikler
-
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
 
         protected void Page_Load(object sender, EventArgs e)
         {
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            Button1_Click(sender, e);
+            if(!IsPostBack)
+                Button1_Click(sender, e);
         }
 
-        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
-        }
+        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
 
-        protected async void Button1_Click(object sender, EventArgs e)
-        {
-            await FetchVmUsageDataAsync();
-
-        }
+        protected async void Button1_Click(object sender, EventArgs e) => await FetchVmUsageDataAsync();
 
         private async Task FetchVmUsageDataAsync()
         {
             try
             {
-                string vmId = await GetVmIdAsync("tekscr1");
+                string vmId = await GetVmIdAsync("gbsplp14");//gbsplp14
                 if (!string.IsNullOrEmpty(vmId))
                 {
-                    var metricsData = await GetAllMetricsDataAsync(vmId);
+                    string metricsData = await GetAllMetricsDataAsync(vmId);
                     var parsedData = ParseMetricsData(metricsData);
                     SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
                 }
@@ -59,11 +51,11 @@ namespace blank_page
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
             }
         }
+
         private async Task<string> GetAllMetricsDataAsync(string vmId)
         {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-30)).ToUnixTimeMilliseconds();
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-
             string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
 
             var request = (HttpWebRequest)WebRequest.Create(statsUrl);
@@ -71,11 +63,9 @@ namespace blank_page
             request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
 
             using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                {
-                    return await reader.ReadToEndAsync();
-                }
+                return await reader.ReadToEndAsync();
             }
         }
 
@@ -88,20 +78,17 @@ namespace blank_page
             request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
 
             using (var response = (HttpWebResponse)await request.GetResponseAsync())
+            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
-                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                {
-                    string responseText = await reader.ReadToEndAsync();
+                string responseText = await reader.ReadToEndAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
 
-                    var xmlDoc = new XmlDocument();
-                    xmlDoc.LoadXml(responseText);
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
 
-                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                    nsManager.AddNamespace("ops", OpsNamespace);
-
-                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                    return identifierNode?.Value;
-                }
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
             }
         }
         private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
@@ -116,16 +103,15 @@ namespace blank_page
             var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
                                         .Elements(XName.Get("timestamps", ns.NamespaceName))
                                         .FirstOrDefault();
+
             if (timestampElems != null)
             {
-                var timestampsStr = timestampElems.Value.Split(' ');
-                foreach (var timestamp in timestampsStr)
-                {
-                    if (long.TryParse(timestamp, out long ts))
-                    {
-                        timestamps.Add(DateTimeOffset.FromUnixTimeMilliseconds(ts).DateTime);
-                    }
-                }
+                timestamps = timestampElems.Value.Split(' ')
+                              .Select(ts => long.TryParse(ts, out long result)
+                              ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                              : DateTime.MinValue)
+                              .Where(t => t != DateTime.MinValue)
+                              .ToList();
             }
 
             // Extract all stat elements
@@ -137,28 +123,27 @@ namespace blank_page
                               .Element(XName.Get("key", ns.NamespaceName))
                               .Value;
 
-                // Filter metrics with guestfilesystem and percentage
-                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
                 {
-                    Response.Write(key);
-                    // Extract data
                     var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
                     if (dataElems != null)
                     {
-                        var dataStr = dataElems.Value.Split(' ');
-                        var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
+                        var dataValues = dataElems.Value.Split(' ')
+                                       .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                                       .ToArray();
 
-                        metricsData[key] = dataValues;
-                    }
-                }
-                else if (_metricsToFilter.Contains(key))
-                {
-                    // Extract data for other metrics in filter
-                    var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                    if (dataElems != null)
-                    {
-                        var dataStr = dataElems.Value.Split(' ');
-                        var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
+                        // Ensure all data arrays match the length of timestamps
+                        int minLength = Math.Min(timestamps.Count, dataValues.Length);
+                        if (timestamps.Count > dataValues.Length)
+                        {
+                            // Truncate timestamps to match dataValues length
+                            timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
+                        }
+                        else if (dataValues.Length > timestamps.Count)
+                        {
+                            // Truncate dataValues to match timestamps length
+                            dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
+                        }
 
                         metricsData[key] = dataValues;
                     }
@@ -167,29 +152,41 @@ namespace blank_page
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
-
-
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
             var scriptBuilder = new StringBuilder();
             scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
-            string parameters = "";
+
+            var processedDiskMetrics = new HashSet<string>();
+
             foreach (var metric in metricsData)
             {
 
-                string key = metric.Key.Replace("|", "").Replace(@"\", "_").Replace(":","");
-                parameters +=key+"Data ,";
-                string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
-                scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+
+                if (metric.Key.StartsWith("guestfilesystem"))
+                {
+                    string key = metric.Key.Split(':')[1].Split('|')[0];
+
+                    if (!processedDiskMetrics.Contains(key))
+                    {
+                        string diskDataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                        scriptBuilder.AppendLine($"diskDataMap['{key}'] = [{diskDataArray}];");
+                        processedDiskMetrics.Add(key);
+                    }
+                }
+                else
+                {
+                    string key = metric.Key.Substring(0,3);
+
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+                }
             }
-            parameters.Substring(0, parameters.Length - 2);
+            scriptBuilder.AppendLine("fetchData();");
+
 
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
-
-        private void DisplayMessage(string message)
-        {
-            Label.InnerText = message;
-        }
+        private void DisplayMessage(string message) => Label.InnerText = message;
     }
 }
