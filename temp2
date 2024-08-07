@@ -1,82 +1,69 @@
-stat-list
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
-stat
-timestamps
-statKey
-key
-rollUpType
-intervalUnit
-quantifier
-intervalType
-data
+private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
+{
+    var metricsData = new Dictionary<string, List<double>>();
+    var timestamps = new List<DateTime>();
+
+    using (var stringReader = new StringReader(xmlData))
+    using (var xmlReader = XmlReader.Create(stringReader))
+    {
+        while (xmlReader.Read())
+        {
+            if (xmlReader.NodeType == XmlNodeType.Element)
+            {
+                if (xmlReader.LocalName == "stat")
+                {
+                    string currentMetricName = null;
+                    List<double> currentDataList = null;
+
+                    while (xmlReader.ReadToFollowing("stat"))
+                    {
+                        if (xmlReader.ReadToDescendant("statKey"))
+                        {
+                            currentMetricName = xmlReader.GetAttribute("name");
+
+                            if (_metricsToFilter.Contains(currentMetricName))
+                            {
+                                if (!metricsData.ContainsKey(currentMetricName))
+                                {
+                                    metricsData[currentMetricName] = new List<double>();
+                                }
+                                currentDataList = metricsData[currentMetricName];
+                            }
+                        }
+
+                        if (currentDataList != null)
+                        {
+                            if (xmlReader.ReadToDescendant("data"))
+                            {
+                                double value;
+                                if (double.TryParse(xmlReader.ReadElementContentAsString(), out value))
+                                {
+                                    currentDataList.Add(value);
+                                }
+                            }
+                        }
+
+                        if (xmlReader.ReadToDescendant("timestamps"))
+                        {
+                            while (xmlReader.ReadToDescendant("timestamp"))
+                            {
+                                DateTime parsedDateTime;
+                                if (DateTime.TryParse(xmlReader.ReadElementContentAsString(), out parsedDateTime))
+                                {
+                                    timestamps.Add(parsedDateTime);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    var metricsDataArray = metricsData.ToDictionary(
+        kvp => kvp.Key,
+        kvp => kvp.Value.ToArray()
+    );
+
+    return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsDataArray, timestamps.ToArray());
+}
