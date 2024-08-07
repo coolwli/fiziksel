@@ -112,7 +112,7 @@ namespace blank_page
             var xmlDoc = XDocument.Parse(xmlData);
             var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-            // Extract timestamps once
+            // Extract timestamps
             var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
                                         .Elements(XName.Get("timestamps", ns.NamespaceName))
                                         .FirstOrDefault();
@@ -128,6 +128,7 @@ namespace blank_page
                 }
             }
 
+            // Extract all stat elements
             var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
 
             foreach (var stat in stats)
@@ -135,8 +136,12 @@ namespace blank_page
                 var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
                               .Element(XName.Get("key", ns.NamespaceName))
                               .Value;
-                if (_metricsToFilter.Contains(key))
+
+                // Filter metrics with guestfilesystem and percentage
+                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
                 {
+                    Response.Write(key);
+                    // Extract data
                     var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
                     if (dataElems != null)
                     {
@@ -144,14 +149,25 @@ namespace blank_page
                         var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
 
                         metricsData[key] = dataValues;
-                        Response.Write(metricsData[key].Length);
                     }
+                }
+                else if (_metricsToFilter.Contains(key))
+                {
+                    // Extract data for other metrics in filter
+                    var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                    if (dataElems != null)
+                    {
+                        var dataStr = dataElems.Value.Split(' ');
+                        var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
 
+                        metricsData[key] = dataValues;
+                    }
                 }
             }
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
+
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
@@ -161,13 +177,12 @@ namespace blank_page
             foreach (var metric in metricsData)
             {
 
-                string key = metric.Key.Replace("|", "_");
+                string key = metric.Key.Replace("|", "").Replace(@"\", "_").Replace(":","");
                 parameters +=key+"Data ,";
                 string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
                 scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
             }
             parameters.Substring(0, parameters.Length - 2);
-            scriptBuilder.AppendLine("fetchData("+parameters+");");
 
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
