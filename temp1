@@ -24,9 +24,12 @@ namespace blank_page
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
             Button1_Click(sender, e);
         }
-
-        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
-
+        
+        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            // Implement actual certificate validation logic here
+            return sslPolicyErrors == SslPolicyErrors.None;
+        }
         protected async void Button1_Click(object sender, EventArgs e) => await FetchVmUsageDataAsync();
 
         private async Task FetchVmUsageDataAsync()
