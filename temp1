@@ -1,50 +1,25 @@
-private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
+private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
 {
-    var metricsData = new Dictionary<string, double[]>();
-    var timestamps = new List<DateTime>();
+    var scriptBuilder = new StringBuilder();
 
-    var xmlDoc = XDocument.Parse(xmlData);
-    var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-    
-    // Extract timestamps once
-    var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                                .Elements(XName.Get("timestamps", ns.NamespaceName))
-                                .FirstOrDefault();
-    if (timestampElems != null)
+    // Convert timestamps to JavaScript date strings
+    var timestampsJsArray = string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\""));
+
+    scriptBuilder.AppendLine("let timestamps = [" + timestampsJsArray + "];");
+
+    // Convert metrics data to JavaScript arrays
+    foreach (var metric in metricsData)
     {
-        var timestampsStr = timestampElems.Value.Split(' ');
-        foreach (var timestamp in timestampsStr)
-        {
-            if (long.TryParse(timestamp, out long ts))
-            {
-                timestamps.Add(DateTimeOffset.FromUnixTimeMilliseconds(ts).DateTime);
-            }
-        }
+        string key = metric.Key.Replace("|", "_");
+        string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+        scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
     }
 
-    // Extract all stat elements
-    var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
-    
-    // Process each stat element
-    foreach (var stat in stats)
-    {
-        var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                      .Element(XName.Get("key", ns.NamespaceName))
-                      .Value;
+    // Call a JavaScript function to use the data
+    scriptBuilder.AppendLine("processData(timestamps, { " +
+                             string.Join(", ", metricsData.Keys.Select(k => $"{k.Replace("|", "_")}Data: {k.Replace("|", "_")}Data")) +
+                             " });");
 
-        if (_metricsToFilter.Contains(key))
-        {
-            // Extract data
-            var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-            if (dataElems != null)
-            {
-                var dataStr = dataElems.Value.Split(' ');
-                var dataValues = dataStr.Select(d => double.TryParse(d, out double value) ? value : 0.0).ToArray();
-
-                metricsData[key] = dataValues;
-            }
-        }
-    }
-
-    return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+    // Register the script to be executed on the client side
+    ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
 }
