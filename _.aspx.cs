@@ -1,13 +1,15 @@
 using System;
-using System.Net.Http;
+using System.Threading.Tasks;
+using System.IO;
+using System.Net;
+using System.Xml;
+using System.Xml.Linq;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
+using System.Configuration;
 
 namespace blank_page
 {
@@ -15,21 +17,14 @@ namespace blank_page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" };
+        private string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
+        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" }; // Filtrelemek istediğiniz metrikler
 
-        private static readonly HttpClient HttpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(2)
-        };
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            ServicePointManager.ServerCertificateValidationCallback = ValidateServerCertificate;
-            if (!IsPostBack)
-            {
-                Button1_Click(sender, e).GetAwaiter().GetResult();
-            }
+            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+            Button1_Click(sender, e);
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
@@ -37,9 +32,10 @@ namespace blank_page
             return true;
         }
 
-        protected async Task Button1_Click(object sender, EventArgs e)
+        protected async void Button1_Click(object sender, EventArgs e)
         {
             await FetchVmUsageDataAsync();
+
         }
 
         private async Task FetchVmUsageDataAsync()
@@ -51,7 +47,8 @@ namespace blank_page
                 {
                     var metricsData = await GetAllMetricsDataAsync(vmId);
                     var parsedData = ParseMetricsData(metricsData);
-                    SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
+
+                    //SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
                 }
                 else
                 {
@@ -63,36 +60,49 @@ namespace blank_page
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
             }
         }
-
-        private async Task<string> GetVmIdAsync(string vmName)
-        {
-            var url = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-            return await SendRequestAsync(url);
-        }
-
         private async Task<string> GetAllMetricsDataAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-30)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            var url = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-            return await SendRequestAsync(url);
-        }
 
-        private async Task<string> SendRequestAsync(string url)
-        {
-            try
+            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+
+            var request = (HttpWebRequest)WebRequest.Create(statsUrl);
+            request.Method = "GET";
+            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
             {
-                using (var request = new HttpRequestMessage(HttpMethod.Get, url))
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
                 {
-                    request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-                    var response = await HttpClient.SendAsync(request);
-                    response.EnsureSuccessStatusCode();
-                    return await response.Content.ReadAsStringAsync();
+                    return await reader.ReadToEndAsync();
                 }
             }
-            catch (HttpRequestException ex)
+        }
+
+        private async Task<string> GetVmIdAsync(string vmName)
+        {
+            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+            var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
+            request.Method = "GET";
+            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
+
+            using (var response = (HttpWebResponse)await request.GetResponseAsync())
             {
-                throw new Exception("Error while sending request.", ex);
+                using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+                {
+                    string responseText = await reader.ReadToEndAsync();
+
+                    var xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(responseText);
+
+                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                    nsManager.AddNamespace("ops", OpsNamespace);
+
+                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                    return identifierNode?.Value;
+                }
             }
         }
 
@@ -100,7 +110,6 @@ namespace blank_page
         {
             var metricsData = new Dictionary<string, List<double>>();
             var timestamps = new List<DateTime>();
-
             using (var stringReader = new System.IO.StringReader(xmlData))
             using (var xmlReader = XmlReader.Create(stringReader))
             {
@@ -108,24 +117,29 @@ namespace blank_page
 
                 while (xmlReader.Read())
                 {
+
                     if (xmlReader.NodeType == XmlNodeType.Element)
                     {
-                        if (xmlReader.LocalName == "metric")
+                        Response.Write(xmlReader.LocalName + "<br/>");
+
+                        if (xmlReader.LocalName == "statKey")
                         {
+                        
                             currentMetricName = xmlReader.GetAttribute("name");
+
                             if (_metricsToFilter.Contains(currentMetricName))
                             {
                                 metricsData[currentMetricName] = new List<double>();
                             }
                         }
-                        else if (xmlReader.LocalName == "value" && currentMetricName != null)
+                        else if (xmlReader.LocalName == "data" && currentMetricName !=null && metricsData[currentMetricName] != null)
                         {
                             if (double.TryParse(xmlReader.ReadElementContentAsString(), out double value))
                             {
                                 metricsData[currentMetricName].Add(value);
                             }
                         }
-                        else if (xmlReader.LocalName == "timestamp")
+                        else if (xmlReader.LocalName == "timestamp" && timestamps !=null)
                         {
                             if (DateTime.TryParse(xmlReader.ReadElementContentAsString(), out DateTime parsedDateTime))
                             {
@@ -143,6 +157,7 @@ namespace blank_page
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsDataArray, timestamps.ToArray());
         }
+
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
