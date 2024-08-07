@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 
 namespace blank_page
 {
@@ -14,7 +15,7 @@ namespace blank_page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::aed863ae-72b9-452d-86d1-cf9536f4fd9c";
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
         private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average", "disk|usage_average" };
 
         private static readonly HttpClient HttpClient = new HttpClient();
