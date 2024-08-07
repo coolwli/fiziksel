@@ -47,7 +47,6 @@ namespace blank_page
                 {
                     var metricsData = await GetAllMetricsDataAsync(vmId);
                     var parsedData = ParseMetricsData(metricsData);
-
                     //SendUsageDataToClient(usageData.Item1, usageData.Item2, usageData.Item3);
                 }
                 else
@@ -105,59 +104,10 @@ namespace blank_page
                 }
             }
         }
-
         private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
         {
-            var metricsData = new Dictionary<string, List<double>>();
-            var timestamps = new List<DateTime>();
-            using (var stringReader = new System.IO.StringReader(xmlData))
-            using (var xmlReader = XmlReader.Create(stringReader))
-            {
-                string currentMetricName = null;
-
-                while (xmlReader.Read())
-                {
-
-                    if (xmlReader.NodeType == XmlNodeType.Element)
-                    {
-                        Response.Write(xmlReader.LocalName + "<br/>");
-
-                        if (xmlReader.LocalName == "statKey")
-                        {
-                        
-                            currentMetricName = xmlReader.GetAttribute("name");
-
-                            if (_metricsToFilter.Contains(currentMetricName))
-                            {
-                                metricsData[currentMetricName] = new List<double>();
-                            }
-                        }
-                        else if (xmlReader.LocalName == "data" && currentMetricName !=null && metricsData[currentMetricName] != null)
-                        {
-                            if (double.TryParse(xmlReader.ReadElementContentAsString(), out double value))
-                            {
-                                metricsData[currentMetricName].Add(value);
-                            }
-                        }
-                        else if (xmlReader.LocalName == "timestamp" && timestamps !=null)
-                        {
-                            if (DateTime.TryParse(xmlReader.ReadElementContentAsString(), out DateTime parsedDateTime))
-                            {
-                                timestamps.Add(parsedDateTime);
-                            }
-                        }
-                    }
-                }
-            }
-
-            var metricsDataArray = metricsData.ToDictionary(
-                kvp => kvp.Key,
-                kvp => kvp.Value.ToArray()
-            );
-
-            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsDataArray, timestamps.ToArray());
+            
         }
-
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
