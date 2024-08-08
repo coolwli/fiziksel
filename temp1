@@ -1,12 +1,14 @@
 using System;
+using System.Threading.Tasks;
 using System.IO;
 using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
-using System.Xml.Linq;
 using System.Linq;
 using System.Collections.Generic;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Xml.Linq;
+using System.Xml;
 
 namespace blank_page
 {
@@ -21,7 +23,7 @@ namespace blank_page
         protected void Page_Load(object sender, EventArgs e)
         {
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            if (!IsPostBack)
+            if(!IsPostBack)
                 Button1_Click(sender, e);
         }
 
@@ -57,11 +59,11 @@ namespace blank_page
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
 
-            using (var request = new HttpRequestMessage(HttpMethod.Get, statsUrl))
+            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
             {
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("vRealizeOpsToken", _token);
-                
-                var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
             }
@@ -71,11 +73,11 @@ namespace blank_page
         {
             string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
 
-            using (var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl))
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
             {
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("vRealizeOpsToken", _token);
-                
-                var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 string responseText = await response.Content.ReadAsStringAsync();
                 var xmlDoc = new XmlDocument();
@@ -94,49 +96,51 @@ namespace blank_page
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
 
-            using (var reader = XmlReader.Create(new StringReader(xmlData)))
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                                        .Elements(XName.Get("timestamps", ns.NamespaceName))
+                                        .FirstOrDefault();
+
+            if (timestampElems != null)
             {
-                XNamespace ns = XNamespace.Get(OpsNamespace);
-                string currentKey = null;
+                timestamps = timestampElems.Value.Split(' ')
+                              .Select(ts => long.TryParse(ts, out long result)
+                              ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                              : DateTime.MinValue)
+                              .Where(t => t != DateTime.MinValue)
+                              .ToList();
+            }
 
-                while (reader.Read())
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+
+            foreach (var stat in stats)
+            {
+                var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                              .Element(XName.Get("key", ns.NamespaceName))
+                              .Value;
+
+                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
                 {
-                    if (reader.IsStartElement("timestamps", ns.NamespaceName))
+                    var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                    if (dataElems != null)
                     {
-                        var timestampsStr = reader.ReadElementContentAsString();
-                        timestamps = timestampsStr.Split(' ')
-                                    .Select(ts => long.TryParse(ts, out long result)
-                                    ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                                    : DateTime.MinValue)
-                                    .Where(t => t != DateTime.MinValue)
-                                    .ToList();
-                    }
+                        var dataValues = dataElems.Value.Split(' ')
+                                       .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                                       .ToArray();
 
-                    if (reader.IsStartElement("stat", ns.NamespaceName))
-                    {
-                        reader.ReadToFollowing("statKey");
-                        var key = reader.ReadElementContentAsString();
-
-                        if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
+                        int minLength = Math.Min(timestamps.Count, dataValues.Length);
+                        if (timestamps.Count > dataValues.Length)
                         {
-                            reader.ReadToFollowing("data");
-                            var dataStr = reader.ReadElementContentAsString();
-                            var dataValues = dataStr.Split(' ')
-                                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                                           .ToArray();
-
-                            // Adjust data length to match timestamps
-                            if (timestamps.Count > dataValues.Length)
-                            {
-                                timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
-                            }
-                            else if (dataValues.Length > timestamps.Count)
-                            {
-                                dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
-                            }
-
-                            metricsData[key] = dataValues;
+                            timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
                         }
+                        else if (dataValues.Length > timestamps.Count)
+                        {
+                            dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
+                        }
+
+                        metricsData[key] = dataValues;
                     }
                 }
             }
@@ -167,7 +171,6 @@ namespace blank_page
                 else
                 {
                     string key = metric.Key.Substring(0, 3);
-
                     string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
                     scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
                 }
