@@ -1,20 +1,22 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Xml;
 using System.Text;
 using System.Linq;
-using System.IO;
 using System.Data;
+using System.Web.UI;
+using System.Net.Http;
 using System.Xml.Linq;
 using System.Net.Security;
-using System.Web.UI;
-using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
+using System.Configuration;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
-using System.Security.Cryptography.X509Certificates;
-using System.Configuration;
+using System.Net.Http.Headers;
+using System.Web.UI.WebControls;
+using System.Web.UI.HtmlControls;
 using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 namespace vminfo
 {
@@ -27,6 +29,7 @@ namespace vminfo
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
         private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private static readonly HttpClient _httpClient = new HttpClient();
 
 
         protected async void Page_Load(object sender, EventArgs e)
@@ -190,39 +193,30 @@ namespace vminfo
 
         private async Task<string> PostApiDataAsync(string url, string requestBody)
         {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "POST";
-            request.ContentType = "application/json";
-            byte[] byteArray = Encoding.UTF8.GetBytes(requestBody);
-            request.ContentLength = byteArray.Length;
+            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
-            using (var dataStream = await request.GetRequestStreamAsync())
-            {
-                await dataStream.WriteAsync(byteArray, 0, byteArray.Length);
-            }
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
-            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-            {
-                return await reader.ReadToEndAsync();
-            }
+            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
         }
 
         private async Task<string> GetVmIdAsync(string vmName)
         {
             string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-            var request = (HttpWebRequest)WebRequest.Create(getIdUrl);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
 
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
-            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
             {
-                string responseText = await reader.ReadToEndAsync();
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
                 var xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(responseText);
+
                 var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
                 nsManager.AddNamespace("ops", OpsNamespace);
+
                 var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
                 return identifierNode?.Value;
             }
@@ -236,19 +230,14 @@ namespace vminfo
         }
         private async Task<string> GetAllMetricsDataAsync(string vmId)
         {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-30)).ToUnixTimeMilliseconds();
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("vRealizeOpsToken", _token);
 
-            var request = (HttpWebRequest)WebRequest.Create(statsUrl);
-            request.Method = "GET";
-            request.Headers["Authorization"] = $"vRealizeOpsToken {_token}";
-
-            using (var response = (HttpWebResponse)await request.GetResponseAsync())
-            using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-            {
-                return await reader.ReadToEndAsync();
-            }
+            HttpResponseMessage response = await _httpClient.GetAsync(statsUrl);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
         }
 
         private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
