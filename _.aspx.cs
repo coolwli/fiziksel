@@ -23,15 +23,14 @@ namespace vminfo
     public partial class vmscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string vRopsServer= "https://ptekvrops01.fw.garanti.com.tr";
+        private readonly string vRopsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private string hostName;
-        public string _token;
+        private string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
         private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
         private List<string> _metricsToFilter;
         private static readonly HttpClient _httpClient = new HttpClient();
-
 
         protected async void Page_Load(object sender, EventArgs e)
         {
@@ -43,7 +42,6 @@ namespace vminfo
             }
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
 
-
             if (!IsPostBack)
             {
                 ShowHost();
@@ -53,7 +51,7 @@ namespace vminfo
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            return true; 
+            return true;
         }
 
         private void DisplayHostNameError()
@@ -64,9 +62,7 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
-            //Session["Token"] = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
             if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
-            //if (Session["Token"] == null)
             {
                 Response.Write("yok");
                 await AcquireTokenAsync();
@@ -75,8 +71,6 @@ namespace vminfo
             {
                 _token = Session["Token"].ToString();
                 await FetchVmUsageDataAsync();
-
-
             }
         }
 
@@ -96,7 +90,7 @@ namespace vminfo
                 else
                 {
                     Session["Token"] = _token;
-                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(300); 
+                    Session["TokenExpiry"] = DateTime.UtcNow.AddMinutes(300);
                     await FetchVmUsageDataAsync();
                 }
             }
@@ -104,6 +98,12 @@ namespace vminfo
             {
                 Response.Write($"Error acquiring token: {ex.Message}");
             }
+            catch (HttpRequestException httpEx)
+            {
+                string errorMessage = await response.Content.ReadAsStringAsync();
+                Response.Write($"HTTP Error: {httpEx.Message}. Response Content: {errorMessage}");
+            }
+
         }
 
         private void ShowHost()
@@ -140,11 +140,12 @@ namespace vminfo
             notes.InnerText = reader["VMNotes"].ToString();
             numcpu.InnerText = reader["VMNumCPU"].ToString();
             totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
-            usedDisk.InnerHtml = "Used Disk: <strong>" + reader["VMUsedStorage"].ToString() + "GB </strong >";
-            freeDisk.InnerHtml = "Free Disk: <strong>" + (Convert.ToDouble(reader["VMTotalStorage"]) - Convert.ToDouble(reader["VMUsedStorage"])).ToString("F2") + "GB </strong >";
-            totalDisk.InnerText = "Total Disk " + reader["VMTotalStorage"].ToString() + " GB";
-            usedPercentage.Style["width"] = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString() + "%";
-            usedBar.InnerText = ((Convert.ToDouble(reader["VMUsedStorage"])) / (Convert.ToDouble(reader["VMTotalStorage"])) * 100).ToString("F2") + "%";
+            usedDisk.InnerHtml = $"Used Disk: <strong>{reader["VMUsedStorage"]}GB</strong>";
+            freeDisk.InnerHtml = $"Free Disk: <strong>{(Convert.ToDouble(reader["VMTotalStorage"]) - Convert.ToDouble(reader["VMUsedStorage"])).ToString("F2")}GB</strong>";
+            totalDisk.InnerText = $"Total Disk {reader["VMTotalStorage"]} GB";
+            double usedPercentage = Convert.ToDouble(reader["VMUsedStorage"]) / Convert.ToDouble(reader["VMTotalStorage"]) * 100;
+            usedPercentage.Style["width"] = $"{usedPercentage}%";
+            usedBar.InnerText = $"{usedPercentage:F2}%";
             lasttime.InnerText = reader["LastWriteTime"].ToString();
             hostmodel.InnerText = reader["VMHostModel"].ToString();
             os.InnerText = reader["VMGuestOS"].ToString();
@@ -160,7 +161,7 @@ namespace vminfo
             var columnData = columns.Select(c => c.Split('~')).ToArray();
             int rowCount = columnData[0].Length;
 
-            for (int i = 0; i < rowCount - 1; i++)
+            for (int i = 0; i < rowCount; i++)
             {
                 var row = new HtmlTableRow();
                 for (int j = 0; j < columnData.Length; j++)
@@ -228,9 +229,11 @@ namespace vminfo
         {
             var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage response = await _httpClient.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            using (HttpResponseMessage response = await _httpClient.PostAsync(url, content))
+            {
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
         }
 
         private async Task<string> GetVmIdAsync(string vmName)
@@ -261,6 +264,7 @@ namespace vminfo
             var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
             return tokenElement?.Value;
         }
+
         private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
@@ -268,7 +272,7 @@ namespace vminfo
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
 
-            foreach (var metric in _metricsToFilter)
+            var fetchTasks = _metricsToFilter.Select(async metric =>
             {
                 string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
                 var data = await FetchMetricsDataAsync(metricsUrl);
@@ -277,7 +281,9 @@ namespace vminfo
                 {
                     metricsData[metric] = parsedData;
                 }
-            }
+            });
+
+            await Task.WhenAll(fetchTasks);
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
@@ -307,7 +313,7 @@ namespace vminfo
             foreach (var stat in stats)
             {
                 var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
-                if (timestampElems != null && timestamps.Count == 0)
+                if (timestampElems != null && !timestamps.Any())
                 {
                     timestamps = timestampElems.Value.Split(' ')
                                   .Select(ts => long.TryParse(ts, out long result)
@@ -328,6 +334,7 @@ namespace vminfo
 
             return null;
         }
+
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
             var scriptBuilder = new StringBuilder();
@@ -337,8 +344,6 @@ namespace vminfo
 
             foreach (var metric in metricsData)
             {
-
-
                 if (metric.Key.StartsWith("guestfilesystem"))
                 {
                     string key = metric.Key.Split(':')[1].Split('|')[0];
@@ -360,9 +365,7 @@ namespace vminfo
             }
             scriptBuilder.AppendLine("fetchDisk();");
 
-
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
-
     }
 }
