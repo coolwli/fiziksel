@@ -28,7 +28,8 @@ namespace vminfo
         public string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private List<string> _metricsToFilter;
         private static readonly HttpClient _httpClient = new HttpClient();
 
 
@@ -63,10 +64,11 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
-            Session["Token"] = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
-            //if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
-            if (Session["Token"] == null)
+            //Session["Token"] = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
+            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
+            //if (Session["Token"] == null)
             {
+                Response.Write("yok");
                 await AcquireTokenAsync();
             }
             else
@@ -173,12 +175,12 @@ namespace vminfo
         {
             try
             {
-                string vmId = await GetVmIdAsync(hostName);
+                string vmId = await GetVmIdAsync("gbsplp27");
                 if (!string.IsNullOrEmpty(vmId))
                 {
-                    string metricsData = await GetAllMetricsDataAsync(vmId);
-                    var parsedData = ParseMetricsData(metricsData);
-                    SendUsageDataToClient(parsedData.Item1, parsedData.Item2);
+                    await FetchGuestFileSystemMetricsAsync(vmId);
+                    var metricsData = await FetchMetricsAsync(vmId);
+                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
                 }
                 else
                 {
@@ -188,6 +190,37 @@ namespace vminfo
             catch (Exception ex)
             {
                 Response.Write($"Error fetching VM data: {ex.Message}");
+            }
+        }
+
+        private async Task FetchGuestFileSystemMetricsAsync(string vmId)
+        {
+            string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats";
+            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = XDocument.Parse(responseText);
+                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+                var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+
+                _metricsToFilter = new List<string>(_initialMetricsToFilter);
+
+                foreach (var stat in stats)
+                {
+                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                  .Element(XName.Get("key", ns.NamespaceName))
+                                  .Value;
+
+                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                    {
+                        _metricsToFilter.Add(key);
+                    }
+                }
             }
         }
 
@@ -228,75 +261,72 @@ namespace vminfo
             var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
             return tokenElement?.Value;
         }
-        private async Task<string> GetAllMetricsDataAsync(string vmId)
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("vRealizeOpsToken", _token);
-
-            HttpResponseMessage response = await _httpClient.GetAsync(statsUrl);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
-        }
-
-        private Tuple<Dictionary<string, double[]>, DateTime[]> ParseMetricsData(string xmlData)
-        {
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
 
-            var xmlDoc = XDocument.Parse(xmlData);
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-            var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                                        .Elements(XName.Get("timestamps", ns.NamespaceName))
-                                        .FirstOrDefault();
-
-            if (timestampElems != null)
+            foreach (var metric in _metricsToFilter)
             {
-                timestamps = timestampElems.Value.Split(' ')
-                              .Select(ts => long.TryParse(ts, out long result)
-                              ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                              : DateTime.MinValue)
-                              .Where(t => t != DateTime.MinValue)
-                              .ToList();
-            }
-
-            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
-
-            foreach (var stat in stats)
-            {
-                var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                              .Element(XName.Get("key", ns.NamespaceName))
-                              .Value;
-
-                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
+                string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+                var data = await FetchMetricsDataAsync(metricsUrl);
+                var parsedData = ParseMetricsData(data, metric, ref timestamps);
+                if (parsedData != null)
                 {
-                    var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                    if (dataElems != null)
-                    {
-                        var dataValues = dataElems.Value.Split(' ')
-                                       .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                                       .ToArray();
-
-                        int minLength = Math.Min(timestamps.Count, dataValues.Length);
-                        if (timestamps.Count > dataValues.Length)
-                        {
-                            // Truncate timestamps to match dataValues length
-                            timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
-                        }
-                        else if (dataValues.Length > timestamps.Count)
-                        {
-                            // Truncate dataValues to match timestamps length
-                            dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
-                        }
-
-                        metricsData[key] = dataValues;
-                    }
+                    metricsData[metric] = parsedData;
                 }
             }
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+        }
+
+        private async Task<string> FetchMetricsDataAsync(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+        }
+
+        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
+        {
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                                 .Element(XName.Get("key", ns.NamespaceName))
+                                                 .Value == metricKey);
+
+            foreach (var stat in stats)
+            {
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && timestamps.Count == 0)
+                {
+                    timestamps = timestampElems.Value.Split(' ')
+                                  .Select(ts => long.TryParse(ts, out long result)
+                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                  : DateTime.MinValue)
+                                  .Where(t => t != DateTime.MinValue)
+                                  .ToList();
+                }
+
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                           .ToArray();
+                }
+            }
+
+            return null;
         }
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
