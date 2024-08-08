@@ -30,7 +30,6 @@ namespace blank_page
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
 
-        protected async void Button1_Click(object sender, EventArgs e) => await FetchVmUsageDataAsync();
 
         private async Task FetchVmUsageDataAsync()
         {
@@ -56,7 +55,7 @@ namespace blank_page
 
         private async Task FetchGuestFileSystemMetricsAsync(string vmId)
         {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-1)).ToUnixTimeMilliseconds();
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddHours(-1)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=1&intervalType=HOURS&rollUpType=AVG";
             var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
