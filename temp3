@@ -8,7 +8,7 @@ $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
 $excelObj = New-Object -ComObject Excel.Application
 $excelObj.Visible = $false  # Excel penceresinin görünmemesi için
 $workbook = $excelObj.Workbooks.Open($excelFile)
-$worksheet = $workbook.Sheets.Item(1)  # 1. sayfayı seç
+$worksheet = $workbook.Sheets.Item(2)  # 1. sayfayı seç
 
 # Excel'deki verileri oku
 $usedRange = $worksheet.UsedRange
@@ -23,7 +23,7 @@ for ($col = 1; $col -le $columns; $col++) {
 
 if (-not ($sheetHeaders -contains "CPU")) {
     $worksheet.Cells.Item(1, $columns + 1).Value2 = "CPU"
-    $worksheet.Cells.Item(1, $columns + 2).Value2 = "CPUPerSocket"
+    $worksheet.Cells.Item(1, $columns + 2).Value2 = "CorwPerSocket"
     $worksheet.Cells.Item(1, $columns + 3).Value2 = "CPUCore"
 }
 
@@ -38,7 +38,7 @@ foreach ($vcenter in $vcenters) {
 
         if ($vmObj) {
             $cpuCount = $vmObj.NumCpu
-            $cpuPerSocket = $vmObj.CpuPerSocket
+            $cpuPerSocket = $vmObj.CoresPerSocket
             $cpuCore = $cpuCount / $cpuPerSocket
 
             $worksheet.Cells.Item($row, $columns + 1).Value2 = $cpuCount
