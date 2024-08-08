@@ -9,7 +9,6 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 using System.Xml;
-using System.Net;
 
 namespace blank_page
 {
@@ -30,6 +29,7 @@ namespace blank_page
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
+            // Perform proper certificate validation in production
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
@@ -45,9 +45,8 @@ namespace blank_page
                     var startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
                     var endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
 
-                    var metricsData = await FetchAllMetricsAsync(vmId, startTimeMillis, endTimeMillis);
-
-                    SendUsageDataToClient(metricsData, new DateTime[] { }); // Pass appropriate timestamps if needed
+                    var (metricsData, timestamps) = await FetchAllMetricsAsync(vmId, startTimeMillis, endTimeMillis);
+                    SendUsageDataToClient(metricsData, timestamps);
                 }
                 else
                 {
@@ -59,6 +58,7 @@ namespace blank_page
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
             }
         }
+
         private async Task FetchGuestFileSystemMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddHours(-1)).ToUnixTimeMilliseconds();
@@ -91,20 +91,25 @@ namespace blank_page
             }
         }
 
-        private async Task<Dictionary<string, double[]>> FetchAllMetricsAsync(string vmId, long startTimeMillis, long endTimeMillis)
+        private async Task<(Dictionary<string, double[]>, DateTime[])> FetchAllMetricsAsync(string vmId, long startTimeMillis, long endTimeMillis)
         {
+            var timestamps = new List<DateTime>();
             var fetchTasks = _metricsToFilter.Select(async metric =>
             {
                 var metricsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
                 var data = await FetchMetricsDataAsync(metricsUrl);
-                var parsedData = ParseMetricsData(data, metric);
+                var parsedData = ParseMetricsData(data, metric, ref timestamps);
                 return new { metric, data = parsedData };
             });
 
             var results = await Task.WhenAll(fetchTasks);
+            var metricsData = results.Where(result => result.data != null)
+                                     .ToDictionary(result => result.metric, result => result.data);
 
-            return results.Where(result => result.data != null)
-                          .ToDictionary(result => result.metric, result => result.data);
+            // Deduplicate timestamps if necessary
+            var distinctTimestamps = timestamps.Distinct().ToArray();
+
+            return (metricsData, distinctTimestamps);
         }
 
         private async Task<string> FetchMetricsDataAsync(string url)
@@ -122,43 +127,44 @@ namespace blank_page
             }
             catch (HttpRequestException ex)
             {
+                // Log exception or handle it accordingly
                 throw new ApplicationException("Error fetching metrics data.", ex);
             }
         }
 
         private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
         {
-            var xmlDoc = XDocument.Parse(xmlData);
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+            var metrics = new List<double>();
 
-            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                                 .Element(XName.Get("key", ns.NamespaceName))
-                                                 .Value == metricKey);
-
-            foreach (var stat in stats)
+            using (var reader = XmlReader.Create(new StringReader(xmlData)))
             {
-                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
-                if (timestampElems != null && timestamps.Count == 0)
+                while (reader.Read())
                 {
-                    timestamps = timestampElems.Value.Split(' ')
-                                  .Select(ts => long.TryParse(ts, out long result)
-                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                                  : DateTime.MinValue)
-                                  .Where(t => t != DateTime.MinValue)
-                                  .ToList();
-                }
+                    if (reader.IsStartElement("stat"))
+                    {
+                        var key = reader["key"];
+                        if (key == metricKey)
+                        {
+                            reader.ReadToFollowing("timestamps");
+                            var timestampData = reader.ReadElementContentAsString();
+                            timestamps = timestampData.Split(' ')
+                                .Select(ts => long.TryParse(ts, out var result)
+                                    ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                    : DateTime.MinValue)
+                                .Where(t => t != DateTime.MinValue)
+                                .ToList();
 
-                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                if (dataElems != null)
-                {
-                    return dataElems.Value.Split(' ')
-                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                           .ToArray();
+                            reader.ReadToFollowing("data");
+                            var data = reader.ReadElementContentAsString();
+                            metrics = data.Split(' ')
+                                .Select(d => double.TryParse(d, out var value) ? value : 0.0)
+                                .ToList();
+                        }
+                    }
                 }
             }
 
-            return null;
+            return metrics.ToArray();
         }
 
         private async Task<string> GetVmIdAsync(string vmName)
@@ -172,14 +178,13 @@ namespace blank_page
             {
                 response.EnsureSuccessStatusCode();
                 string responseText = await response.Content.ReadAsStringAsync();
-                var xmlDoc = new XmlDocument();
-                xmlDoc.LoadXml(responseText);
+                var xmlDoc = XDocument.Parse(responseText);
 
-                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                nsManager.AddNamespace("ops", OpsNamespace);
-
-                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                return identifierNode?.Value;
+                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+                var identifier = xmlDoc.Descendants(XName.Get("resource", ns.NamespaceName))
+                                       .Select(r => r.Attribute("identifier")?.Value)
+                                       .FirstOrDefault();
+                return identifier;
             }
         }
 
@@ -212,7 +217,9 @@ namespace blank_page
             }
             scriptBuilder.AppendLine("fetchData();");
 
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true
+
+);
         }
 
         private void DisplayMessage(string message) => Label.InnerText = message;
