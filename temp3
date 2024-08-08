@@ -1,17 +1,9 @@
-# Gerekli modülleri yükleyin
-Import-Module ImportExcel
-Import-Module VMware.PowerCLI
 
-# Excel dosyasının yolu
-$excelFile = "C:\path\to\your\file.xlsx"
+$excelFile = "F:\Ali\vmlistdeneme.xlsx"
 
 # vCenter bilgileri
-$vcenters = @(
-    "vcenter1.example.com",
-    "vcenter2.example.com",
-    "vcenter3.example.com",
-    "vcenter4.example.com"
-)
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+
 
 # Excel dosyasını yükleyin
 $excelData = Import-Excel -Path $excelFile
@@ -48,4 +40,6 @@ foreach ($vcenter in $vcenters) {
 }
 
 # Güncellenmiş verileri aynı Excel dosyasına yazın
-$excelData | Export-Excel -Path $excelFile -WorksheetName "UpdatedVMs" -Force
+$excelData | Export-Excel -Path $excelFile -WorksheetName "ILMT" -Force
+
+kodumu $excelObj= New-Object -ComObject Excel.Application ile yapar mısın
