@@ -9,22 +9,22 @@ using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 using System.Xml;
+using System.Net;
 
 namespace blank_page
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class WebForm1 : System.Web.UI.Page
     {
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::22d233c2-bc52-4917-959f-d50b4b0782f4";
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
         private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
         private static readonly HttpClient _httpClient = new HttpClient();
 
-        protected void Page_Load(object sender, EventArgs e)
+        protected async void Page_Load(object sender, EventArgs e)
         {
             ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
-            if(!IsPostBack)
-                Button1_Click(sender, e);
+            await FetchVmUsageDataAsync();
         }
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
@@ -95,23 +95,10 @@ namespace blank_page
         {
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
-
             var xmlDoc = XDocument.Parse(xmlData);
             var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-            var timestampElems = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                                        .Elements(XName.Get("timestamps", ns.NamespaceName))
-                                        .FirstOrDefault();
-
-            if (timestampElems != null)
-            {
-                timestamps = timestampElems.Value.Split(' ')
-                              .Select(ts => long.TryParse(ts, out long result)
-                              ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                              : DateTime.MinValue)
-                              .Where(t => t != DateTime.MinValue)
-                              .ToList();
-            }
+            XElement timestampElems = null;
 
             var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
 
@@ -123,22 +110,25 @@ namespace blank_page
 
                 if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage") || _metricsToFilter.Contains(key))
                 {
+                    if (timestampElems == null)
+                    {
+                        timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                        if (timestampElems != null)
+                        {
+                            timestamps = timestampElems.Value.Split(' ')
+                                          .Select(ts => long.TryParse(ts, out long result)
+                                          ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                          : DateTime.MinValue)
+                                          .Where(t => t != DateTime.MinValue)
+                                          .ToList();
+                        }
+                    }
                     var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
                     if (dataElems != null)
                     {
                         var dataValues = dataElems.Value.Split(' ')
                                        .Select(d => double.TryParse(d, out double value) ? value : 0.0)
                                        .ToArray();
-
-                        int minLength = Math.Min(timestamps.Count, dataValues.Length);
-                        if (timestamps.Count > dataValues.Length)
-                        {
-                            timestamps = timestamps.Skip(timestamps.Count - dataValues.Length).ToList();
-                        }
-                        else if (dataValues.Length > timestamps.Count)
-                        {
-                            dataValues = dataValues.Skip(dataValues.Length - timestamps.Count).ToArray();
-                        }
 
                         metricsData[key] = dataValues;
                     }
