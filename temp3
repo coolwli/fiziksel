@@ -1,5 +1,6 @@
-private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-{
-    // Implement actual certificate validation logic here
-    return sslPolicyErrors == SslPolicyErrors.None;
-}
+System.AccessViolationException
+  HResult=0x80004003
+  Message=Attempted to read or write protected memory. This is often an indication that other memory is corrupt.
+  Source=<Cannot evaluate the exception source>
+  StackTrace:
+<Cannot evaluate the exception stack trace>
