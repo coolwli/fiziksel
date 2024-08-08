@@ -8,7 +8,8 @@ using System.Collections.Generic;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
-using Newtonsoft.Json;
+using System.Xml;
+using System.Net;
 
 namespace blank_page
 {
@@ -29,7 +30,6 @@ namespace blank_page
 
         private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
         {
-            // Ensure proper certificate validation in production
             return sslPolicyErrors == SslPolicyErrors.None;
         }
 
@@ -47,7 +47,7 @@ namespace blank_page
 
                     var metricsData = await FetchAllMetricsAsync(vmId, startTimeMillis, endTimeMillis);
 
-                    SendUsageDataToClient(metricsData, new DateTime[] {}); // Pass appropriate timestamps if needed
+                    SendUsageDataToClient(metricsData, new DateTime[] { }); // Pass appropriate timestamps if needed
                 }
                 else
                 {
@@ -59,7 +59,6 @@ namespace blank_page
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
             }
         }
-
         private async Task FetchGuestFileSystemMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddHours(-1)).ToUnixTimeMilliseconds();
@@ -127,31 +126,39 @@ namespace blank_page
             }
         }
 
-        private double[] ParseMetricsData(string xmlData, string metricKey)
+        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
         {
-            var metrics = new List<double>();
-            var nsManager = new XmlNamespaceManager(new NameTable());
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-            using (var reader = XmlReader.Create(new StringReader(xmlData)))
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                                 .Element(XName.Get("key", ns.NamespaceName))
+                                                 .Value == metricKey);
+
+            foreach (var stat in stats)
             {
-                while (reader.Read())
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && timestamps.Count == 0)
                 {
-                    if (reader.IsStartElement("stat"))
-                    {
-                        var key = reader["key"];
-                        if (key == metricKey)
-                        {
-                            reader.ReadToFollowing("data");
-                            var data = reader.ReadElementContentAsString();
-                            metrics = data.Split(' ')
-                                .Select(d => double.TryParse(d, out var value) ? value : 0.0)
-                                .ToList();
-                        }
-                    }
+                    timestamps = timestampElems.Value.Split(' ')
+                                  .Select(ts => long.TryParse(ts, out long result)
+                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                  : DateTime.MinValue)
+                                  .Where(t => t != DateTime.MinValue)
+                                  .ToList();
+                }
+
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                           .ToArray();
                 }
             }
 
-            return metrics.ToArray();
+            return null;
         }
 
         private async Task<string> GetVmIdAsync(string vmName)
@@ -165,31 +172,47 @@ namespace blank_page
             {
                 response.EnsureSuccessStatusCode();
                 string responseText = await response.Content.ReadAsStringAsync();
-                var xmlDoc = XDocument.Parse(responseText);
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
 
-                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-                var identifier = xmlDoc.Descendants(XName.Get("resource", ns.NamespaceName))
-                                       .Select(r => r.Attribute("identifier")?.Value)
-                                       .FirstOrDefault();
-                return identifier;
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
             }
         }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
-            var jsonData = new
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
+
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
             {
-                dates = timestamps.Select(t => t.ToString("yyyy-MM-ddTHH:mm:ss")).ToArray(),
-                metrics = metricsData.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => kvp.Value.Select(v => v.ToString("F2")).ToArray()
-                )
-            };
+                if (metric.Key.StartsWith("guestfilesystem"))
+                {
+                    string key = metric.Key.Split(':')[1].Split('|')[0];
 
-            var jsonString = JsonConvert.SerializeObject(jsonData);
+                    if (!processedDiskMetrics.Contains(key))
+                    {
+                        string diskDataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                        scriptBuilder.AppendLine($"diskDataMap['{key}'] = [{diskDataArray}];");
+                        processedDiskMetrics.Add(key);
+                    }
+                }
+                else
+                {
+                    string key = metric.Key.Substring(0, 3);
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+                }
+            }
+            scriptBuilder.AppendLine("fetchData();");
 
-            var script = $"var usageData = JSON.parse('{jsonString}'); fetchData();";
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", script, true);
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
         private void DisplayMessage(string message) => Label.InnerText = message;
