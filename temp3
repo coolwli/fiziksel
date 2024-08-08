@@ -1,6 +1,51 @@
-System.AccessViolationException
-  HResult=0x80004003
-  Message=Attempted to read or write protected memory. This is often an indication that other memory is corrupt.
-  Source=<Cannot evaluate the exception source>
-  StackTrace:
-<Cannot evaluate the exception stack trace>
+# Gerekli modülleri yükleyin
+Import-Module ImportExcel
+Import-Module VMware.PowerCLI
+
+# Excel dosyasının yolu
+$excelFile = "C:\path\to\your\file.xlsx"
+
+# vCenter bilgileri
+$vcenters = @(
+    "vcenter1.example.com",
+    "vcenter2.example.com",
+    "vcenter3.example.com",
+    "vcenter4.example.com"
+)
+
+# Excel dosyasını yükleyin
+$excelData = Import-Excel -Path $excelFile
+
+# Excel dosyasına yeni sütunları ekleyin (bir kere eklenmişse tekrar eklemeyin)
+if (-not ($excelData[0].PSObject.Properties.Name -contains "CPU")) {
+    $excelData | ForEach-Object {
+        $_ | Add-Member -MemberType NoteProperty -Name "CPU" -Value $null
+        $_ | Add-Member -MemberType NoteProperty -Name "CPUPerSocket" -Value $null
+        $_ | Add-Member -MemberType NoteProperty -Name "CPUCore" -Value $null
+    }
+}
+
+# vCenter'lara bağlanın ve VM bilgilerini kontrol edin
+foreach ($vcenter in $vcenters) {
+    Connect-VIServer -Server $vcenter
+
+    foreach ($vm in $excelData) {
+        $vmName = $vm.'VM Name'  # Excel dosyasındaki VM isim sütunu
+        $vmObj = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+
+        if ($vmObj) {
+            $cpuCount = $vmObj.NumCpu
+            $cpuPerSocket = $vmObj.CpuPerSocket
+            $cpuCore = $cpuCount / $cpuPerSocket
+
+            $vm.'CPU' = $cpuCount
+            $vm.'CPUPerSocket' = $cpuPerSocket
+            $vm.'CPUCore' = $cpuCore
+        }
+    }
+
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+}
+
+# Güncellenmiş verileri aynı Excel dosyasına yazın
+$excelData | Export-Excel -Path $excelFile -WorksheetName "UpdatedVMs" -Force
