@@ -18,7 +18,8 @@ namespace blank_page
         private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
-        private readonly string[] _metricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private List<string> _metricsToFilter;
         private static readonly HttpClient _httpClient = new HttpClient();
 
         protected async void Page_Load(object sender, EventArgs e)
@@ -38,6 +39,7 @@ namespace blank_page
                 string vmId = await GetVmIdAsync("gbsplp27");
                 if (!string.IsNullOrEmpty(vmId))
                 {
+                    await FetchGuestFileSystemMetricsAsync(vmId);
                     var metricsData = await FetchMetricsAsync(vmId);
                     SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
                 }
@@ -49,6 +51,39 @@ namespace blank_page
             catch (Exception ex)
             {
                 DisplayMessage($"Error fetching VM data: {ex.Message}");
+            }
+        }
+
+        private async Task FetchGuestFileSystemMetricsAsync(string vmId)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-1)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=1&intervalType=HOURS&rollUpType=AVG";
+            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = XDocument.Parse(responseText);
+                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+                var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+
+                _metricsToFilter = new List<string>(_initialMetricsToFilter);
+
+                foreach (var stat in stats)
+                {
+                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                  .Element(XName.Get("key", ns.NamespaceName))
+                                  .Value;
+
+                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                    {
+                        _metricsToFilter.Add(key);
+                    }
+                }
             }
         }
 
@@ -70,12 +105,6 @@ namespace blank_page
                 }
             }
 
-            var guestFileSystemMetrics = await FetchGuestFileSystemMetricsAsync(vmId, startTimeMillis, endTimeMillis);
-            foreach (var metric in guestFileSystemMetrics)
-            {
-                metricsData[metric.Key] = metric.Value;
-            }
-
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
 
@@ -89,46 +118,6 @@ namespace blank_page
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
             }
-        }
-
-        private async Task<Dictionary<string, double[]>> FetchGuestFileSystemMetricsAsync(string vmId, long startTimeMillis, long endTimeMillis)
-        {
-            var metricsData = new Dictionary<string, double[]>();
-            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            using (var response = await _httpClient.SendAsync(request))
-            {
-                response.EnsureSuccessStatusCode();
-                string responseText = await response.Content.ReadAsStringAsync();
-                var xmlDoc = XDocument.Parse(responseText);
-                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-                var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
-
-                foreach (var stat in stats)
-                {
-                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                  .Element(XName.Get("key", ns.NamespaceName))
-                                  .Value;
-
-                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
-                    {
-                        var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                        if (dataElems != null)
-                        {
-                            var dataValues = dataElems.Value.Split(' ')
-                                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                                           .ToArray();
-
-                            metricsData[key] = dataValues;
-                        }
-                    }
-                }
-            }
-
-            return metricsData;
         }
 
         private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
