@@ -1,361 +1,226 @@
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+const ROWS_PER_PAGE = 20;
+const MAX_PAGE = 10;
+var screenName = "";
+let data = [];
+let currentPage = 1;
+let ascending = true;
+let filteredData = [];
 
-<head>
-    <title>Cloud United</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f5f5f5;
+
+function sortDatas(index) {
+    filteredData.sort(function (a, b) {
+        let aValue = a[Object.keys(a)[index]];
+        let bValue = b[Object.keys(b)[index]];
+
+
+        if (!isNaN(aValue) && !isNaN(bValue)) {
+            return ascending ? aValue - bValue : bValue - aValue;
         }
-
-        .chart-container {
-            width: 80%;
-            height: 80%;
+        else if (index === 9) {
+            if (aValue == "-") return 1;
+            if (bValue == "-") return -1;
+            aValue = new Date(aValue.trim());
+            bValue = new Date(bValue.trim());
+            return ascending ? aValue - bValue : bValue - aValue;
         }
+        return ascending ? aValue.trim().localeCompare(bValue.trim()) : bValue.trim().localeCompare(aValue.trim());
+    });
+    currentPage = 1;
+    renderPage(currentPage);
 
-        .charts {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+}
+
+function renderPage(pageNumber) {
+    const start = (pageNumber - 1) * ROWS_PER_PAGE;
+    const end = start + ROWS_PER_PAGE;
+    const paginatedData = filteredData.slice(start, end);
+
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '';
+
+    paginatedData.forEach(row => {
+        const tr = document.createElement('tr');
+        for (const cellData of Object.values(row)) {
+            const td = document.createElement('td');
+            td.textContent = cellData;
+            tr.appendChild(td);
+            tr.addEventListener('click', function () {
+                window.location.href = screenName + ".aspx" + "?id=" + row[Object.keys(row)[0]];
+            });
         }
+        tableBody.appendChild(tr);
+    });
+}
 
-        canvas {
-            width: 100%;
-            height: 100%;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #ffffff;
+function renderPagination() {
+    const totalPages = Math.ceil(filteredData.length / ROWS_PER_PAGE);
+    const paginationDiv = document.getElementById('pagination');
+    paginationDiv.innerHTML = '';
+
+    let startPage = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
+    let endPage = Math.min(totalPages, currentPage + Math.floor(MAX_PAGE / 2));
+
+    if (endPage - startPage < MAX_PAGE) {
+        if (startPage === 1) {
+            endPage = Math.min(totalPages, startPage + MAX_PAGE - 1);
+        } else if (endPage === totalPages) {
+            startPage = Math.max(1, endPage - MAX_PAGE + 1);
         }
+    }
 
-        .disk-panel {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+    for (let i = startPage; i <= endPage; i++) {
+        const button = document.createElement('button');
+        button.textContent = i;
+        button.className = 'page-link';
+        if (i === currentPage) {
+            button.classList.add('active');
         }
+        button.addEventListener('click', () => {
+            currentPage = i;
+            renderPage(currentPage);
+            renderPagination();
+        });
+        paginationDiv.appendChild(button);
+    }
+}
 
-        .disk-canvas {
-            width: 85%;
-            height: 85%;
+function initializeTable() {
+    filteredData = data;
+    document.querySelectorAll(".select-all-div input[type='checkbox']").forEach(selectAllCheckbox => {
+        selectAllCheckbox.addEventListener("change", () => {
+            const checkboxes = selectAllCheckbox.closest(".dropdown-content").querySelectorAll("input[type='checkbox']:not([style*='display: none'])");
+            const visibleCheckboxes = Array.from(checkboxes).filter(checkbox => checkbox.parentElement.style.display !== "none");
+            visibleCheckboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
+            filterTable();
+        });
+    });
+    document.querySelectorAll(".dropdown-content").forEach((column) => {
+        generateColumnCheckboxes(column);
+    });
+    renderPagination();
+    updateCounter();
+    sortDatas(0);
+}
+
+function generateColumnCheckboxes(dropdownContent) {
+    const columnIndex = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(dropdownContent);
+    const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
+
+    checkboxesDiv.querySelectorAll("div").forEach((div) => {
+        const checkbox = div.querySelector("input[type='checkbox']");
+        if (!checkbox.checked) {
+            div.remove();
         }
+    });
 
-        .dropdown-container {
-            margin-bottom: 20px;
+    const values = [...new Set(filteredData.map(row => row[Object.keys(row)[columnIndex]].toString().trim()))];
+    values.sort(function (a, b) {
+        if (!isNaN(a) && !isNaN(b)) {
+            return ascending ? a - b : b - a;
         }
-
-        label {
-            margin-right: 10px;
+        else if (columnIndex == 9) {
+            if (a == "-") return 1;
+            if (b == "-") return -1;
+            a = new Date(a);
+            b = new Date(b);
+            return ascending ? a - b : b - a;
         }
+        if (a == null) return -1;
+        if (b == null) return 1;
 
-        .panel-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            width: 250px;
+        return ascending ? a.localeCompare(b) : b.localeCompare(a);
+    });
+
+    const fragment = document.createDocumentFragment();
+    values.forEach((value) => {
+        if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
+            return;
         }
+        const div = document.createElement("div");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = value;
+        checkbox.addEventListener("change", function () {
+            selectAll = dropdownContent.querySelector(".select-all-div input[type='checkbox']");
+            if (!checkbox.checked && selectAll.checked) {
+                selectAll.checked = false;
+            }
 
-        .panel-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            filterTable(checkbox);
+        });
+        const label = document.createElement("label");
+        label.textContent = value;
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        div.appendChild(document.createElement("br"));
+        fragment.appendChild(div);
+    });
+    checkboxesDiv.appendChild(fragment);
+}
+
+function filterTable(checkbox) {
+    filteredData = data;
+    const lastSelectedColumn = checkbox ? checkbox.closest(".dropdown-content") : null;
+
+    const columns = document.querySelectorAll(".dropdown-content");
+    const checkedValues = Array.from(columns).map(column => {
+        return Array.from(column.querySelectorAll("input[type='checkbox']:checked")).map(checkbox => checkbox.value);
+    });
+    const checkedValuesLength = checkedValues.map(values => values.length);
+    const sumOfArrayLengths = checkedValuesLength.reduce((total, length) => total + length, 0);
+    console.log(sumOfArrayLengths);
+    filteredData = data.filter(row => {
+        return checkedValues.every((values, columnIndex) => {
+            if (values.length === 0) return true;
+            return values.includes(row[Object.keys(row)[columnIndex]].toString());
+        });
+    });
+    columns.forEach((column) => {
+        if (column !== lastSelectedColumn || sumOfArrayLengths == 0) {
+            generateColumnCheckboxes(column);
         }
+    });
 
-        .panel {
-            background-color: #eeeeee;
-            padding: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            text-align: center;
-            border: 1px solid transparent;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+    currentPage = 1;
+    renderPagination();
+    renderPage(currentPage);
+    updateCounter();
+}
+
+function searchCheckboxes(searchInput) {
+    const filter = searchInput.value.toUpperCase();
+    const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
+    const divs = checkboxesDiv.getElementsByTagName("div");
+    for (let i = 0; i < divs.length; i++) {
+        const label = divs[i].getElementsByTagName("label")[0];
+        const txtValue = label.textContent || label.innerText;
+        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+            divs[i].style.display = "";
+        } else {
+            divs[i].style.display = "none";
         }
+    }
+}
 
-        .panel.active {
-            background-color: #cccccc;
-            font-weight: bold;
-            border: 1px solid #aaa;
+function updateCounter() {
+    document.getElementById('rowCounter').textContent = `${filteredData.length} Satır Listelendi..`;
+}
+
+document.querySelectorAll("th").forEach((th, index) => {
+    th.addEventListener('click', function (event) {
+        if (!event.target.closest('.dropdown-content')) {
+            ascending = !ascending;
+            sortDatas(index);
         }
+    });
+});
 
-        .panel-value {
-            font-weight: bold;
-        }
-    </style>
-</head>
-
-<body>
-    <form id="form1" runat="server" style="width: 100%; height: 100%;">
-        <p runat="server" id="Label"></p>
-        <div class="dropdown-container">
-            <label for="timeRange">Select Time Range: </label>
-            <select id="timeRange" onchange="fetchData()">
-                <option value="1">1 Day</option>
-                <option value="7">7 Days</option>
-                <option value="30" selected>30 Days</option>
-                <option value="90">90 Days</option>
-                <option value="360">1 Year</option>
-            </select>
-        </div>
-        <div class="charts">
-            <div>
-                <canvas id="cpuChart"></canvas>
-            </div>
-            <div>
-                <canvas id="memoryChart"></canvas>
-            </div>
-            <div class="disk-panel">
-                <div class="panel-group" id="diskPanelContainer">
-                    <!-- Disk panels will be dynamically inserted here -->
-                </div>
-                <div class="disk-canvas">
-                    <canvas id="diskChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <script>
-            // Sample data
-            const sampleDates = ["2024-07-08T00:00:00", "2024-07-09T00:00:00"];
-            const sampleCpuData = [
-                { x: "2024-07-08T00:00:00", y: 20 },
-                { x: "2024-07-09T00:00:00", y: 30 }
-            ];
-            const sampleMemoryData = [
-                { x: "2024-07-08T00:00:00", y: 40 },
-                { x: "2024-07-09T00:00:00", y: 60 }
-            ];
-            const sampleDiskDataMap = {
-                'disk1': [
-                    { x: "2024-07-08T00:00:00", y: 50 },
-                    { x: "2024-07-09T00:00:00", y: 70 }
-                ],
-                'disk2': [
-                    { x: "2024-07-08T00:00:00", y: 60 },
-                    { x: "2024-07-09T00:00:00", y: 80 }
-                ]
-            };
-
-            const createChart = (ctx, data, dates, label, borderColor) => {
-                const min = Math.min(...data.map(d => d.y));
-                const max = Math.max(...data.map(d => d.y));
-                const minIndex = data.findIndex(d => d.y === min);
-                const maxIndex = data.findIndex(d => d.y === max);
-
-                const backgroundColor = borderColor.replace('1)', '0.2)');
-
-                return new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: dates,
-                        datasets: [
-                            {
-                                label: `Minimum: ${min.toFixed(2)}%`,
-                                data: [{ x: dates[minIndex], y: min }],
-                                borderColor: 'red',
-                                fill: true,
-                                pointRadius: 6,
-                                pointHoverRadius: 4,
-                                pointBackgroundColor: 'red'
-                            },
-                            {
-                                label: `Maximum: ${max.toFixed(2)}%`,
-                                data: [{ x: dates[maxIndex], y: max }],
-                                borderColor: 'black',
-                                fill: true,
-                                pointRadius: 6,
-                                pointHoverRadius: 4,
-                                pointBackgroundColor: 'black'
-                            },
-                            {
-                                label: label,
-                                data: data,
-                                borderColor: borderColor,
-                                backgroundColor: backgroundColor,
-                                fill: true,
-                                pointRadius: 0,
-                                pointHoverRadius: 4,
-                                borderWidth: 1,
-                                tension: 0.1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: { display: true, text: `${label} Usage` },
-                            legend: { position: 'top' },
-                            tooltip: {
-                                backgroundColor: '#333',
-                                titleColor: '#fff',
-                                bodyColor: '#fff'
-                            }
-                        },
-                        interaction: { intersect: false },
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: { unit: 'day' },
-                                display: true,
-                                title: { display: true, text: 'Date' },
-                                grid: { color: '#e0e0e0' }
-                            },
-                            y: {
-                                display: true,
-                                title: { display: true, text: 'Value' },
-                                suggestedMin: Math.max(0, min - 10),
-                                suggestedMax: max + 10,
-                                grid: { color: '#e0e0e0' }
-                            }
-                        }
-                    }
-                });
-            };
-
-            const processLargeData = (data, dates) => {
-                if (data.length <= 250) {
-                    return {
-                        data: data.map((value, index) => ({ x: dates[index], y: value })),
-                        dates
-                    };
-                }
-
-                const step = Math.ceil(data.length / 250);
-                let sum = 0;
-                let count = 0;
-                let sumDates = 0;
-                const reducedData = [];
-                const reducedDates = [];
-
-                data.forEach((value, i) => {
-                    sum += value;
-                    sumDates += new Date(dates[i]).getTime();
-                    count++;
-
-                    if ((i + 1) % step === 0) {
-                        const average = sum / count;
-                        const averageDate = new Date(sumDates / count);
-                        reducedData.push({ x: averageDate, y: average });
-                        reducedDates.push(averageDate);
-                        sum = 0;
-                        sumDates = 0;
-                        count = 0;
-                    }
-                });
-
-                if (count > 0) {
-                    const average = sum / count;
-                    const averageDate = new Date(sumDates / count);
-                    reducedData.push({ x: averageDate, y: average });
-                    reducedDates.push(averageDate);
-                }
-
-                const min = Math.min(...data);
-                const max = Math.max(...data);
-                const minDate = new Date(dates[data.indexOf(min)]);
-                const maxDate = new Date(dates[data.indexOf(max)]);
-
-                if (!reducedData.some(d => d.x.getTime() === minDate.getTime())) {
-                    reducedData.push({ x: minDate, y: min });
-                    reducedDates.push(minDate);
-                }
-                if (!reducedData.some(d => d.x.getTime() === maxDate.getTime())) {
-                    reducedData.push({ x: maxDate, y: max });
-                    reducedDates.push(maxDate);
-                }
-
-                reducedData.sort((a, b) => a.x - b.x);
-                reducedDates.sort((a, b) => a - b);
-
-                return { dates: reducedDates, data: reducedData };
-            };
-
-            const updateDiskPanels = (diskLabels) => {
-                const container = document.getElementById('diskPanelContainer');
-                container.innerHTML = '';
-
-                diskLabels.forEach(label => {
-                    const averageUsage = calculateAverage(diskDataMap[label]);
-                    const panel = document.createElement('div');
-                    panel.className = 'panel';
-                    panel.dataset.disk = label;
-
-                    panel.innerHTML = `
-                        Disk ${label} <span class="panel-value">${averageUsage}%</span>
-                    `;
-
-                    panel.addEventListener('click', () => handlePanelClick(label));
-                    container.appendChild(panel);
-                });
-            };
-
-            const fetchData = async () => {
-                const range = parseInt(document.getElementById('timeRange').value);
-                const dates = [...new Set([
-                    ...sampleCpuData.map(d => d.x),
-                    ...sampleMemoryData.map(d => d.x)
-                ])];
-
-                const processedCpuData = processLargeData(sampleCpuData.map(d => d.y), dates);
-                const processedMemoryData = processLargeData(sampleMemoryData.map(d => d.y), dates);
-                const processedDiskData = {};
-
-                Object.keys(sampleDiskDataMap).forEach(label => {
-                    processedDiskData[label] = processLargeData(
-                        sampleDiskDataMap[label].map(d => d.y),
-                        dates
-                    ).data;
-                });
-
-                if (cpuChart) cpuChart.destroy();
-                if (memoryChart) memoryChart.destroy();
-                if (diskChart) diskChart.destroy();
-
-                cpuChart = createChart(cpuCtx, processedCpuData.data, processedCpuData.dates, 'CPU Usage', 'rgba(75, 192, 192, 1)');
-                memoryChart = createChart(memoryCtx, processedMemoryData.data, processedMemoryData.dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
-
-                updateDiskPanels(Object.keys(sampleDiskDataMap));
-                diskChart = createChart(diskCtx, processedDiskData[Object.keys(sampleDiskDataMap)[0]], processedCpuData.dates, `Disk ${Object.keys(sampleDiskDataMap)[0]} Usage`, 'rgba(255, 159, 64, 1)');
-            };
-
-            const updateDiskChart = (diskLabel) => {
-                const processedDiskData = processLargeData(
-                    sampleDiskDataMap[diskLabel].map(d => d.y),
-                    sampleDates
-                );
-                if (diskChart) diskChart.destroy();
-
-                diskChart = createChart(diskCtx, processedDiskData.data, processedDiskData.dates, `Disk ${diskLabel} Usage`, 'rgba(255, 159, 64, 1)');
-            };
-
-            const handlePanelClick = (diskLabel) => {
-                document.querySelectorAll('.panel').forEach(panel => {
-                    panel.classList.remove('active');
-                });
-                document.querySelector(`.panel[data-disk="${diskLabel}"]`).classList.add('active');
-                updateDiskChart(diskLabel);
-            };
-
-            const calculateAverage = (data) => {
-                if (!data.length) return 0;
-                const sum = data.reduce((acc, cur) => acc + cur.y, 0);
-                return (sum / data.length).toFixed(2);
-            };
-
-            const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-            const diskCtx = document.getElementById('diskChart').getContext('2d');
-
-            window.onload = fetchData;
-        </script>
-    </form>
-</body>
-
-</html>
+document.getElementById('reset-button').addEventListener('click', () => {
+    event.preventDefault();
+    document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => { checkbox.checked = false; });
+    document.querySelectorAll("input[type='text']").forEach((input) => { input.value = ""; });
+    ascending = true;
+    filterTable();
+    sortDatas(0);
+});
