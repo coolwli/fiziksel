@@ -1,28 +1,39 @@
-
+# Excel dosyasının yolu
 $excelFile = "F:\Ali\vmlistdeneme.xlsx"
 
 # vCenter bilgileri
-$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01")
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
 
+# Excel COM nesnesini oluştur
+$excelObj = New-Object -ComObject Excel.Application
+$excelObj.Visible = $false  # Excel penceresinin görünmemesi için
+$workbook = $excelObj.Workbooks.Open($excelFile)
+$worksheet = $workbook.Sheets.Item(1)  # 1. sayfayı seç
 
-# Excel dosyasını yükleyin
-$excelData = Import-Excel -Path $excelFile
+# Excel'deki verileri oku
+$usedRange = $worksheet.UsedRange
+$rows = $usedRange.Rows.Count
+$columns = $usedRange.Columns.Count
 
-# Excel dosyasına yeni sütunları ekleyin (bir kere eklenmişse tekrar eklemeyin)
-if (-not ($excelData[0].PSObject.Properties.Name -contains "CPU")) {
-    $excelData | ForEach-Object {
-        $_ | Add-Member -MemberType NoteProperty -Name "CPU" -Value $null
-        $_ | Add-Member -MemberType NoteProperty -Name "CPUPerSocket" -Value $null
-        $_ | Add-Member -MemberType NoteProperty -Name "CPUCore" -Value $null
-    }
+# Yeni sütunları ekleyin, mevcutsa tekrar eklemeyin
+$sheetHeaders = @()
+for ($col = 1; $col -le $columns; $col++) {
+    $sheetHeaders += $worksheet.Cells.Item(1, $col).Value2
+}
+
+if (-not ($sheetHeaders -contains "CPU")) {
+    $worksheet.Cells.Item(1, $columns + 1).Value2 = "CPU"
+    $worksheet.Cells.Item(1, $columns + 2).Value2 = "CPUPerSocket"
+    $worksheet.Cells.Item(1, $columns + 3).Value2 = "CPUCore"
 }
 
 # vCenter'lara bağlanın ve VM bilgilerini kontrol edin
 foreach ($vcenter in $vcenters) {
     Connect-VIServer -Server $vcenter
 
-    foreach ($vm in $excelData) {
-        $vmName = $vm.'VM Name'  # Excel dosyasındaki VM isim sütunu
+    for ($row = 2; $row -le $rows; $row++) {
+        $vmName = $worksheet.Cells.Item($row, 1).Value2  # VM isimlerinin bulunduğu sütun (1. sütun)
+
         $vmObj = Get-VM -Name $vmName -ErrorAction SilentlyContinue
 
         if ($vmObj) {
@@ -30,16 +41,21 @@ foreach ($vcenter in $vcenters) {
             $cpuPerSocket = $vmObj.CpuPerSocket
             $cpuCore = $cpuCount / $cpuPerSocket
 
-            $vm.'CPU' = $cpuCount
-            $vm.'CPUPerSocket' = $cpuPerSocket
-            $vm.'CPUCore' = $cpuCore
+            $worksheet.Cells.Item($row, $columns + 1).Value2 = $cpuCount
+            $worksheet.Cells.Item($row, $columns + 2).Value2 = $cpuPerSocket
+            $worksheet.Cells.Item($row, $columns + 3).Value2 = $cpuCore
         }
     }
 
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Güncellenmiş verileri aynı Excel dosyasına yazın
-$excelData | Export-Excel -Path $excelFile -WorksheetName "ILMT" -Force
+# Excel dosyasını kaydedin ve kapatın
+$workbook.Save()
+$workbook.Close()
+$excelObj.Quit()
 
-kodumu $excelObj= New-Object -ComObject Excel.Application ile yapar mısın
+# COM nesnelerini serbest bırakın
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObj) | Out-Null
