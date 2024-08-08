@@ -7,55 +7,77 @@ $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
 # Excel COM nesnesini oluştur
 $excelObj = New-Object -ComObject Excel.Application
 $excelObj.Visible = $false  # Excel penceresinin görünmemesi için
-$workbook = $excelObj.Workbooks.Open($excelFile)
-$worksheet = $workbook.Sheets.Item(2)  # 1. sayfayı seç
 
-# Excel'deki verileri oku
-$usedRange = $worksheet.UsedRange
-$rows = $usedRange.Rows.Count
-$columns = $usedRange.Columns.Count
+try {
+    $workbook = $excelObj.Workbooks.Open($excelFile)
+    $worksheet = $workbook.Sheets.Item(2)  # 2. sayfayı seç
 
-# Yeni sütunları ekleyin, mevcutsa tekrar eklemeyin
-$sheetHeaders = @()
-for ($col = 1; $col -le $columns; $col++) {
-    $sheetHeaders += $worksheet.Cells.Item(1, $col).Value2
-}
+    # Excel'deki verileri oku
+    $usedRange = $worksheet.UsedRange
+    $rows = $usedRange.Rows.Count
+    $columns = $usedRange.Columns.Count
 
-if (-not ($sheetHeaders -contains "CPU")) {
-    $worksheet.Cells.Item(1, $columns + 1).Value2 = "CPU"
-    $worksheet.Cells.Item(1, $columns + 2).Value2 = "CorwPerSocket"
-    $worksheet.Cells.Item(1, $columns + 3).Value2 = "CPUCore"
-}
+    # Başlıkları kontrol et ve gerekirse yeni sütunlar ekle
+    $sheetHeaders = @()
+    for ($col = 1; $col -le $columns; $col++) {
+        $sheetHeaders += $worksheet.Cells.Item(1, $col).Value2
+    }
 
-# vCenter'lara bağlanın ve VM bilgilerini kontrol edin
-foreach ($vcenter in $vcenters) {
-    Connect-VIServer -Server $vcenter
+    if (-not ($sheetHeaders -contains "CPU")) {
+        $worksheet.Cells.Item(1, $columns + 1).Value2 = "CPU"
+        $worksheet.Cells.Item(1, $columns + 2).Value2 = "CorePerSocket"
+        $worksheet.Cells.Item(1, $columns + 3).Value2 = "CPUCore"
+    }
 
-    for ($row = 2; $row -le $rows; $row++) {
-        $vmName = $worksheet.Cells.Item($row, 1).Value2  # VM isimlerinin bulunduğu sütun (1. sütun)
+    # Tüm VM'leri tek seferde alın
+    $vmList = @{}
+    foreach ($vcenter in $vcenters) {
+        try {
+            Connect-VIServer -Server $vcenter -ErrorAction Stop
 
-        $vmObj = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+            # Tüm VM'leri tek seferde çekin
+            $allVMs = Get-VM
 
-        if ($vmObj) {
-            $cpuCount = $vmObj.NumCpu
-            $cpuPerSocket = $vmObj.CoresPerSocket
-            $cpuCore = $cpuCount / $cpuPerSocket
+            foreach ($vm in $allVMs) {
+                $vmList[$vm.Name] = [PSCustomObject]@{
+                    CPUCount = $vm.NumCpu
+                    CorePerSocket = $vm.CoresPerSocket
+                    CPUCore = $vm.NumCpu / $vm.CoresPerSocket
+                }
+            }
 
-            $worksheet.Cells.Item($row, $columns + 1).Value2 = $cpuCount
-            $worksheet.Cells.Item($row, $columns + 2).Value2 = $cpuPerSocket
-            $worksheet.Cells.Item($row, $columns + 3).Value2 = $cpuCore
+        } catch {
+            Write-Warning "vCenter $vcenter bağlantı hatası: $_"
+        } finally {
+            Disconnect-VIServer -Server $vcenter -Confirm:$false -ErrorAction SilentlyContinue
         }
     }
 
-    Disconnect-VIServer -Server $vcenter -Confirm:$false
+    # Excel'deki VM bilgilerini güncelle
+    for ($row = 2; $row -le $rows; $row++) {
+        $vmName = $worksheet.Cells.Item($row, 1).Value2  # VM isimlerinin bulunduğu sütun (1. sütun)
+
+        if ($vmList.ContainsKey($vmName)) {
+            $vmData = $vmList[$vmName]
+            $worksheet.Cells.Item($row, $columns + 1).Value2 = $vmData.CPUCount
+            $worksheet.Cells.Item($row, $columns + 2).Value2 = $vmData.CorePerSocket
+            $worksheet.Cells.Item($row, $columns + 3).Value2 = $vmData.CPUCore
+        }
+    }
+
+    # Excel dosyasını kaydedin ve kapatın
+    $workbook.Save()
+} catch {
+    Write-Error "Excel dosyası ile ilgili bir hata oluştu: $_"
+} finally {
+    # Çalışma kitabını kapatın ve Excel uygulamasını kapatın
+    $workbook.Close() | Out-Null
+    $excelObj.Quit()
+
+    # COM nesnelerini serbest bırakın
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObj) | Out-Null
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
 }
-
-# Excel dosyasını kaydedin ve kapatın
-$workbook.Save()
-$workbook.Close()
-$excelObj.Quit()
-
-# COM nesnelerini serbest bırakın
-[System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet) | Out-Null
-[System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-[System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObj) | Out-Null
