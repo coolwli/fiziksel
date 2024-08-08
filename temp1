@@ -1,2 +1,226 @@
-Severity	Code	Description	Project	File	Line	Suppression State
-Error	CS8179	Predefined type 'System.ValueTuple`2' is not defined or imported	blank_page	F:\Ali\asp.net\blank_page\blank_page\default.aspx.cs	49	Active
+using System;
+using System.Threading.Tasks;
+using System.IO;
+using System.Net.Http;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Xml.Linq;
+using System.Xml;
+using System.Net;
+
+namespace blank_page
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        private const string VropsServer = "https://ptekvrops01.fw.garanti.com.tr";
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private readonly string _token = "f267bd72-f77d-43ee-809c-c081d9a62dbe::a4ccbe4a-e9b6-4e01-92dd-0930cb99e2ac";
+        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private List<string> _metricsToFilter;
+        private static readonly HttpClient _httpClient = new HttpClient();
+
+        protected async void Page_Load(object sender, EventArgs e)
+        {
+            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
+            await FetchVmUsageDataAsync();
+        }
+
+        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            return sslPolicyErrors == SslPolicyErrors.None;
+        }
+
+        private async Task FetchVmUsageDataAsync()
+        {
+            try
+            {
+                string vmId = await GetVmIdAsync("gbsplp27");
+                if (!string.IsNullOrEmpty(vmId))
+                {
+                    await FetchGuestFileSystemMetricsAsync(vmId);
+
+                    var startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+                    var endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+
+                    var metricsData = await FetchAllMetricsAsync(vmId, startTimeMillis, endTimeMillis);
+
+                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                }
+                else
+                {
+                    DisplayMessage("VM ID not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayMessage($"Error fetching VM data: {ex.Message}");
+            }
+        }
+
+        private async Task FetchGuestFileSystemMetricsAsync(string vmId)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddHours(-1)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            string statsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=1&intervalType=HOURS&rollUpType=AVG";
+            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = XDocument.Parse(responseText);
+                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+                var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
+                _metricsToFilter = new List<string>(_initialMetricsToFilter);
+
+                foreach (var stat in stats)
+                {
+                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                  .Element(XName.Get("key", ns.NamespaceName))
+                                  .Value;
+
+                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                    {
+                        _metricsToFilter.Add(key);
+                    }
+                }
+            }
+        }
+
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchAllMetricsAsync(string vmId, long startTimeMillis, long endTimeMillis)
+        {
+            var timestamps = new List<DateTime>();
+            var fetchTasks = _metricsToFilter.Select(async metric =>
+            {
+                var metricsUrl = $"{VropsServer}/suite-api/api/resources/{vmId}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+                var data = await FetchMetricsDataAsync(metricsUrl);
+                var parsedData = ParseMetricsData(data, metric, ref timestamps);
+                return new { metric, data = parsedData };
+            });
+
+            var results = await Task.WhenAll(fetchTasks);
+            var metricsData = results.Where(result => result.data != null)
+                                     .ToDictionary(result => result.metric, result => result.data);
+
+            // Deduplicate timestamps if necessary
+            var distinctTimestamps = timestamps.Distinct().ToArray();
+
+            return Tuple.Create(metricsData, distinctTimestamps);
+        }
+
+        private async Task<string> FetchMetricsDataAsync(string url)
+        {
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+                using (var response = await _httpClient.SendAsync(request))
+                {
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsStringAsync();
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new ApplicationException("Error fetching metrics data.", ex);
+            }
+        }
+
+        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
+        {
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                                 .Element(XName.Get("key", ns.NamespaceName))
+                                                 .Value == metricKey);
+
+            foreach (var stat in stats)
+            {
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && timestamps.Count == 0)
+                {
+                    timestamps = timestampElems.Value.Split(' ')
+                                  .Select(ts => long.TryParse(ts, out long result)
+                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                  : DateTime.MinValue)
+                                  .Where(t => t != DateTime.MinValue)
+                                  .ToList();
+                }
+
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                           .ToArray();
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<string> GetVmIdAsync(string vmName)
+        {
+            string getIdUrl = $"{VropsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
+
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
+            }
+        }
+
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+        {
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
+
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
+            {
+                if (metric.Key.StartsWith("guestfilesystem"))
+                {
+                    string key = metric.Key.Split(':')[1].Split('|')[0];
+
+                    if (!processedDiskMetrics.Contains(key))
+                    {
+                        string diskDataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                        scriptBuilder.AppendLine($"diskDataMap['{key}'] = [{diskDataArray}];");
+                        processedDiskMetrics.Add(key);
+                    }
+                }
+                else
+                {
+                    string key = metric.Key.Substring(0, 3);
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    scriptBuilder.AppendLine($"let {key}Data = [{dataArray}];");
+                }
+            }
+            scriptBuilder.AppendLine("fetchData();");
+
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+        }
+
+        private void DisplayMessage(string message) => Label.InnerText = message;
+    }
+}
