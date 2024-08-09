@@ -1,37 +1,26 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Web.Script.Serialization;
-
-public partial class Default : System.Web.UI.Page
-{
-    protected void Page_Load(object sender, EventArgs e)
-    {
-        if (IsPostBack)
+   protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            string jsonData = hiddenFieldData.Value;
-            if (!string.IsNullOrEmpty(jsonData))
+            string jsonData = hiddenField.Value;
+            Response.Write(jsonData);
+            if (string.IsNullOrEmpty(jsonData))
             {
-                // JSON verisini dinamik olarak parçala
                 JavaScriptSerializer js = new JavaScriptSerializer();
-                var tableData = js.Deserialize<Dictionary<string, object>[]>(jsonData);
+                js.MaxJsonLength = int.MaxValue;
+                var tableData = js.Deserialize<object[][]>(jsonData);
 
-                // CSV verisini oluştur
                 StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Name,Age,City"); // Başlık satırı
+                csv.AppendLine("Name,vCenter,CPU,Memory,Total Storage,Power State,Cluster,Data Center,OS,Owner,Created Date");
 
                 foreach (var row in tableData)
                 {
-                    csv.AppendLine($"{row["name"]},{row["age"]},{row["city"]}");
+
+                    csv.AppendLine($"{row[0]},{row[1]},{row[2]}");
                 }
 
-                // Kullanıcıya CSV dosyasını indirme imkanı sağla
                 Response.Clear();
                 Response.ContentType = "text/csv";
                 Response.AddHeader("content-disposition", "attachment;filename=TableData.csv");
                 Response.Write(csv.ToString());
                 Response.End();
             }
-        }
-    }
-}
+            [{"VMName":"APAAUDPSNA01","vCenter":"apgaraavcs801","VMNumCPU":6,"VMMemoryCapacity":16,"VMTotalStorage":200,"VMPowerState":"PoweredOn","VMCluster":"GBAAPPCL1","VMDataCenter":"Ankara","VMGuestOS":"Debian GNU/Linux 11 (64-bit)","VMOwner":"-","VMCreatedDate":"11/28/2023"}]
