@@ -1,125 +1,37 @@
-:root {
-    --primary-color: black;
-    --secondary-color: #54AFE4;
-	--default-gray:#f2f2f2;
-    --error-red: #E04F4F;
-}
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Web.Script.Serialization;
 
-body {
-    font-family: Verdana;
-    margin: 0;
-    padding: 0;
-    background-color: #fff;
-    align-items: center;
-}
+public partial class Default : System.Web.UI.Page
+{
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        if (IsPostBack)
+        {
+            string jsonData = hiddenFieldData.Value;
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                // JSON verisini dinamik olarak parçala
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                var tableData = js.Deserialize<Dictionary<string, object>[]>(jsonData);
 
-.blue-text {
-    letter-spacing: 2px;
-    color: var(--secondary-color);
-    font-weight: bold;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-}
+                // CSV verisini oluştur
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Name,Age,City"); // Başlık satırı
 
-.link-text {
-    font-size: 14px;
-    font-weight: 400;
-    color: #2997ff;
-    text-decoration: underline;
-    margin-bottom: 5px;
-    font-weight: bold;
-    cursor: pointer;
-}
+                foreach (var row in tableData)
+                {
+                    csv.AppendLine($"{row["name"]},{row["age"]},{row["city"]}");
+                }
 
-.bold-text {
-    text-transform: uppercase;
-    font-weight: bold;
-}
-
-.strong-text {
-    font-size: 40px;
-    letter-spacing: 0;
-    line-height: 44px;
-    font-weight: 700;
-}
-
-.gray-text {
-    font-size: 18px;
-    color: #8b959e;
-    line-height: 1.4;
-}
-
-.number-box {
-    border-radius: 8px;
-    width: 500px;
-    overflow: hidden;
-    border: 1px solid #ced5db;
-    text-align: center;
-    margin: auto;
-    height: auto;
-    padding: 10px;
-}
-
-    .number-box .strong-text {
-        display: block;
+                // Kullanıcıya CSV dosyasını indirme imkanı sağla
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=TableData.csv");
+                Response.Write(csv.ToString());
+                Response.End();
+            }
+        }
     }
-
-.big-cell {
-    text-align: center;
-    padding-top: 24px;
-    padding-right: 32px;
-    padding-left: 32px;
-    line-height: normal;
-}
-
-button, .button {
-    color: white;
-    background-color: var(--primary-color);
-    padding: 10px 20px;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    outline: none;
-}
-
-    .button:hover, button:hover {
-        background-color: #333333;
-    }
-
-.header {
-    overflow: hidden;
-    background-color: var(--primary-color);
-}
-
-    .header h1 {
-        float: left;
-        text-align: center;
-        text-decoration: none;
-        line-height: 10px;
-        border-radius: 4px;
-        color: #F8F9FA;
-        margin-left: 10px;
-        margin-top: 30px;
-    }
-
-
-#logo {
-    background-image: url('logo.png');
-    background-repeat: no-repeat;
-    background-size: cover;
-    float: right;
-    width: 55px;
-    height: 70px;
-    margin-right: 10px;
-}
-
-footer {
-    text-align: center;
-    padding: 10px;
-}
-
-.footer {
-    display: block;
-    color: #888;
-    font-size: 14px;
 }
