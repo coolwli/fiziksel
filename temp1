@@ -29,8 +29,9 @@ namespace blank_page
 
             try
             {
-                token = await GetTokenAsync(username, password);
-                litToken.Text = token;
+                string tokenjson = await GetTokenAsync(username, password);
+                litToken.Text = tokenjson;
+                Response.Write(tokenjson);
             }
             catch (Exception ex)
             {
@@ -64,16 +65,17 @@ namespace blank_page
                     throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
                 }
             }
-            catch (HttpRequestException httpRequestException)
-            {
-                throw new Exception($"HttpRequestException: {httpRequestException.Message}", httpRequestException);
-            }
             catch (Exception ex)
             {
                 throw new Exception($"Exception: {ex.Message}", ex);
             }
         }
+
+        private string ParseTokenJson(string json)
+        {
+            JavaScriptSerializer js = new JavaScriptSerializer();
+            string token???
+            return token;
+        }
     }
 }
-çıktı şöyle:
-Token: f267bd72-f77d-43ee-809c-c081d9a62dbe::b13e6bcc-5954-4a32-8b53-b7654ecbaa441723231754708Friday, August 9, 2024 at 7:29:14 PM Coordinated Universal Time
