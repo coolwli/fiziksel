@@ -8,7 +8,21 @@ namespace blank_page
 {
     public partial class onlytoken : System.Web.UI.Page
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient;
+
+        static onlytoken()
+        {
+            // Sertifika doğrulamasını devre dışı bırakma
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) => true
+            };
+            
+            HttpClient = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(120) // Timeout süresini artırma (isteğe bağlı)
+            };
+        }
 
         protected async void Page_Load(object sender, EventArgs e)
         {
@@ -39,15 +53,27 @@ namespace blank_page
             var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-            var response = await HttpClient.PostAsync(requestUri, content);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                return await response.Content.ReadAsStringAsync();
+                var response = await HttpClient.PostAsync(requestUri, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadAsStringAsync();
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
+                }
             }
-            else
+            catch (HttpRequestException httpRequestException)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
+                throw new Exception($"HttpRequestException: {httpRequestException.Message}", httpRequestException);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Exception: {ex.Message}", ex);
             }
         }
     }
