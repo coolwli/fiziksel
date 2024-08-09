@@ -2,7 +2,7 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization; // For JavaScriptSerializer
+using System.Web.Script.Serialization; // JavaScriptSerializer için
 
 namespace blank_page
 {
@@ -38,20 +38,17 @@ namespace blank_page
 
             var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            Response.Write(content.ToString());
 
             var response = await HttpClient.PostAsync(requestUri, content);
-            Response.Write(response.Headers.ToString());
             if (response.IsSuccessStatusCode)
             {
-                return response.ToString();
+                return await response.Content.ReadAsStringAsync();
             }
             else
             {
-                throw new Exception($"Failed to retrieve token: {response.RequestMessage}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
             }
         }
-
-
     }
 }
