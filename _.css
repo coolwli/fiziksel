@@ -1,26 +1,38 @@
-   protected void hiddenButton_Click(object sender, EventArgs e)
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Web;
+using System.Web.Script.Serialization;
+
+public partial class YourPage : System.Web.UI.Page
+{
+    protected void hiddenButton_Click(object sender, EventArgs e)
+    {
+        string jsonData = hiddenField.Value;
+
+        // JSON verisini kontrol et
+        if (!string.IsNullOrEmpty(jsonData))
         {
-            string jsonData = hiddenField.Value;
-            Response.Write(jsonData);
-            if (string.IsNullOrEmpty(jsonData))
+            // JSON verisini deserialize et
+            JavaScriptSerializer js = new JavaScriptSerializer();
+            js.MaxJsonLength = int.MaxValue; // Maksimum JSON uzunluğunu ayarla
+            var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
+
+            // CSV oluştur
+            StringBuilder csv = new StringBuilder();
+            csv.AppendLine("Name,vCenter,CPU,Memory,Total Storage,Power State,Cluster,Data Center,OS,Owner,Created Date");
+
+            foreach (var row in tableData)
             {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<object[][]>(jsonData);
-
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Name,vCenter,CPU,Memory,Total Storage,Power State,Cluster,Data Center,OS,Owner,Created Date");
-
-                foreach (var row in tableData)
-                {
-
-                    csv.AppendLine($"{row[0]},{row[1]},{row[2]}");
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=TableData.csv");
-                Response.Write(csv.ToString());
-                Response.End();
+                csv.AppendLine($"{row["VMName"]},{row["vCenter"]},{row["VMNumCPU"]},{row["VMMemoryCapacity"]},{row["VMTotalStorage"]},{row["VMPowerState"]},{row["VMCluster"]},{row["VMDataCenter"]},{row["VMGuestOS"]},{row["VMOwner"]},{row["VMCreatedDate"]}");
             }
-            [{"VMName":"APAAUDPSNA01","vCenter":"apgaraavcs801","VMNumCPU":6,"VMMemoryCapacity":16,"VMTotalStorage":200,"VMPowerState":"PoweredOn","VMCluster":"GBAAPPCL1","VMDataCenter":"Ankara","VMGuestOS":"Debian GNU/Linux 11 (64-bit)","VMOwner":"-","VMCreatedDate":"11/28/2023"}]
+
+            // Yanıtı yapılandır ve CSV dosyasını gönder
+            Response.Clear();
+            Response.ContentType = "text/csv";
+            Response.AddHeader("content-disposition", "attachment;filename=TableData.csv");
+            Response.Write(csv.ToString());
+            Response.End();
+        }
+    }
+}
