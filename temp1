@@ -62,7 +62,7 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
-            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
+            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.Now >= (DateTime)Session["TokenExpiry"])
             {
                 Response.Write("yok");
                 await AcquireTokenAsync();
@@ -97,6 +97,7 @@ namespace vminfo
             catch (HttpRequestException httpEx)
             {
                 Response.Write($"HTTP Error: {httpEx.Message}");
+                Response.Write($"HTTP Stack: {httpEx.StackTrace}");
             }
             catch (Exception ex)
             {
@@ -268,7 +269,7 @@ namespace vminfo
         private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.Now.AddDays(-365)).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.Now.AddHours(3)).ToUnixTimeMilliseconds();
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
 
@@ -369,3 +370,13 @@ namespace vminfo
         }
     }
 }
+
+
+
+
+
+
+
+
+
+HTTP Error: Response status code does not indicate success: 401 (401).HTTP Stack: at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode() at vminfo.vmscreen.d__19.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 235 --- End of stack trace from previous location where exception was thrown --- at System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw() at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task) at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult() at vminfo.vmscreen.d__13.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 84
