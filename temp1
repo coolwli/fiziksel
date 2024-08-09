@@ -1,74 +1,59 @@
-using System;
-using System.Collections.Generic;
-using System.Web;
-using System.Web.UI;
-using Microsoft.Office.Interop.Excel;
-using System.Runtime.InteropServices;
-
-public partial class YourPage : System.Web.UI.Page
-{
-    protected void hiddenButton_Click(object sender, EventArgs e)
-    {
-        string jsonData = hiddenField.Value;
-
-        if (!string.IsNullOrEmpty(jsonData))
+protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            var js = new System.Web.Script.Serialization.JavaScriptSerializer();
-            js.MaxJsonLength = int.MaxValue;
-            var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
-
-            // Excel uygulamasını başlat
-            Application excelApp = new Application();
-            Workbook workbook = excelApp.Workbooks.Add(Type.Missing);
-            Worksheet worksheet = (Worksheet)workbook.Sheets[1];
-
-            // Başlıkları ekle
-            worksheet.Cells[1, 1] = "Name";
-            worksheet.Cells[1, 2] = "vCenter";
-            worksheet.Cells[1, 3] = "CPU";
-            worksheet.Cells[1, 4] = "Memory";
-            worksheet.Cells[1, 5] = "Total Storage";
-            worksheet.Cells[1, 6] = "Power State";
-            worksheet.Cells[1, 7] = "Cluster";
-            worksheet.Cells[1, 8] = "Data Center";
-            worksheet.Cells[1, 9] = "OS";
-            worksheet.Cells[1, 10] = "Owner";
-            worksheet.Cells[1, 11] = "Created Date";
-
-            int rowIndex = 2; // Verilerin yazılacağı başlangıç satırı
-            foreach (var row in tableData)
+            string jsonData = hiddenField.Value;
+            Response.Write(jsonData);
+            if (!string.IsNullOrEmpty(jsonData))
             {
-                worksheet.Cells[rowIndex, 1] = row["VMName"];
-                worksheet.Cells[rowIndex, 2] = row["vCenter"];
-                worksheet.Cells[rowIndex, 3] = row["VMNumCPU"];
-                worksheet.Cells[rowIndex, 4] = row["VMMemoryCapacity"];
-                worksheet.Cells[rowIndex, 5] = row["VMTotalStorage"];
-                worksheet.Cells[rowIndex, 6] = row["VMPowerState"];
-                worksheet.Cells[rowIndex, 7] = row["VMCluster"];
-                worksheet.Cells[rowIndex, 8] = row["VMDataCenter"];
-                worksheet.Cells[rowIndex, 9] = row["VMGuestOS"];
-                worksheet.Cells[rowIndex, 10] = row["VMOwner"];
-                worksheet.Cells[rowIndex, 11] = row["VMCreatedDate"];
-                rowIndex++;
+                var js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue;
+                var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
+
+                Application excelApp = new Application();
+                Workbook workbook = excelApp.Workbooks.Add(Type.Missing);
+                Worksheet worksheet = (Worksheet)workbook.Sheets[1];
+
+                worksheet.Cells[1, 1] = "Name";
+                worksheet.Cells[1, 2] = "vCenter";
+                worksheet.Cells[1, 3] = "CPU";
+                worksheet.Cells[1, 4] = "Memory";
+                worksheet.Cells[1, 5] = "Total Storage";
+                worksheet.Cells[1, 6] = "Power State";
+                worksheet.Cells[1, 7] = "Cluster";
+                worksheet.Cells[1, 8] = "Data Center";
+                worksheet.Cells[1, 9] = "OS";
+                worksheet.Cells[1, 10] = "Owner";
+                worksheet.Cells[1, 11] = "Created Date";
+
+                int rowIndex = 2; 
+                foreach (var row in tableData)
+                {
+                    worksheet.Cells[rowIndex, 1] = row["VMName"];
+                    worksheet.Cells[rowIndex, 2] = row["vCenter"];
+                    worksheet.Cells[rowIndex, 3] = row["VMNumCPU"];
+                    worksheet.Cells[rowIndex, 4] = row["VMMemoryCapacity"];
+                    worksheet.Cells[rowIndex, 5] = row["VMTotalStorage"];
+                    worksheet.Cells[rowIndex, 6] = row["VMPowerState"];
+                    worksheet.Cells[rowIndex, 7] = row["VMCluster"];
+                    worksheet.Cells[rowIndex, 8] = row["VMDataCenter"];
+                    worksheet.Cells[rowIndex, 9] = row["VMGuestOS"];
+                    worksheet.Cells[rowIndex, 10] = row["VMOwner"];
+                    worksheet.Cells[rowIndex, 11] = row["VMCreatedDate"];
+                    rowIndex++;
+                }
+
+                string filePath = Server.MapPath("~/TableData.xlsx");
+                workbook.SaveAs(filePath);
+                workbook.Close(false);
+                Marshal.ReleaseComObject(workbook);
+
+                excelApp.Quit();
+                Marshal.ReleaseComObject(excelApp);
+
+                Response.Clear();
+                Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                Response.AddHeader("content-disposition", "attachment;filename=TableData.xlsx");
+                Response.WriteFile(filePath);
+                Response.End();
             }
 
-            // Dosya yolunu belirle
-            string filePath = Server.MapPath("~/TableData.xlsx");
-            workbook.SaveAs(filePath);
-            workbook.Close(false);
-            Marshal.ReleaseComObject(workbook);
-
-            // Excel uygulamasını kapat
-            excelApp.Quit();
-            Marshal.ReleaseComObject(excelApp);
-
-            // Dosyayı kullanıcıya sun
-            Response.Clear();
-            Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            Response.AddHeader("content-disposition", "attachment;filename=TableData.xlsx");
-            Response.WriteFile(filePath);
-            Response.End();
         }
-    }
-}
-
