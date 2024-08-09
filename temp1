@@ -1,59 +1,65 @@
 protected void hiddenButton_Click(object sender, EventArgs e)
+{
+    string jsonData = hiddenField.Value;
+    if (!string.IsNullOrEmpty(jsonData))
+    {
+        var js = new JavaScriptSerializer();
+        js.MaxJsonLength = int.MaxValue;
+        var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
+
+        Application excelApp = new Application();
+        Workbook workbook = excelApp.Workbooks.Add(Type.Missing);
+        Worksheet worksheet = (Worksheet)workbook.Sheets[1];
+
+        // Disable screen updating for performance
+        excelApp.ScreenUpdating = false;
+
+        // Prepare headers
+        string[] headers = new[] {
+            "Name", "vCenter", "CPU", "Memory", "Total Storage", "Power State",
+            "Cluster", "Data Center", "OS", "Owner", "Created Date"
+        };
+
+        Range headerRange = worksheet.get_Range("A1", "K1");
+        headerRange.Value2 = headers;
+
+        // Prepare data array
+        object[,] data = new object[tableData.Count, headers.Length];
+        for (int i = 0; i < tableData.Count; i++)
         {
-            string jsonData = hiddenField.Value;
-            Response.Write(jsonData);
-            if (!string.IsNullOrEmpty(jsonData))
-            {
-                var js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
-
-                Application excelApp = new Application();
-                Workbook workbook = excelApp.Workbooks.Add(Type.Missing);
-                Worksheet worksheet = (Worksheet)workbook.Sheets[1];
-
-                worksheet.Cells[1, 1] = "Name";
-                worksheet.Cells[1, 2] = "vCenter";
-                worksheet.Cells[1, 3] = "CPU";
-                worksheet.Cells[1, 4] = "Memory";
-                worksheet.Cells[1, 5] = "Total Storage";
-                worksheet.Cells[1, 6] = "Power State";
-                worksheet.Cells[1, 7] = "Cluster";
-                worksheet.Cells[1, 8] = "Data Center";
-                worksheet.Cells[1, 9] = "OS";
-                worksheet.Cells[1, 10] = "Owner";
-                worksheet.Cells[1, 11] = "Created Date";
-
-                int rowIndex = 2; 
-                foreach (var row in tableData)
-                {
-                    worksheet.Cells[rowIndex, 1] = row["VMName"];
-                    worksheet.Cells[rowIndex, 2] = row["vCenter"];
-                    worksheet.Cells[rowIndex, 3] = row["VMNumCPU"];
-                    worksheet.Cells[rowIndex, 4] = row["VMMemoryCapacity"];
-                    worksheet.Cells[rowIndex, 5] = row["VMTotalStorage"];
-                    worksheet.Cells[rowIndex, 6] = row["VMPowerState"];
-                    worksheet.Cells[rowIndex, 7] = row["VMCluster"];
-                    worksheet.Cells[rowIndex, 8] = row["VMDataCenter"];
-                    worksheet.Cells[rowIndex, 9] = row["VMGuestOS"];
-                    worksheet.Cells[rowIndex, 10] = row["VMOwner"];
-                    worksheet.Cells[rowIndex, 11] = row["VMCreatedDate"];
-                    rowIndex++;
-                }
-
-                string filePath = Server.MapPath("~/TableData.xlsx");
-                workbook.SaveAs(filePath);
-                workbook.Close(false);
-                Marshal.ReleaseComObject(workbook);
-
-                excelApp.Quit();
-                Marshal.ReleaseComObject(excelApp);
-
-                Response.Clear();
-                Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-                Response.AddHeader("content-disposition", "attachment;filename=TableData.xlsx");
-                Response.WriteFile(filePath);
-                Response.End();
-            }
-
+            var row = tableData[i];
+            data[i, 0] = row["VMName"];
+            data[i, 1] = row["vCenter"];
+            data[i, 2] = row["VMNumCPU"];
+            data[i, 3] = row["VMMemoryCapacity"];
+            data[i, 4] = row["VMTotalStorage"];
+            data[i, 5] = row["VMPowerState"];
+            data[i, 6] = row["VMCluster"];
+            data[i, 7] = row["VMDataCenter"];
+            data[i, 8] = row["VMGuestOS"];
+            data[i, 9] = row["VMOwner"];
+            data[i, 10] = row["VMCreatedDate"];
         }
+
+        // Write data in one operation
+        Range dataRange = worksheet.get_Range("A2", "K" + (tableData.Count + 1));
+        dataRange.Value2 = data;
+
+        string filePath = Server.MapPath("~/TableData.xlsx");
+        workbook.SaveAs(filePath);
+        workbook.Close(false);
+        Marshal.ReleaseComObject(workbook);
+
+        excelApp.Quit();
+        Marshal.ReleaseComObject(excelApp);
+
+        // Enable screen updating
+        excelApp.ScreenUpdating = true;
+
+        Response.Clear();
+        Response.ContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        Response.AddHeader("content-disposition", "attachment;filename=TableData.xlsx");
+        Response.WriteFile(filePath);
+        Response.End();
+    }
+}
