@@ -1,7 +1,5 @@
 using System;
-using System.IO;
 using System.Net.Http;
-using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization; // For JavaScriptSerializer
@@ -10,15 +8,12 @@ namespace blank_page
 {
     public partial class onlytoken : System.Web.UI.Page
     {
-        private static readonly HttpClient HttpClient = new HttpClient
-        {
-            BaseAddress = new Uri("https://your-vrops-url/") // vROps URL'nizi buraya ekleyin
-        };
+        private static readonly HttpClient HttpClient = new HttpClient();
 
         protected async void Page_Load(object sender, EventArgs e)
         {
-            string username = "your-username";
-            string password = "your-password";
+            string username = "admin";
+            string password = "VMware123!";
             string token = string.Empty;
 
             try
@@ -32,43 +27,31 @@ namespace blank_page
             }
         }
 
-        private async Task<string> GetTokenAsync(string username, string password)
+        private async Task<string> GetTokenAsync(string inputusername, string inputpassword)
         {
-            var requestUri = "v1/session"; // vROps API token alım endpointi
-
+            var requestUri = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/auth/token/acquire?_no_links=true"; 
             var requestBody = new
             {
-                username = username,
-                password = password
+                username = inputusername,
+                password = inputpassword
             };
 
             var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            Response.Write(content.ToString());
 
             var response = await HttpClient.PostAsync(requestUri, content);
-
+            Response.Write(response.Headers.ToString());
             if (response.IsSuccessStatusCode)
             {
-                var jsonResponse = await response.Content.ReadAsStringAsync();
-                using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(jsonResponse)))
-                {
-                    var serializer = new DataContractJsonSerializer(typeof(TokenResponse));
-                    var tokenResponse = (TokenResponse)serializer.ReadObject(stream);
-
-                    return tokenResponse.Token;
-                }
+                return response.ToString();
             }
             else
             {
-                throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}");
+                throw new Exception($"Failed to retrieve token: {response.RequestMessage}");
             }
         }
 
-        [DataContract]
-        private class TokenResponse
-        {
-            [DataMember(Name = "token")]
-            public string Token { get; set; }
-        }
+
     }
 }
