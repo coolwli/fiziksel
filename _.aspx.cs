@@ -370,5 +370,4 @@ namespace vminfo
         }
     }
 }
-
-HTTP Error: Response status code does not indicate success: 401 (401).HTTP Stack: at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode() at vminfo.vmscreen.d__19.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 235 --- End of stack trace from previous location where exception was thrown --- at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task) at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task) at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult() at vminfo.vmscreen.d__13.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 84
+Error acquiring token: System.Net.Http.HttpRequestException: Response status code does not indicate success: 401 (401). at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode() at vminfo.vmscreen.d__20.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 223 --- End of stack trace from previous location where exception was thrown --- at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task) at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task) at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult() at vminfo.vmscreen.d__14.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 84
