@@ -4,85 +4,65 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-public partial class Default : System.Web.UI.Page
+namespace blank_page
 {
-    private static readonly HttpClient HttpClient = new HttpClient
+    public partial class onlytoken : System.Web.UI.Page
     {
-        BaseAddress = new Uri("https://your-vrops-url/") // vROps URL'nizi buraya ekleyin
-    };
-
-    protected async void Page_Load(object sender, EventArgs e)
-    {
-        string username = "your-username";
-        string password = "your-password";
-        string token = string.Empty;
-
-        try
+        private static readonly HttpClient HttpClient = new HttpClient
         {
-            token = await GetTokenAsync(username, password);
-            litToken.Text = token;
-        }
-        catch (Exception ex)
-        {
-            lblError.Text = ex.Message;
-        }
-    }
-
-    private async Task<string> GetTokenAsync(string username, string password)
-    {
-        var requestUri = "v1/session"; // vROps API token alım endpointi
-
-        var requestBody = new
-        {
-            username = username,
-            password = password
+            BaseAddress = new Uri("https://your-vrops-url/") // vROps URL'nizi buraya ekleyin
         };
 
-        var jsonContent = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-        var response = await HttpClient.PostAsync(requestUri, content);
-
-        if (response.IsSuccessStatusCode)
+        protected async void Page_Load(object sender, EventArgs e)
         {
-            var jsonResponse = await response.Content.ReadAsStringAsync();
-            using (var document = JsonDocument.Parse(jsonResponse))
+            string username = "your-username";
+            string password = "your-password";
+            string token = string.Empty;
+
+            try
             {
-                if (document.RootElement.TryGetProperty("token", out JsonElement tokenElement))
-                {
-                    return tokenElement.GetString();
-                }
-                else
-                {
-                    throw new Exception("Token property not found in response.");
-                }
+                token = await GetTokenAsync(username, password);
+                litToken.Text = token;
+            }
+            catch (Exception ex)
+            {
+                lblError.Text = ex.Message;
             }
         }
-        else
+
+        private async Task<string> GetTokenAsync(string username, string password)
         {
-            throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}");
+            var requestUri = "v1/session"; // vROps API token alım endpointi
+
+            var requestBody = new
+            {
+                username = username,
+                password = password
+            };
+            
+            var jsonContent = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var response = await HttpClient.PostAsync(requestUri, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                using (var document = JsonDocument.Parse(jsonResponse))
+                {
+                    if (document.RootElement.TryGetProperty("token", out JsonElement tokenElement))
+                    {
+                        return tokenElement.GetString();
+                    }
+                    else
+                    {
+                        throw new Exception("Token property not found in response.");
+                    }
+                }
+            }
+            else
+            {
+                throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}");
+            }
         }
     }
-}
-
-
-
-
-
-<%@ Page Language="C#" AutoEventWireup="true" CodeFile="Default.aspx.cs" Inherits="Default" %>
-
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title>vROps Token Example</title>
-</head>
-<body>
-    <form id="form1" runat="server">
-        <div>
-            <asp:Label ID="lblToken" runat="server" Text="Token: " />
-            <asp:Literal ID="litToken" runat="server" />
-            <asp:Label ID="lblError" runat="server" ForeColor="Red" />
-        </div>
-    </form>
-</body>
-</html>
