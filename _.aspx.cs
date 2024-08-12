@@ -1,22 +1,19 @@
 using System;
-using System.IO;
 using System.Net;
 using System.Xml;
 using System.Text;
 using System.Linq;
 using System.Data;
-using System.Web.UI;
 using System.Net.Http;
 using System.Xml.Linq;
-using System.Net.Security;
 using System.Configuration;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
-using System.Net.Http.Headers;
 using System.Web.UI.WebControls;
 using System.Web.UI.HtmlControls;
 using System.Collections.Generic;
-using System.Security.Cryptography.X509Certificates;
+using System.Web.Script.Serialization;
+
 
 namespace vminfo
 {
@@ -30,8 +27,16 @@ namespace vminfo
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
         private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
         private List<string> _metricsToFilter;
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient;
 
+        static vmscreen()
+        {
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+            _httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+        }
         protected async void Page_Load(object sender, EventArgs e)
         {
             hostName = Request.QueryString["id"];
@@ -40,18 +45,12 @@ namespace vminfo
                 DisplayHostNameError();
                 return;
             }
-            ServicePointManager.ServerCertificateValidationCallback += ValidateServerCertificate;
 
             if (!IsPostBack)
             {
                 ShowHost();
                 await EnsureTokenAsync();
             }
-        }
-
-        private static bool ValidateServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-        {
-            return true;
         }
 
         private void DisplayHostNameError()
@@ -62,10 +61,24 @@ namespace vminfo
 
         private async Task EnsureTokenAsync()
         {
+            //Session["Token"] = "f267bd72-f77d-43ee-809c-c081d9a62dbe::913c829c-f2c1-4180-a3d7-01b75baee417";
             if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.Now >= (DateTime)Session["TokenExpiry"])
+            //if(Session["Token"] == null)
             {
                 Response.Write("yok");
-                await AcquireTokenAsync();
+                try
+                {
+                    string tokenxml = await AcquireTokenAsync();
+                    _token = ExtractTokenFromXml(tokenxml);
+                    Session["Token"] = _token;
+                    Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
+                }
+                catch(Exception ex)
+                {
+                    Response.Write(ex);
+                }
+
+
             }
             else
             {
@@ -74,36 +87,34 @@ namespace vminfo
             }
         }
 
-        private async Task AcquireTokenAsync()
+        private async Task<string> AcquireTokenAsync()
         {
-            string apiUrl = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            string requestBody = $"{{ \"username\": \"{_username}\", \"password\": \"{_password}\" }}";
-
+            var requestUri = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             try
             {
-                string tokenXml = await PostApiDataAsync(apiUrl, requestBody);
-                _token = ExtractTokenFromXml(tokenXml);
-                if (string.IsNullOrEmpty(_token))
+                var response = await _httpClient.PostAsync(requestUri, content);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    Response.Write("Error: Token is empty");
+                    return await response.Content.ReadAsStringAsync();
                 }
                 else
                 {
-                    Session["Token"] = _token;
-                    Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
-                    await FetchVmUsageDataAsync();
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
                 }
-            }
-            catch (HttpRequestException httpEx)
-            {
-                Response.Write($"HTTP Error: {httpEx.Message}");
-                Response.Write($"HTTP Stack: {httpEx.StackTrace}");
             }
             catch (Exception ex)
             {
-                Response.Write($"Error acquiring token: {ex.Message}");
+                throw new Exception($"Exception: {ex.Message}", ex);
             }
-
 
         }
 
@@ -164,12 +175,15 @@ namespace vminfo
 
             for (int i = 0; i < rowCount; i++)
             {
-                var row = new HtmlTableRow();
-                for (int j = 0; j < columnData.Length; j++)
+                if (columnData[0][i] != "")
                 {
-                    row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
+                    var row = new HtmlTableRow();
+                    for (int j = 0; j < columnData.Length; j++)
+                    {
+                        row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
+                    }
+                    table.Rows.Add(row);
                 }
-                table.Rows.Add(row);
             }
         }
 
@@ -226,17 +240,6 @@ namespace vminfo
             }
         }
 
-        private async Task<string> PostApiDataAsync(string url, string requestBody)
-        {
-            var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
-
-            using (HttpResponseMessage response = await _httpClient.PostAsync(url, content))
-            {
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
-            }
-        }
-
         private async Task<string> GetVmIdAsync(string vmName)
         {
             string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
@@ -268,8 +271,8 @@ namespace vminfo
 
         private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
         {
-            long startTimeMillis = new DateTimeOffset(DateTime.Now.AddDays(-365)).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(DateTime.Now.AddHours(3)).ToUnixTimeMilliseconds();
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
             var metricsData = new Dictionary<string, double[]>();
             var timestamps = new List<DateTime>();
 
@@ -370,4 +373,3 @@ namespace vminfo
         }
     }
 }
-Error acquiring token: System.Net.Http.HttpRequestException: Response status code does not indicate success: 401 (401). at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode() at vminfo.vmscreen.d__20.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 223 --- End of stack trace from previous location where exception was thrown --- at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task) at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task) at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult() at vminfo.vmscreen.d__14.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 84
