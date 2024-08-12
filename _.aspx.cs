@@ -20,22 +20,22 @@ namespace vminfo
     public partial class vmscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private readonly string vRopsServer = "https://ptekvrops01.fw.garanti.com.tr";
+        private string vRopsServer;
+        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private const int MaxRetryAttempts = 3;
+        private const int RetryDelayMilliseconds = 3000;
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+
         private string hostName;
         private string _token;
         private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
-        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
         private List<string> _metricsToFilter;
-        private static readonly HttpClient _httpClient;
+
 
         static vmscreen()
         {
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
-            _httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(60)
-            };
         }
         protected async void Page_Load(object sender, EventArgs e)
         {
@@ -68,7 +68,7 @@ namespace vminfo
                 Response.Write("yok");
                 try
                 {
-                    string tokenxml = await AcquireTokenAsync();
+                    string tokenxml = await AcquireTokenWithRetryAsync();
                     _token = ExtractTokenFromXml(tokenxml);
                     Session["Token"] = _token;
                     Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
@@ -77,15 +77,32 @@ namespace vminfo
                 {
                     Response.Write(ex);
                 }
-
-
             }
             else
             {
                 _token = Session["Token"].ToString();
-                await FetchVmUsageDataAsync();
             }
+            await FetchVmUsageDataAsync();
+
         }
+
+        private async Task<string> AcquireTokenWithRetryAsync()
+        {
+            for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
+            {
+                try
+                {
+                    return await AcquireTokenAsync();
+                }
+                catch (Exception)
+                {
+                    if (attempt == MaxRetryAttempts - 1) throw;
+                    await Task.Delay(RetryDelayMilliseconds);
+                }
+            }
+            throw new Exception("Failed to acquire token.");
+        }
+
 
         private async Task<string> AcquireTokenAsync()
         {
@@ -145,6 +162,7 @@ namespace vminfo
         private void PopulateDetails(SqlDataReader reader)
         {
             vcenter.InnerText = reader["vCenter"].ToString();
+            vRopsServer =  (reader["vCenter"].ToString() != "apgaraavcs801") ?  "https://ptekvrops01.fw.garanti.com.tr":""; 
             host.InnerText = reader["VMHost"].ToString();
             cluster.InnerText = reader["VMCluster"].ToString();
             datacenter.InnerText = reader["VMDataCenter"].ToString();
