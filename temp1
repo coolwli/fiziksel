@@ -1,81 +1,71 @@
-using System;
-using System.Net;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using System.Web.Script.Serialization; // JavaScriptSerializer için
+private const int MaxRetryAttempts = 3; // Maksimum deneme sayısı
+private const int RetryDelayMilliseconds = 3000; // Tekrar deneme aralığı (3 saniye)
 
-namespace blank_page
+private async Task EnsureTokenAsync()
 {
-    public partial class onlytoken : System.Web.UI.Page
+    if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.Now >= (DateTime)Session["TokenExpiry"])
     {
-        private static readonly HttpClient HttpClient;
-
-        static onlytoken()
+        try
         {
-            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
-
-            HttpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(60)
-            };
+            _token = await AcquireTokenWithRetryAsync();
+            Session["Token"] = _token;
+            Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
         }
-
-        protected async void Page_Load(object sender, EventArgs e)
+        catch (Exception ex)
         {
-            string username = "admin";
-            string password = "VMware123!";
-            string token = string.Empty;
-
-            try
-            {
-                string tokenjson = await GetTokenAsync(username, password);
-                litToken.Text = tokenjson;
-                Response.Write(tokenjson);
-            }
-            catch (Exception ex)
-            {
-                lblError.Text = ex.Message;
-            }
+            DisplayError($"Failed to acquire token after multiple attempts: {ex.Message}");
+            return;
         }
+    }
+    else
+    {
+        _token = Session["Token"].ToString();
+    }
 
-        private async Task<string> GetTokenAsync(string inputusername, string inputpassword)
+    await FetchVmUsageDataAsync();
+}
+
+private async Task<string> AcquireTokenWithRetryAsync()
+{
+    for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
+    {
+        try
         {
-            var requestUri = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new
-            {
-                username = inputusername,
-                password = inputpassword
-            };
-
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            try
-            {
-                var response = await HttpClient.PostAsync(requestUri, content);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return await response.Content.ReadAsStringAsync();
-                }
-                else
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Exception: {ex.Message}", ex);
-            }
+            return await AcquireTokenAsync();
         }
-
-        private string ParseTokenJson(string json)
+        catch (Exception ex)
         {
-            JavaScriptSerializer js = new JavaScriptSerializer();
-            string token???
-            return token;
+            if (attempt == MaxRetryAttempts - 1)
+            {
+                throw; // Son denemede hata olursa, hatayı tekrar fırlat
+            }
+
+            // Bekleme süresi
+            await Task.Delay(RetryDelayMilliseconds);
         }
+    }
+    throw new Exception("Token acquisition failed after maximum retry attempts.");
+}
+
+private async Task<string> AcquireTokenAsync()
+{
+    var requestUri = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+    var requestBody = new
+    {
+        username = _username,
+        password = _password
+    };
+    var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+    var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+    var response = await _httpClient.PostAsync(requestUri, content);
+    if (response.IsSuccessStatusCode)
+    {
+        return await response.Content.ReadAsStringAsync();
+    }
+    else
+    {
+        var errorContent = await response.Content.ReadAsStringAsync();
+        throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
     }
 }
