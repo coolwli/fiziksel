@@ -23,68 +23,63 @@ namespace vminfo
         private readonly HttpClient _httpClient;
         private readonly string _username;
         private readonly string _password;
+        private string token;
 
         public TokenManager(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _username = ConfigurationManager.AppSettings["VropsUsername"] 
+            _username = ConfigurationManager.AppSettings["VropsUsername"]
                         ?? throw new ArgumentNullException(nameof(_username));
-            _password = ConfigurationManager.AppSettings["VropsPassword"] 
+            _password = ConfigurationManager.AppSettings["VropsPassword"]
                         ?? throw new ArgumentNullException(nameof(_password));
         }
 
-        public async Task<string> GetPendikTokenAsync(string vropsServer)
+        public async Task<string> GetTokenAsync(string vropsServer)
         {
-            return await GetTokenAsync(vropsServer, Pendik_TokenCacheKey);
+            if (vropsServer == "apgaraavcs801"|| vropsServer == "apgartksvcs801")
+            {
+                return null;
+            }
+            else
+            {
+                return await checkToken(vropsServer, "PendikToken");
+            }
         }
 
-        public async Task<string> GetAnkaraTokenAsync(string vropsServer)
+        private async Task<string> checkToken(string vropsServer, string cacheKey)
         {
-            return await GetTokenAsync(vropsServer, Ankara_TokenCacheKey);
-        }
-
-        private async Task<string> GetTokenAsync(string vropsServer, string cacheKey)
-        {
-            var token = HttpRuntime.Cache[cacheKey] as string;
-            if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[cacheKey + "_Expiry"])
+            DateTime token_expiry = (DateTime)ConfigurationManager.AppSettings["VropsUsername"];
+            if (DateTime.Now >= token_expiry)
             {
                 try
                 {
                     string tokenXml = await AcquireTokenAsync(vropsServer);
                     if (string.IsNullOrWhiteSpace(tokenXml))
                     {
-                        return "Şu anlık verileri gösteremiyoruz, lütfen daha sonra tekrar deneyin.";
+                        return null;
                     }
-
                     token = ExtractTokenFromXml(tokenXml);
                     if (token != null)
                     {
-                        var expiryTime = DateTime.Now.Add(TokenLifetime);
-                        HttpRuntime.Cache.Insert(
-                            cacheKey,
-                            token,
-                            null,
-                            expiryTime,
-                            Cache.NoSlidingExpiration);
-
-                        HttpRuntime.Cache.Insert(
-                            cacheKey + "_Expiry",
-                            expiryTime,
-                            null,
-                            expiryTime,
-                            Cache.NoSlidingExpiration);
+                        //write token to configurationmanager and return token
+                        //and write token expiry
                     }
                     else
                     {
-                        return "Token alımı sırasında bir sorun oluştu.";
+                        return null;
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    return $"Token alım hatası: {ex.Message}";
+                    return null;
                 }
             }
-            return token;
+            else
+            {
+                //add to token expiry tokenlifetime
+                return token;
+                
+            }
         }
 
         private async Task<string> AcquireTokenAsync(string vropsServer)
@@ -109,18 +104,9 @@ namespace vminfo
                     {
                         return await response.Content.ReadAsStringAsync();
                     }
-                    else
-                    {
-                        var errorContent = await response.Content.ReadAsStringAsync();
-                        throw new Exception($"Token alma başarısız: {response.ReasonPhrase}, {errorContent}");
-                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    if (attempt == MaxRetryAttempts - 1)
-                    {
-                        throw new Exception($"Token alma işlemi başarısız oldu: {ex.Message}", ex);
-                    }
                     await Task.Delay(RetryDelayMilliseconds);
                 }
             }
