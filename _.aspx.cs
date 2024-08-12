@@ -17,13 +17,11 @@ namespace vminfo
 {
     public partial class vmscreen : Page
     {
-        // Constants
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private const int MaxRetryAttempts = 3;
         private const int RetryDelayMilliseconds = 3000;
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        
-        // Fields
+
         private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
         private string _vRopsServer;
         private string _hostName;
@@ -32,13 +30,11 @@ namespace vminfo
         private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
         private List<string> _metricsToFilter;
 
-        // Static Constructor
         static vmscreen()
         {
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
 
-        // Page Load Event
         protected async void Page_Load(object sender, EventArgs e)
         {
             _hostName = Request.QueryString["id"];
@@ -55,7 +51,6 @@ namespace vminfo
             }
         }
 
-        // Helper Methods
         private void DisplayHostNameError()
         {
             form1.InnerHtml = "";
@@ -68,8 +63,7 @@ namespace vminfo
             {
                 try
                 {
-                    string tokenXml = await AcquireTokenWithRetryAsync();
-                    _token = ExtractTokenFromXml(tokenXml);
+                    _token = await AcquireTokenWithRetryAsync();
                     Session["Token"] = _token;
                     Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
                 }
@@ -138,8 +132,8 @@ namespace vminfo
                 if (!string.IsNullOrEmpty(vmId))
                 {
                     await FetchGuestFileSystemMetricsAsync(vmId);
-                    var metricsData = await FetchMetricsAsync(vmId);
-                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                    var (metricsData, timestamps) = await FetchMetricsAsync(vmId);
+                    SendUsageDataToClient(metricsData, timestamps);
                 }
                 else
                 {
@@ -218,7 +212,7 @@ namespace vminfo
             }
         }
 
-        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
+        private async Task<(Dictionary<string, double[]>, DateTime[])> FetchMetricsAsync(string vmId)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
@@ -238,7 +232,7 @@ namespace vminfo
 
             await Task.WhenAll(fetchTasks);
 
-            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+            return (metricsData, timestamps.ToArray());
         }
 
         private async Task<string> FetchMetricsDataAsync(string url)
@@ -292,7 +286,7 @@ namespace vminfo
                 }
             }
 
-            return null;
+            return Array.Empty<double>();
         }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
