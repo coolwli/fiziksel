@@ -1,357 +1,110 @@
 using System;
-using System.Net;
-using System.Xml;
-using System.Text;
-using System.Linq;
-using System.Data;
-using System.Net.Http;
-using System.Xml.Linq;
-using System.Configuration;
-using System.Data.SqlClient;
 using System.Threading.Tasks;
-using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
-using System.Collections.Generic;
+using System.Web;
+using System.Net.Http;
+using System.Text;
 using System.Web.Script.Serialization;
 
-namespace vminfo
+public class TokenManager
 {
-    public partial class vmscreen : System.Web.UI.Page
+    private static readonly string A_TokenCacheKey = "AToken";
+    private static readonly string B_TokenCacheKey = "BToken";
+    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3); // Token'ların geçerlilik süresi
+
+    private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+
+    private static readonly string VropsServer = ConfigurationManager.AppSettings["VropsServer"];
+    private static readonly string Username = ConfigurationManager.AppSettings["VropsUsername"];
+    private static readonly string Password = ConfigurationManager.AppSettings["VropsPassword"];
+
+    // Token A'yı almak için bu yöntemi kullanın
+    public static async Task<string> GetATokenAsync()
     {
-        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private readonly string vRopsServer = "https://ptekvrops01.fw.garanti.com.tr";
-        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
-        private const int MaxRetryAttempts = 3;
-        private const int RetryDelayMilliseconds = 3000;
-        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-
-        private string hostName;
-        private string _token;
-        private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
-        private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
-        private List<string> _metricsToFilter;
-
-        static vmscreen()
-        {
-            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
-        }
-
-        protected async void Page_Load(object sender, EventArgs e)
-        {
-            hostName = Request.QueryString["id"];
-            if (string.IsNullOrEmpty(hostName))
-            {
-                DisplayHostNameError("ID Bulunamadı");
-                return;
-            }
-
-            if (!IsPostBack)
-            {
-                ShowHost();
-                await EnsureTokenAsync();
-            }
-        }
-
-        private async Task EnsureTokenAsync()
-        {
-            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.Now >= (DateTime)Session["TokenExpiry"])
-            {
-                try
-                {
-                    string tokenXml = await AcquireTokenWithRetryAsync();
-                    _token = ExtractTokenFromXml(tokenXml);
-                    Session["Token"] = _token;
-                    Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
-                }
-                catch (Exception ex)
-                {
-                    DisplayHostNameError($"Token acquisition failed: {ex.Message}");
-                    return;
-                }
-            }
-            await FetchVmUsageDataAsync();
-        }
-
-        private async Task<string> AcquireTokenWithRetryAsync()
-        {
-            for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
-            {
-                try
-                {
-                    return await AcquireTokenAsync();
-                }
-                catch (Exception)
-                {
-                    if (attempt == MaxRetryAttempts - 1) throw;
-                    await Task.Delay(RetryDelayMilliseconds);
-                }
-            }
-            throw new Exception("Failed to acquire token.");
-        }
-
-        private async Task<string> AcquireTokenAsync()
-        {
-            var requestUri = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new { username = _username, password = _password };
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync(requestUri, content);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
-        }
-
-        private async Task<string> GetVmIdAsync(string vmName)
-        {
-            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            string responseText = await response.Content.ReadAsStringAsync();
-            return ExtractVmIdFromResponse(responseText);
-        }
-
-        private string ExtractVmIdFromResponse(string responseText)
-        {
-            var xmlDoc = new XDocument();
-            xmlDoc.LoadXml(responseText);
-
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-            var identifierNode = xmlDoc.Descendants(XName.Get("resource", ns.NamespaceName))
-                                        .Select(e => e.Attribute("identifier")?.Value)
-                                        .FirstOrDefault();
-            return identifierNode;
-        }
-
-        private async Task FetchVmUsageDataAsync()
+        var token = HttpRuntime.Cache[A_TokenCacheKey] as string;
+        if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[A_TokenCacheKey + "_Expiry"])
         {
             try
             {
-                string vmId = await GetVmIdAsync(hostName);
-                if (!string.IsNullOrEmpty(vmId))
-                {
-                    await FetchGuestFileSystemMetricsAsync(vmId);
-                    var metricsData = await FetchMetricsAsync(vmId);
-                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
-                }
-                else
-                {
-                    DisplayHostNameError("VM ID not found.");
-                }
+                token = await AcquireTokenAsync("A");
+                HttpRuntime.Cache.Insert(
+                    A_TokenCacheKey,
+                    token,
+                    null,
+                    DateTime.Now.Add(TokenLifetime),
+                    System.Web.Caching.Cache.NoSlidingExpiration);
+                HttpRuntime.Cache.Insert(
+                    A_TokenCacheKey + "_Expiry",
+                    DateTime.Now.Add(TokenLifetime),
+                    null,
+                    DateTime.Now.Add(TokenLifetime),
+                    System.Web.Caching.Cache.NoSlidingExpiration);
             }
             catch (Exception ex)
             {
-                DisplayHostNameError($"Error fetching VM data: {ex.Message}");
+                throw new Exception($"Token A alım hatası: {ex.Message}", ex);
             }
         }
+        return token;
+    }
 
-        private async Task FetchGuestFileSystemMetricsAsync(string vmId)
-        {
-            string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats";
-            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            string responseText = await response.Content.ReadAsStringAsync();
-            var xmlDoc = XDocument.Parse(responseText);
-
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-            _metricsToFilter = new List<string>(_initialMetricsToFilter);
-
-            foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
-            {
-                var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                              .Element(XName.Get("key", ns.NamespaceName))
-                              .Value;
-
-                if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
-                {
-                    _metricsToFilter.Add(key);
-                }
-            }
-        }
-
-        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmId)
-        {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            var metricsData = new Dictionary<string, double[]>();
-            var timestamps = new List<DateTime>();
-
-            var fetchTasks = _metricsToFilter.Select(async metric =>
-            {
-                string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmId}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-                var data = await FetchMetricsDataAsync(metricsUrl);
-                var parsedData = ParseMetricsData(data, metric, ref timestamps);
-                if (parsedData != null)
-                {
-                    metricsData[metric] = parsedData;
-                }
-            });
-
-            await Task.WhenAll(fetchTasks);
-            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
-        }
-
-        private async Task<string> FetchMetricsDataAsync(string url)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
-        }
-
-        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
-        {
-            var xmlDoc = XDocument.Parse(xmlData);
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                                 .Element(XName.Get("key", ns.NamespaceName))
-                                                 .Value == metricKey);
-
-            foreach (var stat in stats)
-            {
-                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
-                if (timestampElems != null && !timestamps.Any())
-                {
-                    timestamps = timestampElems.Value.Split(' ')
-                                  .Select(ts => long.TryParse(ts, out long result)
-                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                                  : DateTime.MinValue)
-                                  .Where(t => t != DateTime.MinValue)
-                                  .ToList();
-                }
-
-                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                if (dataElems != null)
-                {
-                    return dataElems.Value.Split(' ')
-                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                           .ToArray();
-                }
-            }
-
-            return null;
-        }
-
-        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
-        {
-            var scriptBuilder = new StringBuilder();
-            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH
-
-:mm:ss}\"")) + "];");
-            foreach (var metric in metricsData)
-            {
-                var metricName = metric.Key;
-                var data = metric.Value;
-                scriptBuilder.AppendLine($"let {metricName} = [" + string.Join(",", data) + "];");
-            }
-
-            form1.InnerHtml += $"<script>{scriptBuilder}</script>";
-        }
-
-        private void ShowHost()
-        {
-            string query = "SELECT * FROM vminfoVMs WHERE VMName = @name";
-            using (var connection = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"))
-            using (var command = new SqlCommand(query, connection))
-            {
-                command.Parameters.AddWithValue("@name", hostName);
-                connection.Open();
-                using (var reader = command.ExecuteReader())
-                {
-                    if (reader.Read())
-                    {
-                        PopulateDetails(reader);
-                    }
-                    else
-                    {
-                        DisplayHostNameError("ID Bulunamadı");
-                    }
-                }
-            }
-        }
-
-        private void PopulateDetails(SqlDataReader reader)
+    // Token B'yi almak için bu yöntemi kullanın
+    public static async Task<string> GetBTokenAsync()
+    {
+        var token = HttpRuntime.Cache[B_TokenCacheKey] as string;
+        if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[B_TokenCacheKey + "_Expiry"])
         {
             try
             {
-                vcenter.InnerText = reader["vCenter"].ToString();
-                host.InnerText = reader["VMHost"].ToString();
-                cluster.InnerText = reader["VMCluster"].ToString();
-                datacenter.InnerText = reader["VMDataCenter"].ToString();
-                power.InnerText = reader["VMPowerState"].ToString();
-                notes.InnerText = reader["VMNotes"].ToString();
-                numcpu.InnerText = reader["VMNumCPU"].ToString();
-                totalmemory.InnerText = reader["VMMemoryCapacity"].ToString();
-
-                double usedStorage = Convert.ToDouble(reader["VMUsedStorage"]);
-                double totalStorage = Convert.ToDouble(reader["VMTotalStorage"]);
-                usedDisk.InnerHtml = $"Used Disk: <strong>{usedStorage}GB</strong>";
-                freeDisk.InnerHtml = $"Free Disk: <strong>{(totalStorage - usedStorage):F2}GB</strong>";
-                totalDisk.InnerText = $"Total Disk {totalStorage} GB";
-                double usedPercentage = usedStorage / totalStorage * 100;
-                usedPercentage.Style["width"] = $"{usedPercentage}%";
-                usedBar.InnerText = $"{usedPercentage:F2}%";
-
-                lasttime.InnerText = reader["LastWriteTime"].ToString();
-                hostmodel.InnerText = reader["VMHostModel"].ToString();
-                os.InnerText = reader["VMGuestOS"].ToString();
-                createdDate.InnerText = reader["VMCreatedDate"].ToString();
-
-                PopulateTable(eventsTable, reader["VMEventDates"].ToString(), reader["VMEventMessages"].ToString());
-                PopulateTable(networkTable, reader["VMNetworkAdapterName"].ToString(), reader["VMNetworkName"].ToString(), reader["VMNetworkAdapterMacAddress"].ToString(), reader["VMNetworkCardType"].ToString());
-                PopulateTable(disksTable, reader["VMDiskName"].ToString(), reader["VMDiskTotalSize"].ToString(), reader["VMDiskStorageFormat"].ToString(), reader["VMDiskDataStore"].ToString());
+                token = await AcquireTokenAsync("B");
+                HttpRuntime.Cache.Insert(
+                    B_TokenCacheKey,
+                    token,
+                    null,
+                    DateTime.Now.Add(TokenLifetime),
+                    System.Web.Caching.Cache.NoSlidingExpiration);
+                HttpRuntime.Cache.Insert(
+                    B_TokenCacheKey + "_Expiry",
+                    DateTime.Now.Add(TokenLifetime),
+                    null,
+                    DateTime.Now.Add(TokenLifetime),
+                    System.Web.Caching.Cache.NoSlidingExpiration);
             }
             catch (Exception ex)
             {
-                DisplayHostNameError($"Error populating details: {ex.Message}");
+                throw new Exception($"Token B alım hatası: {ex.Message}", ex);
             }
         }
+        return token;
+    }
 
-        private void PopulateTable(HtmlTable table, params string[] columns)
+    // Token almak için genel yöntem
+    private static async Task<string> AcquireTokenAsync(string tokenType)
+    {
+        var requestUri = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+        var requestBody = new { username = Username, password = Password, tokenType };
+        var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        try
         {
-            try
-            {
-                var columnData = columns.Select(c => c.Split('~')).ToArray();
-                int rowCount = columnData[0].Length;
-
-                for (int i = 0; i < rowCount; i++)
-                {
-                    if (!string.IsNullOrEmpty(columnData[0][i]))
-                    {
-                        var row = new HtmlTableRow();
-                        for (int j = 0; j < columnData.Length; j++)
-                        {
-                            row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
-                        }
-                        table.Rows.Add(row);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                DisplayHostNameError($"Error populating table: {ex.Message}");
-            }
+            var response = await HttpClient.PostAsync(requestUri, content);
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+            return ExtractTokenFromResponse(responseContent, tokenType);
         }
-
-        private void DisplayHostNameError(string message)
+        catch (Exception ex)
         {
-            form1.InnerHtml = "";
-            Response.Write(message);
+            throw new Exception($"Token alınırken hata oluştu: {ex.Message}", ex);
         }
+    }
 
-        private string ExtractTokenFromXml(string tokenXml)
-        {
-            var xmlDoc = XDocument.Parse(tokenXml);
-            return xmlDoc.Root.Element("token").Value;
-        }
+    // Token'ı yanıt içeriğinden çıkarmak için bu yöntemi kullanın
+    private static string ExtractTokenFromResponse(string responseData, string tokenType)
+    {
+        // Yanıt verisini ve token türünü kullanarak token'ı çıkarmak için gerekli işlemi burada yapın
+        // Örnek olarak JSON veya XML analizine göre token'ı çıkartın
+        // Bu örnekte basit bir JSON yanıtı varsayıyoruz
+        dynamic responseJson = new JavaScriptSerializer().DeserializeObject(responseData);
+        return responseJson[tokenType + "Token"];
     }
 }
