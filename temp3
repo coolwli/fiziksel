@@ -1,83 +1,404 @@
-# Excel dosyasının yolu
-$excelFile = "F:\Ali\vmlistdeneme.xlsx"
+Error fetching Host data: Value cannot be null. Parameter name: source
+using System;
+using System.Net;
+using System.Xml;
+using System.Text;
+using System.Linq;
+using System.Data;
+using System.Net.Http;
+using System.Xml.Linq;
+using System.Configuration;
+using System.Data.SqlClient;
+using System.Threading.Tasks;
+using System.Web.UI.WebControls;
+using System.Web.UI.HtmlControls;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
-# vCenter bilgileri
-$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01")
+namespace vminfo
+{
+    public partial class hostscreen : System.Web.UI.Page
+    {
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
+        private string vRopsServer;
+        private readonly string[] _initialMetricsToFilter = { "cpu|usage_average", "mem|usage_average" };
+        private const int MaxRetryAttempts = 3;
+        private const int RetryDelayMilliseconds = 3000;
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
-# Excel COM nesnesini oluştur
-$excelObj = New-Object -ComObject Excel.Application
-$excelObj.Visible = $false  # Excel penceresinin görünmemesi için
+        private string hostName;
+        private string _token;
+        private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
+        private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
+        private List<string> _metricsToFilter;
 
-try {
-    $workbook = $excelObj.Workbooks.Open($excelFile)
-    $worksheet = $workbook.Sheets.Item(2)  # 2. sayfayı seç
+        static hostscreen()
+        {
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+        }
+        protected async void Page_Load(object sender, EventArgs e)
+        {
+            hostName = Request.QueryString["id"];
+            if (string.IsNullOrEmpty(hostName))
+            {
+                DisplayHostNameError();
+                return;
+            }
 
-    # Excel'deki verileri oku
-    $usedRange = $worksheet.UsedRange
-    $rows = $usedRange.Rows.Count
-    $columns = $usedRange.Columns.Count
+            if (!IsPostBack)
+            {
+                ShowHost();
+                await EnsureTokenAsync();
+            }
+        }
 
-    # Başlıkları kontrol et ve gerekirse yeni sütunlar ekle
-    $sheetHeaders = @()
-    for ($col = 1; $col -le $columns; $col++) {
-        $sheetHeaders += $worksheet.Cells.Item(1, $col).Value2
-    }
+        private void DisplayHostNameError()
+        {
+            form1.InnerHtml = "";
+            Response.Write("Host Bulunamadı");
+        }
 
-    if (-not ($sheetHeaders -contains "CPU")) {
-        $worksheet.Cells.Item(1, $columns + 1).Value2 = "CPU"
-        $worksheet.Cells.Item(1, $columns + 2).Value2 = "CorePerSocket"
-        $worksheet.Cells.Item(1, $columns + 3).Value2 = "CPUCore"
-    }
+        private void ShowHost()
+        {
+            string query = "SELECT * FROM vmInfoHosts WHERE HostName = @name";
+            con.Open();
+            using (var command = new SqlCommand(query, con))
+            {
+                command.Parameters.AddWithValue("@name", hostName);
+                using (var reader = command.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        PopulateDetails(reader);
+                    }
+                    else
+                    {
+                        DisplayHostNameError();
+                    }
+                }
+            }
+            con.Close();
+        }
 
-    # Tüm VM'leri tek seferde alın
-    $vmList = @{}
-    foreach ($vcenter in $vcenters) {
-        try {
-            Connect-VIServer -Server $vcenter -ErrorAction Stop
+        private void PopulateDetails(SqlDataReader reader)
+        {
+            vcenter.InnerText = reader["vCenter"].ToString();
+            vRopsServer = (reader["vCenter"].ToString() == "apgaraavcs801" || reader["vCenter"].ToString() == "apgartksvcs801") ? "https://apgaravrops801.fw.garanti.com.tr" : "https://ptekvrops01.fw.garanti.com.tr";
+            cluster.InnerText = reader["HostCluster"].ToString();
+            datacenter.InnerText = reader["HostDataCenter"].ToString();
+            manufacturer.InnerText = reader["HostManufacturer"].ToString();
+            hostmodel.InnerText = reader["HostModel"].ToString();
+            vmcount.InnerText = reader["VMsCount"].ToString();
+            version.InnerText = reader["esxiVersion"].ToString();
+            hostnic.InnerText = Convert.ToInt32(reader["HostNumNics"]).ToString("N0");
+            lasttime.InnerText = reader["LastWriteTime"].ToString();
+            uptimedays.InnerHtml = reader["UptimeDay"].ToString() + " Day";
+            cpuDetails.InnerHtml = "<strong>" + reader["NumCpuThreads"].ToString() + "</strong> CPUs x " + reader["CPUModel"].ToString();
 
-            # Tüm VM'leri tek seferde çekin
-            $allVMs = Get-VM
+            totalDisk.InnerText = "Total Disk " + Convert.ToDouble(reader["HostStorageCapacity"]).ToString("N2") + "GB";
+            freeDisk.InnerHtml = "Free Disk: <strong>" + Convert.ToDouble(reader["HostFreeStorage"]).ToString("N2") + "GB </strong >";
+            double used = (Convert.ToDouble(reader["HostStorageCapacity"]) - Convert.ToDouble(reader["HostFreeStorage"]));
+            usedDisk.InnerHtml = "Used Disk: <strong>" + used.ToString("N2") + "GB </strong >";
+            usedPercentage.Style["width"] = (used / (Convert.ToDouble(reader["HostStorageCapacity"])) * 100).ToString() + "%";
+            usedBar.InnerText = (used / (Convert.ToDouble(reader["HostStorageCapacity"])) * 100).ToString("F2") + "%";
 
-            foreach ($vm in $allVMs) {
-                $vmList[$vm.Name] = [PSCustomObject]@{
-                    CPUCount = $vm.NumCpu
-                    CorePerSocket = $vm.CoresPerSocket
-                    CPUCore = $vm.NumCpu / $vm.CoresPerSocket
+            totalMemory.InnerText = "Total Memory " + Convert.ToDouble(reader["HostTotalMemory"]).ToString("N2") + "GB";
+            usedMemory.InnerHtml = "Used Memory: <strong>" + Convert.ToDouble(reader["HostMemoryUsage"]).ToString("N2") + "GB </strong >";
+            double free = (Convert.ToDouble(reader["HostTotalMemory"]) - Convert.ToDouble(reader["HostMemoryUsage"]));
+            freeMemory.InnerHtml = "Free Memory: <strong>" + free.ToString("N2") + "GB </strong >";
+            memoryPercentage.Style["width"] = (Convert.ToDouble(reader["HostMemoryUsage"]) / (Convert.ToDouble(reader["HostTotalMemory"])) * 100).ToString() + "%";
+            memoryBar.InnerText = ((Convert.ToDouble(reader["HostMemoryUsage"])) / (Convert.ToDouble(reader["HostTotalMemory"])) * 100).ToString("F2") + "%";
+
+            totalCpu.InnerText = "Total CPU " + Convert.ToDouble(reader["HostTotalCPU"]).ToString("N2") + "GHz";
+            usedCpu.InnerHtml = "Used CPU: <strong>" + Convert.ToDouble(reader["HostCPUUsage"]).ToString("N2") + "GHzm </strong>";
+            free = (Convert.ToDouble(reader["HostTotalCPU"]) - Convert.ToDouble(reader["HostCPUUsage"]));
+            freeCpu.InnerHtml = "Free CPU: <strong>" + free.ToString("N2") + "GHz </strong >";
+            cpuPercentage.Style["width"] = (Convert.ToDouble(reader["HostCPUUsage"]) / (Convert.ToDouble(reader["HostTotalCPU"])) * 100).ToString() + "%";
+            cpuBar.InnerText = ((Convert.ToDouble(reader["HostCPUUsage"])) / (Convert.ToDouble(reader["HostTotalCPU"])) * 100).ToString("F2") + "%";
+
+            PopulateTable(eventsTable, reader["EventDate"].ToString(), reader["EventMessage"].ToString());
+            PopulateTable(dsTable, reader["DSName"].ToString(), reader["DSCapacity"].ToString(), reader["DSFree"].ToString(), reader["DSPercentUsing"].ToString());
+            GetVMs(reader["VMsName"].ToString().Split('~'));
+            reader.Close();
+
+        }
+
+        private void GetVMs(string[] hostNames)
+        {
+            if (hostNames == null || hostNames.Length == 0)
+                return;
+
+            var query = "SELECT * FROM vminfoVMs WHERE VMName IN (@VMNames)";
+            using (var vmcon = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"))
+            {
+                vmcon.Open();
+                var formattedHostNames = hostNames.Select(name => $"'{name}'").ToArray();
+                var vmNamesList = string.Join(",", formattedHostNames);
+
+                using (var cmd = new SqlCommand(query.Replace("@VMNames", vmNamesList), vmcon))
+                {
+                    using (var vmreader = cmd.ExecuteReader())
+                    {
+                        string col1 = "";
+                        string col2 = "";
+                        string col3 = "";
+                        string col4 = "";
+                        string col5 = "";
+                        string col6 = "";
+                        while (vmreader.Read())
+                        {
+
+                            col1 += vmreader["VMName"].ToString() + "~";
+                            col2 += vmreader["VMOwner"].ToString() + "~";
+                            col3 += vmreader["VMPowerState"].ToString() + "~";
+                            col4 += vmreader["VMNumCPU"].ToString() + "~";
+                            col5 += vmreader["VMMemoryCapacity"].ToString() + "~";
+                            col6 += vmreader["VMTotalStorage"].ToString() + "~";
+                        }
+                        PopulateTable(vmsTable, col1, col2, col3, col4, col5, col6);
+                        vmreader.Close();
+                    }
+
+                }
+                vmcon.Close();
+            }
+
+        }
+
+
+        private void PopulateTable(HtmlTable table, params string[] columns)
+        {
+            var columnData = columns.Select(c => c.Split('~')).ToArray();
+            int rowCount = columnData[0].Length;
+            for (int i = 0; i < rowCount; i++)
+            {
+                if (columnData[0][i].Length == 0)
+                    return;
+                var row = new HtmlTableRow();
+                for (int j = 0; j < columnData.Length; j++)
+                {
+                    row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
+                }
+                table.Rows.Add(row);
+            }
+        }
+
+        private async Task EnsureTokenAsync()
+        {
+            if (Session["Token"] == null || Session["TokenExpiry"] == null || DateTime.UtcNow >= (DateTime)Session["TokenExpiry"])
+            {
+                try
+                {
+                    string tokenxml = await AcquireTokenWithRetryAsync();
+                    _token = ExtractTokenFromXml(tokenxml);
+                    Session["Token"] = _token;
+                    Session["TokenExpiry"] = DateTime.Now.AddMinutes(300);
+                }
+                catch (Exception ex)
+                {
+                    Response.Write(ex);
+                }
+            }
+            else
+            {
+                _token = Session["Token"].ToString();
+            }
+            await FetchHostUsageDataAsync();
+
+        }
+
+        private async Task<string> AcquireTokenWithRetryAsync()
+        {
+            for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
+            {
+                try
+                {
+                    return await AcquireTokenAsync();
+                }
+                catch (Exception)
+                {
+                    if (attempt == MaxRetryAttempts - 1) throw;
+                    await Task.Delay(RetryDelayMilliseconds);
+                }
+            }
+            throw new Exception("Maalesef şuan grafik verilerine erişemiyoruz lütfen daha sonra deneyiniz.");
+        }
+
+        private async Task<string> AcquireTokenAsync()
+        {
+            var requestUri = $"{vRopsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            try
+            {
+                var response = await _httpClient.PostAsync(requestUri, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadAsStringAsync();
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Exception: {ex.Message}", ex);
+            }
+
+        }
+
+        private string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            return tokenElement?.Value;
+        }
+
+        private async Task FetchHostUsageDataAsync()
+        {
+            try
+            {
+                string hostId = await GetHostIdAsync(hostName);
+                if (!string.IsNullOrEmpty(hostId))
+                {
+                    var metricsData = await FetchMetricsAsync(hostId);
+                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                }
+                else
+                {
+                    Response.Write("Host ID not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Response.Write($"Error fetching Host data: {ex.Message}");
+            }
+        }
+
+
+        private async Task<string> GetHostIdAsync(string host)
+        {
+            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=HostSystem&name={host}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
+
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
+            }
+        }
+
+
+
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string hostid)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            var fetchTasks = _metricsToFilter.Select(async metric =>
+            {
+                string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{hostid}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+                var data = await FetchMetricsDataAsync(metricsUrl);
+                var parsedData = ParseMetricsData(data, metric, ref timestamps);
+                if (parsedData != null)
+                {
+                    metricsData[metric] = parsedData;
+                }
+            });
+
+            await Task.WhenAll(fetchTasks);
+
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+        }
+
+        private async Task<string> FetchMetricsDataAsync(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+        }
+
+        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
+        {
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                                 .Element(XName.Get("key", ns.NamespaceName))
+                                                 .Value == metricKey);
+
+            foreach (var stat in stats)
+            {
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && !timestamps.Any())
+                {
+                    timestamps = timestampElems.Value.Split(' ')
+                                  .Select(ts => long.TryParse(ts, out long result)
+                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                  : DateTime.MinValue)
+                                  .Where(t => t != DateTime.MinValue)
+                                  .ToList();
+                }
+
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                           .ToArray();
                 }
             }
 
-        } catch {
-            Write-Warning "vCenter $vcenter bağlantı hatası: $_"
-        } finally {
-            Disconnect-VIServer -Server $vcenter -Confirm:$false -ErrorAction SilentlyContinue
+            return null;
         }
-    }
 
-    # Excel'deki VM bilgilerini güncelle
-    for ($row = 2; $row -le $rows; $row++) {
-        $vmName = $worksheet.Cells.Item($row, 1).Value2  # VM isimlerinin bulunduğu sütun (1. sütun)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+        {
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
 
-        if ($vmList.ContainsKey($vmName)) {
-            $vmData = $vmList[$vmName]
-            $worksheet.Cells.Item($row, $columns + 1).Value2 = $vmData.CPUCount
-            $worksheet.Cells.Item($row, $columns + 2).Value2 = $vmData.CorePerSocket
-            $worksheet.Cells.Item($row, $columns + 3).Value2 = $vmData.CPUCore
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
+            {
+                string key = metric.Key.Substring(0, 3);
+
+                string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
+
+            }
+            scriptBuilder.AppendLine("fetchData();");
+
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
+
+
     }
-
-    # Excel dosyasını kaydedin ve kapatın
-    $workbook.Save()
-} catch {
-    Write-Error "Excel dosyası ile ilgili bir hata oluştu: $_"
-} finally {
-    # Çalışma kitabını kapatın ve Excel uygulamasını kapatın
-    $workbook.Close() | Out-Null
-    $excelObj.Quit()
-
-    # COM nesnelerini serbest bırakın
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObj) | Out-Null
-    [GC]::Collect()
-    [GC]::WaitForPendingFinalizers()
 }
