@@ -1,11 +1,20 @@
+    <add key="pendikToken" value="" />
+    <add key="pendikTokenExpiry" value="" />
+  </appSettings>
+
+
+
+
+
+
 using System;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web.Configuration;
 using System.Xml.Linq;
 using System.Web.Script.Serialization;
+using System.Configuration;
 
 namespace vminfo
 {
@@ -29,7 +38,7 @@ namespace vminfo
                         ?? throw new ArgumentNullException(nameof(_password));
         }
 
-        public async Task<string> GetTokenAsync(string vropsServer, string tokenType)
+        public async Task<string> GetTokenAsync(string vropsServer)
         {
             if (vropsServer == "apgaraavcs801" || vropsServer == "apgartksvcs801")
             {
@@ -37,7 +46,7 @@ namespace vminfo
             }
             else
             {
-                return await CheckToken(vropsServer, tokenType);
+                return await CheckToken(vropsServer, "pendik");
             }
         }
 
@@ -47,11 +56,9 @@ namespace vminfo
             string expiryKey = $"{tokenType}TokenExpiry";
 
             DateTime tokenExpiry = GetTokenExpiry(expiryKey);
-            string storedToken = GetStoredToken(tokenKey);
 
-            if (DateTime.Now >= tokenExpiry || string.IsNullOrEmpty(storedToken))
+            if (tokenExpiry==null||DateTime.Now >= tokenExpiry )
             {
-                // Token has expired or doesn't exist; acquire a new token
                 try
                 {
                     string tokenXml = await AcquireTokenAsync(vropsServer, tokenType);
@@ -79,9 +86,8 @@ namespace vminfo
             }
             else
             {
-                // Token is still valid; extend its expiration time
                 StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                return storedToken;
+                return GetStoredToken(tokenKey);
             }
         }
 
