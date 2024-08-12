@@ -3,108 +3,127 @@ using System.Threading.Tasks;
 using System.Web;
 using System.Net.Http;
 using System.Text;
+using System.Xml.Linq;
+using System.Configuration;
+using System.Linq;
 using System.Web.Script.Serialization;
 
-public class TokenManager
+namespace vminfo
 {
-    private static readonly string A_TokenCacheKey = "AToken";
-    private static readonly string B_TokenCacheKey = "BToken";
-    private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3); // Token'ların geçerlilik süresi
-
-    private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-
-    private static readonly string VropsServer = ConfigurationManager.AppSettings["VropsServer"];
-    private static readonly string Username = ConfigurationManager.AppSettings["VropsUsername"];
-    private static readonly string Password = ConfigurationManager.AppSettings["VropsPassword"];
-
-    // Token A'yı almak için bu yöntemi kullanın
-    public static async Task<string> GetATokenAsync()
+    public class TokenManager
     {
-        var token = HttpRuntime.Cache[A_TokenCacheKey] as string;
-        if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[A_TokenCacheKey + "_Expiry"])
-        {
-            try
-            {
-                token = await AcquireTokenAsync("A");
-                HttpRuntime.Cache.Insert(
-                    A_TokenCacheKey,
-                    token,
-                    null,
-                    DateTime.Now.Add(TokenLifetime),
-                    System.Web.Caching.Cache.NoSlidingExpiration);
-                HttpRuntime.Cache.Insert(
-                    A_TokenCacheKey + "_Expiry",
-                    DateTime.Now.Add(TokenLifetime),
-                    null,
-                    DateTime.Now.Add(TokenLifetime),
-                    System.Web.Caching.Cache.NoSlidingExpiration);
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Token A alım hatası: {ex.Message}", ex);
-            }
-        }
-        return token;
-    }
+        private static readonly string Pendik_TokenCacheKey = "PendikToken";
+        private static readonly string Ankara_TokenCacheKey = "AnkaraToken";
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+        private const int MaxRetryAttempts = 3;
+        private const int RetryDelayMilliseconds = 3000;
 
-    // Token B'yi almak için bu yöntemi kullanın
-    public static async Task<string> GetBTokenAsync()
-    {
-        var token = HttpRuntime.Cache[B_TokenCacheKey] as string;
-        if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[B_TokenCacheKey + "_Expiry"])
+        private static readonly string Username = ConfigurationManager.AppSettings["VropsUsername"];
+        private static readonly string Password = ConfigurationManager.AppSettings["VropsPassword"];
+
+        public static async Task<string> GetPendikTokenAsync(string vropsServer,HttpClient http)
         {
-            try
+            var token = HttpRuntime.Cache[Pendik_TokenCacheKey] as string;
+            if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[Pendik_TokenCacheKey + "_Expiry"])
             {
-                token = await AcquireTokenAsync("B");
-                HttpRuntime.Cache.Insert(
-                    B_TokenCacheKey,
-                    token,
-                    null,
-                    DateTime.Now.Add(TokenLifetime),
-                    System.Web.Caching.Cache.NoSlidingExpiration);
-                HttpRuntime.Cache.Insert(
-                    B_TokenCacheKey + "_Expiry",
-                    DateTime.Now.Add(TokenLifetime),
-                    null,
-                    DateTime.Now.Add(TokenLifetime),
-                    System.Web.Caching.Cache.NoSlidingExpiration);
+                try
+                {
+                    string tokenXml = await AcquireTokenAsync(vropsServer,http);
+                    if (tokenXml == null) return "Şu anlık verileri gösteremiyoruz lütfen daha sonra tekrar dene";
+                    token = ExtractTokenFromXml(tokenXml);
+                    HttpRuntime.Cache.Insert(
+                        Pendik_TokenCacheKey,
+                        token,
+                        null,
+                        DateTime.Now.Add(TokenLifetime),
+                        System.Web.Caching.Cache.NoSlidingExpiration);
+                    HttpRuntime.Cache.Insert(
+                        Pendik_TokenCacheKey + "_Expiry",
+                        DateTime.Now.Add(TokenLifetime),
+                        null,
+                        DateTime.Now.Add(TokenLifetime),
+                        System.Web.Caching.Cache.NoSlidingExpiration);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Token alım hatası: {ex.Message}", ex);
+                }
             }
-            catch (Exception ex)
+            return token;
+        }
+
+        public static async Task<string> GetAnkaraTokenAsync(string vropsServer,HttpClient http)
+        {
+            var token = HttpRuntime.Cache[Ankara_TokenCacheKey] as string;
+            if (token == null || DateTime.Now >= (DateTime)HttpRuntime.Cache[Ankara_TokenCacheKey + "_Expiry"])
             {
-                throw new Exception($"Token B alım hatası: {ex.Message}", ex);
+                try
+                {
+                    string tokenXml = await AcquireTokenAsync(vropsServer,http);
+                    if (tokenXml == null) return "Şu anlık verileri gösteremiyoruz lütfen daha sonra tekrar dene";
+                    token = ExtractTokenFromXml(tokenXml);
+                    HttpRuntime.Cache.Insert(
+                        Ankara_TokenCacheKey,
+                        token,
+                        null,
+                        DateTime.Now.Add(TokenLifetime),
+                        System.Web.Caching.Cache.NoSlidingExpiration);
+                    HttpRuntime.Cache.Insert(
+                        Ankara_TokenCacheKey + "_Expiry",
+                        DateTime.Now.Add(TokenLifetime),
+                        null,
+                        DateTime.Now.Add(TokenLifetime),
+                        System.Web.Caching.Cache.NoSlidingExpiration);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception($"Token alım hatası: {ex.Message}", ex);
+                }
             }
+            return token;
         }
-        return token;
-    }
 
-    // Token almak için genel yöntem
-    private static async Task<string> AcquireTokenAsync(string tokenType)
-    {
-        var requestUri = $"{VropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-        var requestBody = new { username = Username, password = Password, tokenType };
-        var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-        try
+        private static async Task<string> AcquireTokenAsync(string vropsServer,HttpClient http)
         {
-            var response = await HttpClient.PostAsync(requestUri, content);
-            response.EnsureSuccessStatusCode();
-            var responseContent = await response.Content.ReadAsStringAsync();
-            return ExtractTokenFromResponse(responseContent, tokenType);
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Token alınırken hata oluştu: {ex.Message}", ex);
-        }
-    }
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = Username,
+                password = Password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-    // Token'ı yanıt içeriğinden çıkarmak için bu yöntemi kullanın
-    private static string ExtractTokenFromResponse(string responseData, string tokenType)
-    {
-        // Yanıt verisini ve token türünü kullanarak token'ı çıkarmak için gerekli işlemi burada yapın
-        // Örnek olarak JSON veya XML analizine göre token'ı çıkartın
-        // Bu örnekte basit bir JSON yanıtı varsayıyoruz
-        dynamic responseJson = new JavaScriptSerializer().DeserializeObject(responseData);
-        return responseJson[tokenType + "Token"];
+            for (int attempt = 0; attempt < MaxRetryAttempts; attempt++)
+            {
+                try
+                {
+                    var response = await http.PostAsync(requestUri, content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return await response.Content.ReadAsStringAsync();
+                    }
+                    else
+                    {
+                        var errorContent = await response.Content.ReadAsStringAsync();
+                        throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
+                    }
+                }
+                catch (Exception)
+                {
+                    await Task.Delay(RetryDelayMilliseconds);
+                }
+            }
+            return null;
+            
+        }
+        private static string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            return tokenElement?.Value;
+        }
     }
 }
