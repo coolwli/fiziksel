@@ -130,3 +130,5 @@ namespace vminfo
         }
     }
 }
+
+using Microsoft.Extensions.Configuration; not found
