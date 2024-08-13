@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Configuration;
+using System.Web.Script.Serialization;
 
 namespace vminfo
 {
@@ -68,28 +69,31 @@ namespace vminfo
 
         private async Task<string> AcquireTokenAsync(string vropsServer, string tokenType)
         {
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
             try
             {
-                var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-                var requestBody = new
+                var response = await _httpClient.PostAsync(requestUri, content);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    username = _username,
-                    password = _password
-                };
-
-                var jsonContent = new StringContent(
-                    Newtonsoft.Json.JsonConvert.SerializeObject(requestBody),
-                    Encoding.UTF8,
-                    "application/json");
-
-                var response = await _httpClient.PostAsync(requestUri, jsonContent);
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
+                    return await response.Content.ReadAsStringAsync();
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Failed to retrieve token: {response.ReasonPhrase}, {errorContent}");
+                }
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
-                // Log exception (ex) here
-                return null;
+                throw new Exception($"Exception: {ex.Message}", ex);
             }
         }
 
@@ -151,3 +155,22 @@ namespace vminfo
         }
     }
 }
+System.ArgumentException
+  HResult = 0x80070057
+  Message=exePath must be specified when not running inside a stand alone exe.
+  Source=vminfo
+  StackTrace:
+   at vminfo.TokenManager.StoreTokenExpiry(DateTime expiryDate, String expiryKey) in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 143
+   at vminfo.TokenManager.<CheckTokenAsync>d__7.MoveNext() in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 65
+   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
+   at vminfo.TokenManager.<GetTokenAsync>d__6.MoveNext() in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 36
+   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
+   at vminfo.vmscreen.<EnsureTokenAsync>d__16.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 130
+   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
+   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()
+   at vminfo.vmscreen.<Page_Load>d__12.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 52
