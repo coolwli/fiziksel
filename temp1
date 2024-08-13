@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using System.Configuration;
+using System.Web.Configuration;
 using System.Web.Script.Serialization;
 
 namespace vminfo
@@ -21,9 +21,9 @@ namespace vminfo
         public TokenManager(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _username = ConfigurationManager.AppSettings["VropsUsername"]
+            _username = WebConfigurationManager.AppSettings["VropsUsername"]
                         ?? throw new ArgumentNullException(nameof(_username));
-            _password = ConfigurationManager.AppSettings["VropsPassword"]
+            _password = WebConfigurationManager.AppSettings["VropsPassword"]
                         ?? throw new ArgumentNullException(nameof(_password));
         }
 
@@ -114,7 +114,7 @@ namespace vminfo
 
         private DateTime GetTokenExpiry(string expiryKey)
         {
-            string expiryStr = ConfigurationManager.AppSettings[expiryKey];
+            string expiryStr = WebConfigurationManager.AppSettings[expiryKey];
             if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
             {
                 return expiryDate;
@@ -124,15 +124,15 @@ namespace vminfo
 
         private void StoreToken(string token, string tokenKey)
         {
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            var appSettings = config.AppSettings.Settings;
-            if (appSettings[tokenKey] != null)
+            var config = WebConfigurationManager.OpenWebConfiguration("~");
+            var appSettings = config.AppSettings;
+            if (appSettings.Settings[tokenKey] != null)
             {
-                appSettings[tokenKey].Value = token;
+                appSettings.Settings[tokenKey].Value = token;
             }
             else
             {
-                appSettings.Add(tokenKey, token);
+                appSettings.Settings.Add(tokenKey, token);
             }
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
@@ -140,37 +140,18 @@ namespace vminfo
 
         private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
         {
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            var appSettings = config.AppSettings.Settings;
-            if (appSettings[expiryKey] != null)
+            var config = WebConfigurationManager.OpenWebConfiguration("~");
+            var appSettings = config.AppSettings;
+            if (appSettings.Settings[expiryKey] != null)
             {
-                appSettings[expiryKey].Value = expiryDate.ToString("o");
+                appSettings.Settings[expiryKey].Value = expiryDate.ToString("o");
             }
             else
             {
-                appSettings.Add(expiryKey, expiryDate.ToString("o"));
+                appSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
             }
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }
     }
 }
-System.ArgumentException
-  HResult = 0x80070057
-  Message=exePath must be specified when not running inside a stand alone exe.
-  Source=vminfo
-  StackTrace:
-   at vminfo.TokenManager.StoreTokenExpiry(DateTime expiryDate, String expiryKey) in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 143
-   at vminfo.TokenManager.<CheckTokenAsync>d__7.MoveNext() in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 65
-   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
-   at vminfo.TokenManager.<GetTokenAsync>d__6.MoveNext() in C:\inetpub\vminfo\vminfo\TokenManager.cs:line 36
-   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter`1.GetResult()
-   at vminfo.vmscreen.<EnsureTokenAsync>d__16.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 130
-   at System.Runtime.CompilerServices.TaskAwaiter.ThrowForNonSuccess(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter.HandleNonSuccessAndDebuggerNotification(Task task)
-   at System.Runtime.CompilerServices.TaskAwaiter.GetResult()
-   at vminfo.vmscreen.<Page_Load>d__12.MoveNext() in C:\inetpub\vminfo\vminfo\vmscreen.aspx.cs:line 52
