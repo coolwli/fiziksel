@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Microsoft.Extensions.Configuration;
+using System.Configuration;
 
 namespace vminfo
 {
@@ -16,14 +16,14 @@ namespace vminfo
         private readonly HttpClient _httpClient;
         private readonly string _username;
         private readonly string _password;
-        private readonly IConfiguration _configuration;
 
-        public TokenManager(HttpClient httpClient, IConfiguration configuration)
+        public TokenManager(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
-            _username = _configuration["VropsUsername"] ?? throw new ArgumentNullException(nameof(_username));
-            _password = _configuration["VropsPassword"] ?? throw new ArgumentNullException(nameof(_password));
+            _username = ConfigurationManager.AppSettings["VropsUsername"]
+                        ?? throw new ArgumentNullException(nameof(_username));
+            _password = ConfigurationManager.AppSettings["VropsPassword"]
+                        ?? throw new ArgumentNullException(nameof(_password));
         }
 
         public async Task<string> GetTokenAsync(string vropsServer)
@@ -110,7 +110,7 @@ namespace vminfo
 
         private DateTime GetTokenExpiry(string expiryKey)
         {
-            string expiryStr = _configuration[expiryKey];
+            string expiryStr = ConfigurationManager.AppSettings[expiryKey];
             if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
             {
                 return expiryDate;
@@ -120,15 +120,34 @@ namespace vminfo
 
         private void StoreToken(string token, string tokenKey)
         {
-            // Consider using a more persistent storage than appSettings for tokens.
-            _configuration[tokenKey] = token;
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            var appSettings = config.AppSettings.Settings;
+            if (appSettings[tokenKey] != null)
+            {
+                appSettings[tokenKey].Value = token;
+            }
+            else
+            {
+                appSettings.Add(tokenKey, token);
+            }
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
         }
 
         private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
         {
-            _configuration[expiryKey] = expiryDate.ToString("o");
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            var appSettings = config.AppSettings.Settings;
+            if (appSettings[expiryKey] != null)
+            {
+                appSettings[expiryKey].Value = expiryDate.ToString("o");
+            }
+            else
+            {
+                appSettings.Add(expiryKey, expiryDate.ToString("o"));
+            }
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
         }
     }
 }
-
-using Microsoft.Extensions.Configuration; not found
