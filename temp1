@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Web.Script.Serialization;
 using System.Configuration;
+using System.Web.Configuration;
 
 namespace vminfo
 {
@@ -48,9 +49,8 @@ namespace vminfo
 
             DateTime tokenExpiry = GetTokenExpiry(expiryKey);
 
-            if (tokenExpiry==null||DateTime.Now >= tokenExpiry )
+            if (tokenExpiry == DateTime.MinValue || DateTime.Now >= tokenExpiry)
             {
-
                 string tokenXml = await AcquireTokenAsync(vropsServer, tokenType);
                 if (string.IsNullOrWhiteSpace(tokenXml))
                 {
@@ -62,19 +62,16 @@ namespace vminfo
                 {
                     StoreToken(token, tokenKey);
                     StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                    //return token;
                     return "token bostu aldım";
                 }
                 else
                 {
                     return "token null çıktı";
                 }
-
             }
             else
             {
                 StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                //return GetStoredToken(tokenKey);
                 return "tokenvarvealdım";
             }
         }
@@ -91,12 +88,11 @@ namespace vminfo
             var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-           
             var response = await _httpClient.PostAsync(requestUri, content);
             if (response.IsSuccessStatusCode)
             {
                 return await response.Content.ReadAsStringAsync();
-            }           
+            }
             return "denedık ve basarısız";
         }
 
@@ -117,28 +113,24 @@ namespace vminfo
             return DateTime.MinValue;
         }
 
-        private string GetStoredToken(string tokenKey)
-        {
-            return ConfigurationManager.AppSettings[tokenKey];
-        }
-
         private void StoreToken(string token, string tokenKey)
         {
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            config.AppSettings.Settings.Remove(tokenKey);
-            config.AppSettings.Settings.Add(tokenKey, token);
+            var config = WebConfigurationManager.OpenWebConfiguration("~");
+            var appSettings = config.AppSettings;
+            appSettings.Settings.Remove(tokenKey);
+            appSettings.Settings.Add(tokenKey, token);
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }
 
         private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
         {
-            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-            config.AppSettings.Settings.Remove(expiryKey);
-            config.AppSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
+            var config = WebConfigurationManager.OpenWebConfiguration("~");
+            var appSettings = config.AppSettings;
+            appSettings.Settings.Remove(expiryKey);
+            appSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
             config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }
     }
 }
--		$exception	{"exePath must be specified when not running inside a stand alone exe."}	System.ArgumentException
