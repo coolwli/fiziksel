@@ -1,312 +1,144 @@
 using System;
-using System.Net;
-using System.Xml;
-using System.Text;
 using System.Linq;
-using System.Data;
 using System.Net.Http;
-using System.Xml.Linq;
-using System.Configuration;
-using System.Data.SqlClient;
+using System.Text;
 using System.Threading.Tasks;
-using System.Web.UI.WebControls;
-using System.Web.UI.HtmlControls;
-using System.Collections.Generic;
+using System.Xml.Linq;
 using System.Web.Script.Serialization;
+using System.Configuration;
 
 namespace vminfo
 {
-    public partial class hostscreen : System.Web.UI.Page
+    public class TokenManager
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
-        private string vRopsServer;
-        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+        private const int MaxRetryAttempts = 3;
+        private const int RetryDelayMilliseconds = 3000;
 
-        private string hostName;
-        private readonly string _username = ConfigurationManager.AppSettings["VropsUsername"];
-        private readonly string _password = ConfigurationManager.AppSettings["VropsPassword"];
-        private List<string> _metricsToFilter = new List<string>{ "cpu|usage_average", "mem|usage_average" };
+        private readonly HttpClient _httpClient;
+        private readonly string _username;
+        private readonly string _password;
 
-        static hostscreen()
+        public TokenManager(HttpClient httpClient)
         {
-            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _username = ConfigurationManager.AppSettings["VropsUsername"]
+                        ?? throw new ArgumentNullException(nameof(_username));
+            _password = ConfigurationManager.AppSettings["VropsPassword"]
+                        ?? throw new ArgumentNullException(nameof(_password));
         }
 
-        protected async void Page_Load(object sender, EventArgs e)
+        public async Task<string> GetTokenAsync(string vropsServer)
         {
-            hostName = Request.QueryString["id"];
-            if (string.IsNullOrEmpty(hostName))
+            if (vropsServer == "apgaraavcs801" || vropsServer == "apgartksvcs801")
             {
-                DisplayHostNameError();
-                return;
+                return null;
             }
-
-            if (!IsPostBack)
+            else
             {
-                ShowHost();
-                await FetchHostUsageDataAsync();
+                return await CheckToken(vropsServer, "pendik");
             }
         }
 
-        private void DisplayHostNameError()
+        private async Task<string> CheckToken(string vropsServer, string tokenType)
         {
-            form1.InnerHtml = "";
-            Response.Write("Host Bulunamadı");
-        }
+            string tokenKey = $"{tokenType}Token";
+            string expiryKey = $"{tokenType}TokenExpiry";
 
-        private void ShowHost()
-        {
-            string query = "SELECT * FROM vmInfoHosts WHERE HostName = @name";
-            con.Open();
-            using (var command = new SqlCommand(query, con))
+            DateTime tokenExpiry = GetTokenExpiry(expiryKey);
+
+            if (tokenExpiry==null||DateTime.Now >= tokenExpiry )
             {
-                command.Parameters.AddWithValue("@name", hostName);
-                using (var reader = command.ExecuteReader())
+
+                string tokenXml = await AcquireTokenAsync(vropsServer, tokenType);
+                if (string.IsNullOrWhiteSpace(tokenXml))
                 {
-                    if (reader.Read())
-                    {
-                        PopulateDetails(reader);
-                    }
-                    else
-                    {
-                        DisplayHostNameError();
-                    }
+                    return "tokenbos";
                 }
-            }
-            con.Close();
-        }
 
-        private void PopulateDetails(SqlDataReader reader)
-        {
-            vcenter.InnerText = reader["vCenter"].ToString();
-            vRopsServer = (reader["vCenter"].ToString() == "apgaraavcs801" || reader["vCenter"].ToString() == "apgartksvcs801") ? "https://apgaravrops801.fw.garanti.com.tr" : "https://ptekvrops01.fw.garanti.com.tr";
-            cluster.InnerText = reader["HostCluster"].ToString();
-            datacenter.InnerText = reader["HostDataCenter"].ToString();
-            manufacturer.InnerText = reader["HostManufacturer"].ToString();
-            hostmodel.InnerText = reader["HostModel"].ToString();
-            vmcount.InnerText = reader["VMsCount"].ToString();
-            version.InnerText = reader["esxiVersion"].ToString();
-            hostnic.InnerText = Convert.ToInt32(reader["HostNumNics"]).ToString("N0");
-            lasttime.InnerText = reader["LastWriteTime"].ToString();
-            uptimedays.InnerHtml = reader["UptimeDay"].ToString() + " Day";
-            cpuDetails.InnerHtml = "<strong>" + reader["NumCpuThreads"].ToString() + "</strong> CPUs x " + reader["CPUModel"].ToString();
-
-            totalDisk.InnerText = "Total Disk " + Convert.ToDouble(reader["HostStorageCapacity"]).ToString("N2") + "GB";
-            freeDisk.InnerHtml = "Free Disk: <strong>" + Convert.ToDouble(reader["HostFreeStorage"]).ToString("N2") + "GB </strong >";
-            double used = (Convert.ToDouble(reader["HostStorageCapacity"]) - Convert.ToDouble(reader["HostFreeStorage"]));
-            usedDisk.InnerHtml = "Used Disk: <strong>" + used.ToString("N2") + "GB </strong >";
-            usedPercentage.Style["width"] = (used / (Convert.ToDouble(reader["HostStorageCapacity"])) * 100).ToString() + "%";
-            usedBar.InnerText = (used / (Convert.ToDouble(reader["HostStorageCapacity"])) * 100).ToString("F2") + "%";
-
-            totalMemory.InnerText = "Total Memory " + Convert.ToDouble(reader["HostTotalMemory"]).ToString("N2") + "GB";
-            usedMemory.InnerHtml = "Used Memory: <strong>" + Convert.ToDouble(reader["HostMemoryUsage"]).ToString("N2") + "GB </strong >";
-            double free = (Convert.ToDouble(reader["HostTotalMemory"]) - Convert.ToDouble(reader["HostMemoryUsage"]));
-            freeMemory.InnerHtml = "Free Memory: <strong>" + free.ToString("N2") + "GB </strong >";
-            memoryPercentage.Style["width"] = (Convert.ToDouble(reader["HostMemoryUsage"]) / (Convert.ToDouble(reader["HostTotalMemory"])) * 100).ToString() + "%";
-            memoryBar.InnerText = ((Convert.ToDouble(reader["HostMemoryUsage"])) / (Convert.ToDouble(reader["HostTotalMemory"])) * 100).ToString("F2") + "%";
-
-            totalCpu.InnerText = "Total CPU " + Convert.ToDouble(reader["HostTotalCPU"]).ToString("N2") + "GHz";
-            usedCpu.InnerHtml = "Used CPU: <strong>" + Convert.ToDouble(reader["HostCPUUsage"]).ToString("N2") + "GHzm </strong>";
-            free = (Convert.ToDouble(reader["HostTotalCPU"]) - Convert.ToDouble(reader["HostCPUUsage"]));
-            freeCpu.InnerHtml = "Free CPU: <strong>" + free.ToString("N2") + "GHz </strong >";
-            cpuPercentage.Style["width"] = (Convert.ToDouble(reader["HostCPUUsage"]) / (Convert.ToDouble(reader["HostTotalCPU"])) * 100).ToString() + "%";
-            cpuBar.InnerText = ((Convert.ToDouble(reader["HostCPUUsage"])) / (Convert.ToDouble(reader["HostTotalCPU"])) * 100).ToString("F2") + "%";
-
-            PopulateTable(eventsTable, reader["EventDate"].ToString(), reader["EventMessage"].ToString());
-            PopulateTable(dsTable, reader["DSName"].ToString(), reader["DSCapacity"].ToString(), reader["DSFree"].ToString(), reader["DSPercentUsing"].ToString());
-            GetVMs(reader["VMsName"].ToString().Split('~'));
-            reader.Close();
-        }
-
-        private void GetVMs(string[] hostNames)
-        {
-            if (hostNames == null || hostNames.Length == 0)
-                return;
-
-            var query = "SELECT * FROM vminfoVMs WHERE VMName IN (@VMNames)";
-            using (var vmcon = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"))
-            {
-                vmcon.Open();
-                var formattedHostNames = hostNames.Select(name => $"'{name}'").ToArray();
-                var vmNamesList = string.Join(",", formattedHostNames);
-
-                using (var cmd = new SqlCommand(query.Replace("@VMNames", vmNamesList), vmcon))
+                string token = ExtractTokenFromXml(tokenXml);
+                if (token != null)
                 {
-                    using (var vmreader = cmd.ExecuteReader())
-                    {
-                        string col1 = "";
-                        string col2 = "";
-                        string col3 = "";
-                        string col4 = "";
-                        string col5 = "";
-                        string col6 = "";
-                        while (vmreader.Read())
-                        {
-                            col1 += vmreader["VMName"].ToString() + "~";
-                            col2 += vmreader["VMOwner"].ToString() + "~";
-                            col3 += vmreader["VMPowerState"].ToString() + "~";
-                            col4 += vmreader["VMNumCPU"].ToString() + "~";
-                            col5 += vmreader["VMMemoryCapacity"].ToString() + "~";
-                            col6 += vmreader["VMTotalStorage"].ToString() + "~";
-                        }
-                        PopulateTable(vmsTable, col1, col2, col3, col4, col5, col6);
-                        vmreader.Close();
-                    }
-                }
-                vmcon.Close();
-            }
-        }
-
-        private void PopulateTable(HtmlTable table, params string[] columns)
-        {
-            var columnData = columns.Select(c => c.Split('~')).ToArray();
-            int rowCount = columnData[0].Length;
-            for (int i = 0; i < rowCount; i++)
-            {
-                if (columnData[0][i].Length == 0)
-                    return;
-                var row = new HtmlTableRow();
-                for (int j = 0; j < columnData.Length; j++)
-                {
-                    row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
-
-
-                }
-                table.Rows.Add(row);
-            }
-        }
-
-        private async Task FetchHostUsageDataAsync()
-        {
-            try
-            {
-                string hostId = await GetHostIdAsync(hostName);
-                if (!string.IsNullOrEmpty(hostId))
-                {
-                    var metricsData = await FetchMetricsAsync(hostId);
-                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                    StoreToken(token, tokenKey);
+                    StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
+                    //return token;
+                    return "token bostu aldım";
                 }
                 else
                 {
-                    Response.Write("Host ID not found.");
+                    return "token null çıktı";
                 }
+
             }
-            catch (Exception ex)
+            else
             {
-                Response.Write($"Error fetching Host data: {ex.Message}");
-            }
-        }
-
-        private async Task<string> GetHostIdAsync(string host)
-        {
-            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=HostSystem&name={host}";
-
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_username}:{_password}")));
-
-            using (var response = await _httpClient.SendAsync(request))
-            {
-                response.EnsureSuccessStatusCode();
-                string responseText = await response.Content.ReadAsStringAsync();
-                var xmlDoc = new XmlDocument();
-                xmlDoc.LoadXml(responseText);
-
-                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                nsManager.AddNamespace("ops", OpsNamespace);
-
-                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                return identifierNode?.Value;
+                StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
+                //return GetStoredToken(tokenKey);
+                return "tokenvarvealdım";
             }
         }
 
-        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string hostid)
+        private async Task<string> AcquireTokenAsync(string vropsServer, string tokenType)
         {
-            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
-            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
-            var metricsData = new Dictionary<string, double[]>();
-            var timestamps = new List<DateTime>();
-
-            var fetchTasks = _metricsToFilter.Select(async metric =>
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
             {
-                string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{hostid}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
-                var data = await FetchMetricsDataAsync(metricsUrl);
-                var parsedData = ParseMetricsData(data, metric, ref timestamps);
-                if (parsedData != null)
-                {
-                    metricsData[metric] = parsedData;
-                }
-            });
+                username = _username,
+                password = _password
+            };
 
-            await Task.WhenAll(fetchTasks);
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
-        }
-
-        private async Task<string> FetchMetricsDataAsync(string url)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_username}:{_password}")));
-
-            using (var response = await _httpClient.SendAsync(request))
+           
+            var response = await _httpClient.PostAsync(requestUri, content);
+            if (response.IsSuccessStatusCode)
             {
-                response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
-            }
+            }           
+            return "denedık ve basarısız";
         }
 
-        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
+        private static string ExtractTokenFromXml(string xmlData)
         {
-            var xmlDoc = XDocument.Parse(xmlData);
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
-                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                                 .Element(XName.Get("key", ns.NamespaceName))
-                                                 .Value == metricKey);
-
-            foreach (var stat in stats)
-            {
-                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
-                if (timestampElems != null && !timestamps.Any())
-                {
-                    timestamps = timestampElems.Value.Split(' ')
-                                  .Select(ts => long.TryParse(ts, out long result)
-                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
-                                  : DateTime.MinValue)
-                                  .Where(t => t != DateTime.MinValue)
-                                  .ToList();
-                }
-
-                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
-                if (dataElems != null)
-                {
-                    return dataElems.Value.Split(' ')
-                           .Select(d => double.TryParse(d, out double value) ? value : 0.0)
-                           .ToArray();
-                }
-            }
-
-            return null;
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            return tokenElement?.Value;
         }
 
-        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+        private DateTime GetTokenExpiry(string expiryKey)
         {
-            var scriptBuilder = new StringBuilder();
-            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
-
-            var processedDiskMetrics = new HashSet<string>();
-
-            foreach (var metric in metricsData)
+            string expiryStr = ConfigurationManager.AppSettings[expiryKey];
+            if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
             {
-                string key = metric.Key.Substring(0, 3);
-
-                string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
-                scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
+                return expiryDate;
             }
-            scriptBuilder.AppendLine("fetchData();");
+            return DateTime.MinValue;
+        }
 
-            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+        private string GetStoredToken(string tokenKey)
+        {
+            return ConfigurationManager.AppSettings[tokenKey];
+        }
+
+        private void StoreToken(string token, string tokenKey)
+        {
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            config.AppSettings.Settings.Remove(tokenKey);
+            config.AppSettings.Settings.Add(tokenKey, token);
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
+        }
+
+        private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
+        {
+            var config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
+            config.AppSettings.Settings.Remove(expiryKey);
+            config.AppSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
+            config.Save(ConfigurationSaveMode.Modified);
+            ConfigurationManager.RefreshSection("appSettings");
         }
     }
 }
+-		$exception	{"exePath must be specified when not running inside a stand alone exe."}	System.ArgumentException
