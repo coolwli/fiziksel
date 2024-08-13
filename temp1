@@ -4,9 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using System.Web.Script.Serialization;
-using System.Configuration;
-using System.Web.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace vminfo
 {
@@ -14,20 +12,18 @@ namespace vminfo
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
-        private const int MaxRetryAttempts = 3;
-        private const int RetryDelayMilliseconds = 3000;
 
         private readonly HttpClient _httpClient;
         private readonly string _username;
         private readonly string _password;
+        private readonly IConfiguration _configuration;
 
-        public TokenManager(HttpClient httpClient)
+        public TokenManager(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _username = ConfigurationManager.AppSettings["VropsUsername"]
-                        ?? throw new ArgumentNullException(nameof(_username));
-            _password = ConfigurationManager.AppSettings["VropsPassword"]
-                        ?? throw new ArgumentNullException(nameof(_password));
+            _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+            _username = _configuration["VropsUsername"] ?? throw new ArgumentNullException(nameof(_username));
+            _password = _configuration["VropsPassword"] ?? throw new ArgumentNullException(nameof(_password));
         }
 
         public async Task<string> GetTokenAsync(string vropsServer)
@@ -36,13 +32,10 @@ namespace vminfo
             {
                 return null;
             }
-            else
-            {
-                return await CheckToken(vropsServer, "pendik");
-            }
+            return await CheckTokenAsync(vropsServer, "pendik");
         }
 
-        private async Task<string> CheckToken(string vropsServer, string tokenType)
+        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
         {
             string tokenKey = $"{tokenType}Token";
             string expiryKey = $"{tokenType}TokenExpiry";
@@ -54,7 +47,7 @@ namespace vminfo
                 string tokenXml = await AcquireTokenAsync(vropsServer, tokenType);
                 if (string.IsNullOrWhiteSpace(tokenXml))
                 {
-                    return "tokenbos";
+                    return "Token acquisition failed.";
                 }
 
                 string token = ExtractTokenFromXml(tokenXml);
@@ -62,50 +55,62 @@ namespace vminfo
                 {
                     StoreToken(token, tokenKey);
                     StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                    return "token bostu aldım";
+                    return "Token acquired successfully.";
                 }
-                else
-                {
-                    return "token null çıktı";
-                }
+                return "Token extraction failed.";
             }
             else
             {
                 StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                return "tokenvarvealdım";
+                return "Token is valid.";
             }
         }
 
         private async Task<string> AcquireTokenAsync(string vropsServer, string tokenType)
         {
-            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new
+            try
             {
-                username = _username,
-                password = _password
-            };
+                var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+                var requestBody = new
+                {
+                    username = _username,
+                    password = _password
+                };
 
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                var jsonContent = new StringContent(
+                    Newtonsoft.Json.JsonConvert.SerializeObject(requestBody),
+                    Encoding.UTF8,
+                    "application/json");
 
-            var response = await _httpClient.PostAsync(requestUri, content);
-            if (response.IsSuccessStatusCode)
-            {
+                var response = await _httpClient.PostAsync(requestUri, jsonContent);
+                response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync();
             }
-            return "denedık ve basarısız";
+            catch (HttpRequestException ex)
+            {
+                // Log exception (ex) here
+                return null;
+            }
         }
 
         private static string ExtractTokenFromXml(string xmlData)
         {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
+            try
+            {
+                var xdoc = XDocument.Parse(xmlData);
+                var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+                return tokenElement?.Value;
+            }
+            catch (Exception ex)
+            {
+                // Log exception (ex) here
+                return null;
+            }
         }
 
         private DateTime GetTokenExpiry(string expiryKey)
         {
-            string expiryStr = ConfigurationManager.AppSettings[expiryKey];
+            string expiryStr = _configuration[expiryKey];
             if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
             {
                 return expiryDate;
@@ -115,22 +120,13 @@ namespace vminfo
 
         private void StoreToken(string token, string tokenKey)
         {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            appSettings.Settings.Remove(tokenKey);
-            appSettings.Settings.Add(tokenKey, token);
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
+            // Consider using a more persistent storage than appSettings for tokens.
+            _configuration[tokenKey] = token;
         }
 
         private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
         {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            appSettings.Settings.Remove(expiryKey);
-            appSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
+            _configuration[expiryKey] = expiryDate.ToString("o");
         }
     }
 }
