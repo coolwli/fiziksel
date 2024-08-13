@@ -1,160 +1,324 @@
 using System;
-using System.Linq;
-using System.Net.Http;
+using System.Net;
+using System.Xml;
 using System.Text;
-using System.Threading.Tasks;
+using System.Linq;
+using System.Data;
+using System.Net.Http;
 using System.Xml.Linq;
-using System.Web.Configuration;
-using System.Web.Script.Serialization;
 using System.Configuration;
+using System.Data.SqlClient;
+using System.Threading.Tasks;
+using System.Web.UI.WebControls;
+using System.Web.UI.HtmlControls;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
 namespace vminfo
 {
-    public class TokenManager
+    public partial class clusterscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+        SqlConnection con = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True");
+        private string vRopsServer;
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
-        private readonly HttpClient _httpClient;
-        private readonly string _username;
-        private readonly string _password;
+        private string hostName;
+        private string _token;
+        private List<string> _metricsToFilter = new List<string> { "cpu|usagemhz_average", "mem|usage_average" };
 
-        public TokenManager(HttpClient httpClient)
+
+        static clusterscreen()
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _username = WebConfigurationManager.AppSettings["VropsUsername"]
-                        ?? throw new ArgumentNullException(nameof(_username));
-            _password = WebConfigurationManager.AppSettings["VropsPassword"]
-                        ?? throw new ArgumentNullException(nameof(_password));
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
-
-        public async Task<string> GetTokenAsync(string vropsServer)
+        protected async void Page_Load(object sender, EventArgs e)
         {
-            if (vropsServer == "apgaraavcs801" || vropsServer == "apgartksvcs801")
+            hostName = Request.QueryString["id"];
+            if (string.IsNullOrEmpty(hostName))
             {
-                return null;
+                DisplayHostNameError();
+                return;
             }
-            return await CheckTokenAsync(vropsServer, "pendik");
-        }
 
-        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
-        {
-            string tokenKey = $"{tokenType}Token";
-            string expiryKey = $"{tokenType}TokenExpiry";
-
-            DateTime tokenExpiry = GetTokenExpiry(expiryKey);
-
-            if (DateTime.Now >= tokenExpiry)
+            if (!IsPostBack)
             {
-                string tokenXml = await AcquireTokenAsync(vropsServer, tokenType);
-                if (string.IsNullOrWhiteSpace(tokenXml))
+                ShowHost();
+                await EnsureTokenAsync();
+            }
+        }
+        private void DisplayHostNameError()
+        {
+            form1.InnerHtml = "";
+            Response.Write("Host Bulunamadı");
+        }
+        private void ShowHost()
+        {
+            string query = "SELECT * FROM vminfoClusters WHERE ClusterName = @name";
+            con.Open();
+            using (var command = new SqlCommand(query, con))
+            {
+                command.Parameters.AddWithValue("@name", hostName);
+                using (var reader = command.ExecuteReader())
                 {
-                    return null;
+                    if (reader.Read())
+                    {
+                        PopulateDetails(reader);
+                    }
+                    else
+                    {
+                        DisplayHostNameError();
+                    }
                 }
-
-                string token = ExtractTokenFromXml(tokenXml);
-                if (token != null)
-                {
-                    StoreToken(token, tokenKey);
-                    StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                    return token;
-                }
-                return null;
             }
-            else
+            con.Close();
+        }
+        private void PopulateDetails(SqlDataReader reader)
+        {
+            vcenter.InnerText = reader["vCenter"].ToString();
+            vRopsServer = (reader["vCenter"].ToString() == "apgaraavcs801" || reader["vCenter"].ToString() == "apgartksvcs801") ? "https://apgaravrops801.fw.garanti.com.tr" : "https://ptekvrops01.fw.garanti.com.tr";
+
+            datacenter.InnerText = reader["DataCenter"].ToString();
+            hae.InnerText = reader["ClusterHAE"].ToString();
+            drs.InnerText = reader["ClusterDRSEnabled"].ToString();
+            vmotion.InnerText = Convert.ToInt32(reader["ClusterNumVmotions"]).ToString("N0");
+            hostcount.InnerText = reader["ClusterNumHosts"].ToString();
+            cpucore.InnerText = reader["ClusterNumCPUCores"].ToString();
+            vmcount.InnerText = reader["TotalVMCount"].ToString();
+            lasttime.InnerText = reader["LastWriteTime"].ToString();
+            totalDisk.InnerText = "Total Disk " + Convert.ToDouble(reader["ClusterTotalStorage"]).ToString("N2") + " GB";
+            freeDisk.InnerHtml = "Free Disk: <strong>" + Convert.ToDouble(reader["ClusterFreeStorage"]).ToString("N2") + "GB </strong >";
+            double usedStorage = (Convert.ToDouble(reader["ClusterTotalStorage"]) - Convert.ToDouble(reader["ClusterFreeStorage"]));
+            usedDisk.InnerHtml = "Used Disk: <strong>" + usedStorage.ToString("N2") + "GB </strong >";
+            usedPercentage.Style["width"] = (usedStorage / (Convert.ToDouble(reader["ClusterTotalStorage"])) * 100).ToString() + "%";
+            usedBar.InnerText = (usedStorage / (Convert.ToDouble(reader["ClusterTotalStorage"])) * 100).ToString("F2") + "%";
+            totalCpu.InnerText = "Total CPU " + reader["ClusterTotalCpu"].ToString() + "GHz ";
+            totalMemory.InnerText = "Total Memory " + reader["ClusterTotalMemory"].ToString() + " GB";
+
+            PopulateTable(eventsTable, reader["ClusterEventDates"].ToString(), reader["ClusterEventMessages"].ToString());
+            PopulateTable(dsTable, reader["DSName"].ToString(), reader["DSCapacity"].ToString(), reader["DSFree"].ToString(), reader["DSPercentUsing"].ToString());
+            getHosts(reader["VMHostNames"].ToString().Split('~'),reader);
+            reader.Close();
+
+        }
+        private void getHosts(string[] hostNames, SqlDataReader reader)
+        {
+            double hostUsedCpu = 0;
+            double hostUsedMem = 0;
+            if (hostNames == null || hostNames.Length == 0)
+                return;
+
+            var query = "SELECT * FROM vminfoHosts WHERE HostName IN (@HostNames)";
+            using (var hostcon = new SqlConnection(@"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"))
             {
-                StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
-                return GetToken(tokenKey);
+                hostcon.Open();
+                var formattedHostNames = hostNames.Select(name => $"'{name}'").ToArray();
+                var hostNamesList = string.Join(",", formattedHostNames);
+
+                using (var cmd = new SqlCommand(query.Replace("@HostNames", hostNamesList), hostcon))
+                {
+                    using (var vmreader = cmd.ExecuteReader())
+                    {
+                        string col1 = "";
+                        string col2 = "";
+                        string col3 = "";
+                        string col4 = "";
+                        string col5 = "";
+                        while (vmreader.Read())
+                        {
+
+                            col1 += vmreader["HostName"].ToString() + "~";
+                            col2 += vmreader["HostModel"].ToString() + "~";
+                            col3 += vmreader["VMsCount"].ToString() + "~";
+                            col4 += vmreader["HostTotalCPU"].ToString() + "~";
+                            col5 += vmreader["HostTotalMemory"].ToString() + "~";
+                            hostUsedCpu += Convert.ToDouble(vmreader["HostCPUUsage"]);
+                            hostUsedMem += Convert.ToDouble(vmreader["HostMemoryUsage"]);
+                        }
+                        PopulateTable(hostsTable, col1, col2, col3, col4, col5);
+                        vmreader.Close();
+                    }
+
+                }
+                hostcon.Close();
+            }
+
+            double totalCpuValue =Convert.ToDouble(reader["ClusterTotalCpu"]);
+            double totalMemoryValue =Convert.ToDouble(reader["ClusterTotalMemory"]);
+
+            usedCpu.InnerHtml = "Used CPU: <strong>" + hostUsedCpu.ToString("N2") + "GHz  </strong >";
+            freeCpu.InnerHtml = "Free CPU: <strong>" + (totalCpuValue-hostUsedCpu).ToString("N2") + "GHz  </strong >";
+            double perc = hostUsedCpu / totalCpuValue*100;
+            cpuPercentage.Style["width"] = perc .ToString() + "%";
+            cpuBar.InnerText = perc.ToString("N2") + "%";
+
+            usedMemory.InnerHtml = "Used Memory: <strong>" + hostUsedMem.ToString("N2") + "GB </strong >";
+            freeMemory.InnerHtml = "Free Memory: <strong>" + (totalMemoryValue- hostUsedMem).ToString("N2") + "GB </strong >";
+            perc = hostUsedMem/ totalMemoryValue*100;
+            memoryPercentage.Style["width"] = perc.ToString() + "%";
+            memoryBar.InnerText = perc.ToString("N2") + "%";
+
+        }
+        private void PopulateTable(HtmlTable table, params string[] columns)
+        {
+            var columnData = columns.Select(c => c.Split('~')).ToArray();
+            int rowCount = columnData[0].Length;
+            for (int i = 0; i < rowCount; i++)
+            {
+                if (columnData[0][i].Length == 0)
+                    return;
+                var row = new HtmlTableRow();
+                for (int j = 0; j < columnData.Length; j++)
+                {
+                    row.Cells.Add(new HtmlTableCell { InnerText = columnData[j][i] });
+                }
+                table.Rows.Add(row);
             }
         }
-
-        private async Task<string> AcquireTokenAsync(string vropsServer, string tokenType)
+        private async Task EnsureTokenAsync()
         {
-            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new
+            TokenManager tokenManager = new TokenManager(_httpClient);
+            _token = await tokenManager.GetTokenAsync(vRopsServer);
+            if (_token == null)
             {
-                username = _username,
-                password = _password
-            };
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                Response.Write("Şu anda grafiği görğntğleyemiyoruz lütfen daha sonra deneyiniz");
+                return;
+            }
+            await FetchClusterUsageDataAsync();
+        }
+
+            private async Task FetchClusterUsageDataAsync()
+        {
             try
             {
-                var response = await _httpClient.PostAsync(requestUri, content);
-
-                if (response.IsSuccessStatusCode)
+                string hostId = await GetClusterIdAsync(hostName);
+                if (!string.IsNullOrEmpty(hostId))
                 {
-                    return await response.Content.ReadAsStringAsync();
+                    var metricsData = await FetchMetricsAsync(hostId);
+                    SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                }
+                else
+                {
+                    Response.Write("Cluster ID not found.");
                 }
             }
-            catch 
+            catch (Exception ex)
             {
-                return null;
+                Response.Write($"Error fetching Host data: {ex.Message}");
             }
+        }
+        
+        private async Task<string> GetClusterIdAsync(string host)
+        {
+            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=ClusterComputeResource&name={host}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                string responseText = await response.Content.ReadAsStringAsync();
+                var xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(responseText);
+
+                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+                nsManager.AddNamespace("ops", OpsNamespace);
+
+                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+                return identifierNode?.Value;
+            }
+        }
+
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string hostid)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.UtcNow.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds();
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            var fetchTasks = _metricsToFilter.Select(async metric =>
+            {
+                string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{hostid}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=5&intervalType=MINUTES&rollUpType=AVG";
+                var data = await FetchMetricsDataAsync(metricsUrl);
+                var parsedData = ParseMetricsData(data, metric, ref timestamps);
+                if (parsedData != null)
+                {
+                    metricsData[metric] = parsedData;
+                }
+            });
+
+            await Task.WhenAll(fetchTasks);
+
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
+        }
+
+        private async Task<string> FetchMetricsDataAsync(string url)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync();
+            }
+        }
+
+        private double[] ParseMetricsData(string xmlData, string metricKey, ref List<DateTime> timestamps)
+        {
+            var xmlDoc = XDocument.Parse(xmlData);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                              .Where(stat => stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                                 .Element(XName.Get("key", ns.NamespaceName))
+                                                 .Value == metricKey);
+
+            foreach (var stat in stats)
+            {
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && !timestamps.Any())
+                {
+                    timestamps = timestampElems.Value.Split(' ')
+                                  .Select(ts => long.TryParse(ts, out long result)
+                                  ? DateTimeOffset.FromUnixTimeMilliseconds(result).DateTime
+                                  : DateTime.MinValue)
+                                  .Where(t => t != DateTime.MinValue)
+                                  .ToList();
+                }
+
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                           .Select(d => double.TryParse(d, out double value) ? value/ Convert.ToDouble(totalCpu.InnerText) : 0.0)
+                           .ToArray();
+                }
+            }
+
             return null;
         }
 
-        private static string ExtractTokenFromXml(string xmlData)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
-            try
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
+
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
             {
-                var xdoc = XDocument.Parse(xmlData);
-                var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-                return tokenElement?.Value;
+                string key = metric.Key.Substring(0, 3);
+
+                string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
+
             }
-            catch{
-                return null;
-            }
+            scriptBuilder.AppendLine("fetchData();");
+
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
-        private string GetToken(string tokenKey)
-        {
-            return WebConfigurationManager.AppSettings[tokenKey];
-        }
-
-        private DateTime GetTokenExpiry(string expiryKey)
-        {
-            string expiryStr = WebConfigurationManager.AppSettings[expiryKey];
-            if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
-            {
-                return expiryDate;
-            }
-            return DateTime.MinValue;
-        }
-
-        private void StoreToken(string token, string tokenKey)
-        {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            if (appSettings.Settings[tokenKey] != null)
-            {
-                appSettings.Settings[tokenKey].Value = token;
-            }
-            else
-            {
-                appSettings.Settings.Add(tokenKey, token);
-            }
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
-        }
-
-        private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
-        {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            if (appSettings.Settings[expiryKey] != null)
-            {
-                appSettings.Settings[expiryKey].Value = expiryDate.ToString("o");
-            }
-            else
-            {
-                appSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
-            }
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
-        }
     }
 }
-
-
-'The process cannot access the file 'C:\inetpub\vminfo\vminfo\web.config' because it is being used by another process.'
