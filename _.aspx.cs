@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -6,13 +7,12 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Web.Configuration;
 using System.Web.Script.Serialization;
-using System.Configuration;
 
 namespace vminfo
 {
     public class TokenManager
     {
-        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private const string TokenFileName = "tokens.txt"; // Tek bir metin dosyası adı
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
 
         private readonly HttpClient _httpClient;
@@ -33,36 +33,32 @@ namespace vminfo
             if (vcenter == "apgaraavcs801" || vcenter == "apgartksvcs801" || vcenter == "ptekvcsd01")
             {
                 return null;
-                //https://apgaravrops801.fw.garanti.com.tr
             }
             return await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
         }
 
         private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
         {
-            string tokenKey = $"{tokenType}Token";
-            string expiryKey = $"{tokenType}TokenExpiry";
+            string tokenFilePath = GetFilePath();
+            (string token, DateTime expiryDate) = ReadTokenAndExpiryFromFile(tokenFilePath, tokenType);
 
-            DateTime tokenExpiry = GetTokenExpiry(expiryKey);
-
-            if (DateTime.Now >= tokenExpiry)
+            if (DateTime.Now >= expiryDate)
             {
-                string token = await AcquireTokenAsync(vropsServer, tokenType);          
+                string newToken = await AcquireTokenAsync(vropsServer);
 
-                if (token != null)
+                if (newToken != null)
                 {
-                    StoreToken(token, tokenKey);
-                    StoreTokenExpiry(DateTime.Now.Add(TokenLifetime), expiryKey);
+                    StoreTokenAndExpiry(tokenFilePath, tokenType, newToken, DateTime.Now.Add(TokenLifetime));
+                    return newToken;
                 }
-                return "token";
+
+                return null;
             }
-            else
-            {
-                return WebConfigurationManager.AppSettings[tokenKey];
-            }
+
+            return token;
         }
 
-        private async Task<string> AcquireTokenAsync(string vropsServer, string tokenType)
+        private async Task<string> AcquireTokenAsync(string vropsServer)
         {
             var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
             var requestBody = new
@@ -77,69 +73,54 @@ namespace vminfo
 
             if (response.IsSuccessStatusCode)
             {
-                string tokenXml= await response.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(tokenXml))
-                {
-                    return "null";
-                }
-                return ExtractTokenFromXml(tokenXml);
+                string tokenXml = await response.Content.ReadAsStringAsync();
+                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
             }
 
-            return "401";
+            return null;
         }
 
         private static string ExtractTokenFromXml(string xmlData)
         {
             var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
             return tokenElement?.Value;
-
         }
 
-        private DateTime GetTokenExpiry(string expiryKey)
+        private (string token, DateTime expiryDate) ReadTokenAndExpiryFromFile(string filePath, string tokenType)
         {
-            string expiryStr = WebConfigurationManager.AppSettings[expiryKey];
-            if (DateTime.TryParse(expiryStr, out DateTime expiryDate))
+            if (!File.Exists(filePath))
             {
-                return expiryDate;
+                return (null, DateTime.MinValue);
             }
-            return DateTime.MinValue;
+
+            var lines = File.ReadAllLines(filePath);
+            var tokenLine = lines.FirstOrDefault(line => line.StartsWith($"{tokenType}:Token="));
+            var expiryLine = lines.FirstOrDefault(line => line.StartsWith($"{tokenType}:Expiry="));
+
+            string token = tokenLine?.Substring(tokenLine.IndexOf('=') + 1);
+            DateTime expiryDate = DateTime.TryParse(expiryLine?.Substring(expiryLine.IndexOf('=') + 1), out DateTime result) ? result : DateTime.MinValue;
+
+            return (token, expiryDate);
         }
 
-        private void StoreToken(string token, string tokenKey)
+        private void StoreTokenAndExpiry(string filePath, string tokenType, string token, DateTime expiryDate)
         {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            if (appSettings.Settings[tokenKey] != null)
-            {
-                appSettings.Settings[tokenKey].Value = token;
-            }
-            else
-            {
-                appSettings.Settings.Add(tokenKey, token);
-            }
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
+            var lines = File.Exists(filePath) ? File.ReadAllLines(filePath).ToList() : new List<string>();
+
+            var tokenLine = $"{tokenType}:Token={token}";
+            var expiryLine = $"{tokenType}:Expiry={expiryDate:o}";
+
+            lines.RemoveAll(line => line.StartsWith($"{tokenType}:Token=") || line.StartsWith($"{tokenType}:Expiry="));
+            lines.Add(tokenLine);
+            lines.Add(expiryLine);
+
+            File.WriteAllLines(filePath, lines);
         }
 
-        private void StoreTokenExpiry(DateTime expiryDate, string expiryKey)
+        private string GetFilePath()
         {
-            var config = WebConfigurationManager.OpenWebConfiguration("~");
-            var appSettings = config.AppSettings;
-            if (appSettings.Settings[expiryKey] != null)
-            {
-                appSettings.Settings[expiryKey].Value = expiryDate.ToString("o");
-            }
-            else
-            {
-                appSettings.Settings.Add(expiryKey, expiryDate.ToString("o"));
-            }
-            config.Save(ConfigurationSaveMode.Modified);
-            ConfigurationManager.RefreshSection("appSettings");
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
         }
     }
 }
-
-
-TokenManager tokenManager = new TokenManager(_httpClient);
-_token = await tokenManager.GetTokenAsync(vcenter.InnerText);
