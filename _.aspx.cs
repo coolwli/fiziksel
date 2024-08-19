@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -40,22 +41,27 @@ namespace vminfo
         private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
         {
             string tokenFilePath = GetFilePath();
-            (string token, DateTime expiryDate) = ReadTokenAndExpiryFromFile(tokenFilePath, tokenType);
+            var tokenInfo = ReadTokenInfoFromFile(tokenFilePath, tokenType);
 
-            if (DateTime.Now >= expiryDate)
+            if (DateTime.Now >= tokenInfo.ExpiryDate)
             {
                 string newToken = await AcquireTokenAsync(vropsServer);
 
                 if (newToken != null)
                 {
-                    StoreTokenAndExpiry(tokenFilePath, tokenType, newToken, DateTime.Now.Add(TokenLifetime));
+                    var newTokenInfo = new TokenInfo
+                    {
+                        Token = newToken,
+                        ExpiryDate = DateTime.Now.Add(TokenLifetime)
+                    };
+                    StoreTokenInfo(tokenFilePath, tokenType, newTokenInfo);
                     return newToken;
                 }
 
                 return null;
             }
 
-            return token;
+            return tokenInfo.Token;
         }
 
         private async Task<string> AcquireTokenAsync(string vropsServer)
@@ -87,11 +93,11 @@ namespace vminfo
             return tokenElement?.Value;
         }
 
-        private (string token, DateTime expiryDate) ReadTokenAndExpiryFromFile(string filePath, string tokenType)
+        private TokenInfo ReadTokenInfoFromFile(string filePath, string tokenType)
         {
             if (!File.Exists(filePath))
             {
-                return (null, DateTime.MinValue);
+                return new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
             }
 
             var lines = File.ReadAllLines(filePath);
@@ -101,15 +107,15 @@ namespace vminfo
             string token = tokenLine?.Substring(tokenLine.IndexOf('=') + 1);
             DateTime expiryDate = DateTime.TryParse(expiryLine?.Substring(expiryLine.IndexOf('=') + 1), out DateTime result) ? result : DateTime.MinValue;
 
-            return (token, expiryDate);
+            return new TokenInfo { Token = token, ExpiryDate = expiryDate };
         }
 
-        private void StoreTokenAndExpiry(string filePath, string tokenType, string token, DateTime expiryDate)
+        private void StoreTokenInfo(string filePath, string tokenType, TokenInfo tokenInfo)
         {
             var lines = File.Exists(filePath) ? File.ReadAllLines(filePath).ToList() : new List<string>();
 
-            var tokenLine = $"{tokenType}:Token={token}";
-            var expiryLine = $"{tokenType}:Expiry={expiryDate:o}";
+            var tokenLine = $"{tokenType}:Token={tokenInfo.Token}";
+            var expiryLine = $"{tokenType}:Expiry={tokenInfo.ExpiryDate:o}";
 
             lines.RemoveAll(line => line.StartsWith($"{tokenType}:Token=") || line.StartsWith($"{tokenType}:Expiry="));
             lines.Add(tokenLine);
@@ -122,5 +128,12 @@ namespace vminfo
         {
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
         }
+    }
+
+    // Token ve Expiry bilgilerini saklamak için sınıf
+    public class TokenInfo
+    {
+        public string Token { get; set; }
+        public DateTime ExpiryDate { get; set; }
     }
 }
