@@ -11,18 +11,6 @@ function sortDatas(index) {
     filteredData.sort(function (a, b) {
         let aValue = a[Object.keys(a)[index]];
         let bValue = b[Object.keys(b)[index]];
-
-
-        if (!isNaN(aValue) && !isNaN(bValue)) {
-            return ascending ? aValue - bValue : bValue - aValue;
-        }
-        else if (index === 9) {
-            if (aValue == "-") return 1;
-            if (bValue == "-") return -1;
-            aValue = new Date(aValue.trim());
-            bValue = new Date(bValue.trim());
-            return ascending ? aValue - bValue : bValue - aValue;
-        }
         return ascending ? aValue.trim().localeCompare(bValue.trim()) : bValue.trim().localeCompare(aValue.trim());
     });
     currentPage = 1;
@@ -44,9 +32,6 @@ function renderPage(pageNumber) {
             const td = document.createElement('td');
             td.textContent = cellData;
             tr.appendChild(td);
-            tr.addEventListener('click', function () {
-                window.location.href = screenName + ".aspx" + "?id=" + row[Object.keys(row)[0]];
-            });
         }
         tableBody.appendChild(tr);
     });
@@ -115,16 +100,6 @@ function generateColumnCheckboxes(dropdownContent) {
 
     const values = [...new Set(filteredData.map(row => row[Object.keys(row)[columnIndex]].toString().trim()))];
     values.sort(function (a, b) {
-        if (!isNaN(a) && !isNaN(b)) {
-            return ascending ? a - b : b - a;
-        }
-        else if (columnIndex == 9) {
-            if (a == "-") return 1;
-            if (b == "-") return -1;
-            a = new Date(a);
-            b = new Date(b);
-            return ascending ? a - b : b - a;
-        }
         if (a == null) return -1;
         if (b == null) return 1;
 
