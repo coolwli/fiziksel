@@ -1,19 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using System.Web.Configuration;
 using System.Web.Script.Serialization;
+using System.Xml.Linq;
 
 namespace vminfo
 {
     public class TokenManager
     {
-        private const string TokenFileName = "tokens.txt"; 
+        private const string ConnectionStringName = "SqlConnectionString"; // app.config'de tanımlı olmalı
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
 
         private readonly HttpClient _httpClient;
@@ -33,15 +34,14 @@ namespace vminfo
         {
             if (vcenter == "apgaraavcs801" || vcenter == "apgartksvcs801" || vcenter == "ptekvcsd01")
             {
-                return await CheckTokenAsync("https://apgaravrops801.fw.garanti.com.tr", "ankara"); ;
+                return await CheckTokenAsync("https://apgaravrops801.fw.garanti.com.tr", "ankara");
             }
             return await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
         }
 
         private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
         {
-            string tokenFilePath = GetFilePath();
-            var tokenInfo = ReadTokenInfoFromFile(tokenFilePath, tokenType);
+            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
             if (DateTime.Now >= tokenInfo.ExpiryDate)
             {
@@ -54,13 +54,13 @@ namespace vminfo
                         Token = newToken,
                         ExpiryDate = DateTime.Now.Add(TokenLifetime)
                     };
-                    StoreTokenInfo(tokenFilePath, tokenType, newTokenInfo);
+                    await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
                     return newToken;
                 }
 
                 return null;
             }
-            tokenInfo = ReadTokenInfoFromFile(tokenFilePath, tokenType);
+
             return tokenInfo.Token;
         }
 
@@ -93,40 +93,64 @@ namespace vminfo
             return tokenElement?.Value;
         }
 
-        private TokenInfo ReadTokenInfoFromFile(string filePath, string tokenType)
+        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
         {
-            if (!File.Exists(filePath))
+            var tokenInfo = new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
+            var connectionString = WebConfigurationManager.ConnectionStrings[ConnectionStringName]?.ConnectionString;
+
+            if (string.IsNullOrEmpty(connectionString))
+                throw new InvalidOperationException("Connection string is not configured.");
+
+            using (var connection = new SqlConnection(connectionString))
             {
-                return new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
+                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        tokenInfo.Token = reader["Token"] as string;
+                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
+                    }
+                }
             }
 
-            var lines = File.ReadAllLines(filePath);
-            var tokenLine = lines.FirstOrDefault(line => line.StartsWith($"{tokenType}:Token="));
-            var expiryLine = lines.FirstOrDefault(line => line.StartsWith($"{tokenType}:Expiry="));
-
-            string token = tokenLine?.Substring(tokenLine.IndexOf('=') + 1);
-            DateTime expiryDate = DateTime.TryParse(expiryLine?.Substring(expiryLine.IndexOf('=') + 1), out DateTime result) ? result : DateTime.MinValue;
-
-            return new TokenInfo { Token = token, ExpiryDate = expiryDate };
+            return tokenInfo;
         }
 
-        private void StoreTokenInfo(string filePath, string tokenType, TokenInfo tokenInfo)
+        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
         {
-            var lines = File.Exists(filePath) ? File.ReadAllLines(filePath).ToList() : new List<string>();
+            var connectionString = WebConfigurationManager.ConnectionStrings[ConnectionStringName]?.ConnectionString;
 
-            var tokenLine = $"{tokenType}:Token={tokenInfo.Token}";
-            var expiryLine = $"{tokenType}:Expiry={tokenInfo.ExpiryDate:o}";
+            if (string.IsNullOrEmpty(connectionString))
+                throw new InvalidOperationException("Connection string is not configured.");
 
-            lines.RemoveAll(line => line.StartsWith($"{tokenType}:Token=") || line.StartsWith($"{tokenType}:Expiry="));
-            lines.Add(tokenLine);
-            lines.Add(expiryLine);
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+                    BEGIN
+                        UPDATE TokenInfo
+                        SET Token = @Token, ExpiryDate = @ExpiryDate
+                        WHERE TokenType = @TokenType
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
+                        VALUES (@TokenType, @Token, @ExpiryDate)
+                    END";
 
-            File.WriteAllLines(filePath, lines);
-        }
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
 
-        private string GetFilePath()
-        {
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TokenFileName);
+                await connection.OpenAsync();
+                await command.ExecuteNonQueryAsync();
+            }
         }
     }
 
@@ -136,5 +160,3 @@ namespace vminfo
         public DateTime ExpiryDate { get; set; }
     }
 }
-
- 'The process cannot access the file 'C:\inetpub\wwwroot\vminfo\vminfo\tokens.txt' because it is being used by another process.'
