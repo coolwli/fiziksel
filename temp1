@@ -1,8 +1,5 @@
-vminfo, sanal makineler  ile bağlı oldukları hostlar ve clusterlar hakkında kapsamlı bilgi sunmak üzere tasarlanmıştır. Bu uygulama, VMware'in vRealize Operations (vROps) ve PowerCLI araçlarından yararlanarak, kullanıcıların sanal altyapılarını daha hızlı ve güvenli erişimelerini sağlamak için oluşturulmuştur.
-Uygulamanın ana sayfasında, sanal makineler hakkında genel bilgilere ve filtreleme araçlarına erişim sağlanır. Bu bilgiler, güç durumu, host adı, cluster, oluşturulma tarihi, işletim sistemi (OS), veri merkezi, vCenter, host modeli, CPU sayısı ve bellek gibi önemli detayları içerir ve ihtiyaca göre çeşitlendirilebilir.
-Sayfa, iki ana sekme içerir: "Data" ve "Performance & Disk".
-•	"Data" Sekmesi: Bu sekme, VM ile ilgili temel bilgileri ve ağ kartları, diskler, olay günlüğü gibi detayları sunar.
-•	"Performance & Disk" Sekmesi: Performans verilerini ve disk kullanım grafiklerini içerir. Burada, CPU, bellek ve disk kullanımına ilişkin grafikler yer alır. Grafikler, belirli bir zaman dilimindeki performans trendlerini vROps'tan süite-api aracılığıyla alarak birebir verileri sunar. Veriler 5 dakikalık aralıklarla alınır; ancak ekran üzerinde fazla detay olup karmaşıklık olmaması için minimum ve maksimum noktalar dışarıda tutulurak kalan tüm değerlerin uygun ortalaması alınarak gösterilir.
-Ayrıca, sayfa disk kullanım verilerini görselleştiren paneller sunar. Her bir disk için ayrı bir otomatik panel oluşturulur ve bu paneller, disk kullanımının ortalama yüzdesini gösterir.
-Başlangıçta yalnızca PowerCLI ile oluşturulan bu uygulama, VMware vROps'un sunduğu kapsamlı veri toplama ve analiz yeteneklerinden faydalanarak hızlı ve etkili destek sağlar. İhtiyaç doğrultusunda her metric eklenebilir veya özel metricler oluşturulabilir. Bu süreçte geri bildirimleriniz büyük önem taşımaktadır.
-
+CREATE TABLE TokenInfo (
+    TokenType NVARCHAR(50) PRIMARY KEY,
+    Token NVARCHAR(MAX) NULL,
+    ExpiryDate DATETIME NOT NULL
+);
