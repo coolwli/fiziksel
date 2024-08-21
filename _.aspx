@@ -1,80 +1,91 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="windows_users._default" %>
-
 <!DOCTYPE html>
+<html lang="tr">
 
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head runat="server">
-    <title>All VMs</title>
-    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
-    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/table-style.css?v=1.0.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Tasarımı</title>
     <style>
-        .table-container{
-            width:50%;
-            margin:auto;
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 80%;
+            margin: 50px auto;
+        }
+
+        .tab-button {
+            background: #eee;
+            border: none;
+            padding: 15px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            flex: 1;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+
+        .tab-button:hover {
+            background-color: #ddd;
+        }
+
+        .tab-button.active {
+            background-color: #fff;
+            border-bottom: 2px solid #007BFF;
+        }
+
+        .tab-content {
+            padding: 20px;
+            background-color: #fff
+        }
+
+        .tab-content h1 {
+            margin-top: 0;
+            font-size: 24px;
+        }
+
+        .tab-content p {
+            font-size: 16px;
+            color: #555;
         }
     </style>
-
 </head>
+
 <body>
-    <form id="form1" runat="server">
-        <div class="header">
-            <h1 class="baslik" id="baslik" runat="server">Example</h1>
-
+    <div class="container">
+        <div class="tabs">
+            <button class="tab-button active" onclick="openTab(event, 'tab1')">Tab 1</button>
+            <button class="tab-button" onclick="openTab(event, 'tab2')">Tab 2</button>
         </div>
-        <div class="table-container">
-            <div class="table-top">
-                <h2 id="rowCounter"></h2>
-                <button id="reset-button">Reset</button>
-            </div>
-            <div class="tabs"></div>
-            <table id="contentTable">
-                <thead>
-                    <tr>
-                        <th class="dropdown">
-                            Host<span class="dropdown-arrow">&#9660;</span>
-                            <div class="dropdown-content" id="nameDropdown">
-                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div">
-                                    <input type="checkbox">
-                                    <label>Select All</label>
-                                    <br>
-                                </div>
-                                <div class="checkboxes"></div>
-                        </th>
-                        <th class="dropdown">
-                            User<span class="dropdown-arrow">&#9660;</span>
-                            <div class="dropdown-content" id="userDropdown">
-                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
-                                <div class="select-all-div">
-                                    <input type="checkbox">
-                                    <label>Select All</label>
-                                    <br>
-                                </div>
-                                <div class="checkboxes"></div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody" runat="server">
-                </tbody>
-            </table>
+        <div class="tab-content" id="tab1">
+            <h1>Tab 1 İçeriği</h1>
+            <p>Bu, ilk sekmenin içeriğidir.</p>
         </div>
-        <div class="pagination" id="pagination"></div>
-        <footer>
-            <p class="footer">© 2024 - Cloud United Team</p>
-        </footer>
+        <div class="tab-content" id="tab2" style="display: none;">
+            <h1>Tab 2 İçeriği</h1>
+            <p>Bu, ikinci sekmenin içeriğidir.</p>
+        </div>
+    </div>
 
-        <script src="tableOrganizer.js"></script>
-        <script>
-            function add1000rowsTable() {
-                for (let i = 0; i < 1000; i++) {
-                    
-                }
+    <script>
+        function openTab(event, tabId) {
+            var i, tabContent, tabButtons;
+            tabContent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabContent.length; i++) {
+                tabContent[i].style.display = "none";
             }
-            add1000rowsTable();
-            initializeTable();
-
-        </script>
-    </form>
+            tabButtons = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].className = tabButtons[i].className.replace(" active", "");
+            }
+            document.getElementById(tabId).style.display = "block";
+            event.currentTarget.className += " active";
+        }
+    </script>
 </body>
 
 </html>
