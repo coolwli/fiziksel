@@ -21,7 +21,7 @@ namespace windows_users
             }
 
             string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
-            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+            List<string[][]> rows = new List<string[][]>();
 
             try
             {
@@ -35,7 +35,7 @@ namespace windows_users
                         if (columns.Length > 0)
                         {
                             string[] cell = columns[0].Split('+');
-                            Dictionary<string, object> row = new Dictionary<string, object>();
+                            string[][] row = new string[][];
 
                             for (int i = 0; i < cell.Length ; i++)
                             {
