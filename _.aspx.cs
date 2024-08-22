@@ -2,54 +2,57 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Collections.Generic;
 
-public partial class Default : System.Web.UI.Page
+namespace windows_users
 {
-    protected void Page_Load(object sender, EventArgs e)
+    public partial class _default : System.Web.UI.Page
     {
-        // CSV dosyalarının bulunduğu klasör
-        string folderPath = Server.MapPath("~/App_Data/");
-        
-        // Klasördeki tüm CSV dosyalarını alın
-        var csvFiles = Directory.GetFiles(folderPath, "*.csv");
-        
-        if (csvFiles.Length == 0)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            LiteralData.Text = "Klasörde CSV dosyası bulunamadı.";
-            return;
-        }
-        
-        // En son eklenen dosyayı bul
-        string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
-        
-        // En son eklenen CSV dosyasını okuyun ve ilk sütundaki verileri alın
-        StringBuilder sb = new StringBuilder();
+            string folderPath = @"F:\Ali\windows users";
 
-        try
-        {
-            using (StreamReader reader = new StreamReader(latestFile))
+            var csvFiles = Directory.GetFiles(folderPath, "*.csv");
+
+            if (csvFiles.Length == 0)
             {
-                string line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    // Satırı virgülle ayırarak sütunları elde edin
-                    string[] columns = line.Split(',');
-
-                    // İlk sütundaki veriyi alın
-                    if (columns.Length > 0)
-                    {
-                        sb.AppendLine(columns[0]);
-                    }
-                }
+                Response.Write("csv bulunamadı");
+                return;
             }
 
-            // Verileri Literal kontrolüne atayın
-            LiteralData.Text = sb.ToString().Replace(Environment.NewLine, "<br/>");
-        }
-        catch (Exception ex)
-        {
-            // Hata durumunda uygun bir mesaj gösterin
-            LiteralData.Text = "Hata: " + ex.Message;
+            string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
+            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+
+            try
+            {
+                using (StreamReader reader = new StreamReader(latestFile))
+                {
+                    string line;
+
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        string[] columns = line.Split(',');
+                        if (columns.Length > 0)
+                        {
+                            string[] cell = columns[0].Split('+');
+                            Dictionary<string, object> row = new Dictionary<string, object>();
+
+                            for (int i = 0; i < cell.Length ; i++)
+                            {
+                                row.Add(cell[0],cell[1]);
+                            }
+                            rows.Add(row);
+                        }
+                    }
+                }
+
+                Response.Write(rows.Count+"-");
+                Response.Write(rows[0].Count);
+            }
+            catch (Exception ex)
+            {
+                Response.Write("Hata: " + ex.Message);
+            }
         }
     }
 }
