@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Collections.Generic;
 using System.Web.UI;
+using System.Web.Script.Serialization;
 
 namespace windows_users
 {
@@ -14,7 +16,6 @@ namespace windows_users
 
             try
             {
-                // CSV dosyalarını al
                 var csvFiles = Directory.GetFiles(folderPath, "*.csv");
 
                 if (csvFiles.Length == 0)
@@ -23,11 +24,9 @@ namespace windows_users
                     return;
                 }
 
-                // En son oluşturulmuş dosyayı seç
                 string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
                 List<string[]> rows = new List<string[]>();
 
-                // CSV dosyasını oku
                 using (StreamReader reader = new StreamReader(latestFile))
                 {
                     string line;
@@ -36,34 +35,45 @@ namespace windows_users
                         string[] columns = line.Split(',');
                         if (columns.Length > 0)
                         {
-                            string[] cell = columns[0].Split('+');
+                            string[] cell = columns[0].Split('+').Select(c=>c.Trim()).ToArray();
                             rows.Add(cell);
                         }
                     }
                 }
-
-                // Sonuçları ekrana yazdır
-                if (rows.Count > 0)
-                {
-                    StringBuilder output = new StringBuilder();
-                    output.AppendLine($"Toplam satır sayısı: {rows.Count}");
-                    output.AppendLine("Veri içeriği:");
-                    
-                    foreach (var row in rows)
-                    {
-                        output.AppendLine(string.Join(" | ", row));
-                    }
-
-                    Response.Write(output.ToString());
-                }
-                else
-                {
-                    Response.Write("CSV dosyası boş.");
-                }
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = Int32.MaxValue;
+                string json = serializer.Serialize(rows);
+                string script = $"<script> data = {json};initializeTable();</script>";
+                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
             }
             catch (Exception ex)
             {
                 Response.Write("Hata: " + ex.Message);
+            }
+        }
+        protected void hiddenButton_Click(object sender, EventArgs e)
+        {
+            string jsonData = hiddenField.Value;
+
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue; // Maksimum JSON uzunluğunu ayarla
+                var tableData = js.Deserialize<List<Dictionary<string, string>>>(jsonData);
+
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Host,User");
+
+                foreach (var row in tableData)
+                {
+                    csv.AppendLine($"{row["a"]},{row["vCenter"]}");
+                }
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=vmsData.csv");
+                Response.Write(csv.ToString());
+                Response.End();
             }
         }
     }
