@@ -1,5 +1,5 @@
-CREATE TABLE TokenInfo (
-    TokenType NVARCHAR(50) PRIMARY KEY,
-    Token NVARCHAR(MAX) NULL,
-    ExpiryDate DATETIME NOT NULL
-);
+vminfo adıyla ekip içerisinde kullandığımız servisimizi güncelleyerek yeni adıyla ve yeni içeriğiyle ilgili tüm ekip arkadaşlarımızın erişimine açtık
+Tasarımsal olarak büyük değişiklikler ve performans olarak iyileştirmelerin yanı sıra en büyük gelişimleri günlük ihtiyaçlar doğrultusunda hazırladık
+Sunucu sahiplerinin sıkça ihtiyaç duyduğu ve uzunca bir süreç olan performans grafiğini uzun süreçlerde incelemeyi çok kolaylaştırdık ve bize ihtiyaç duymalarına gerek kalmadan karmaşık işlemlerden kurtardık
+Vm host ya da cluster özelinde cpu kullanımı,memory kullanımı ya da disk kullanımlarını dinamik bir şekilde 1 yıl dan 1 güne kadar istenilen aralıkta izlemelerini sağladık
+Burada minimum ve maxsimum noltaları da belirterek kaynak planlaması ya da … gibi işlemler için anlık olarak kullanımı görebilidik
