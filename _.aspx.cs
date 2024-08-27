@@ -1,42 +1,43 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
-using System.Collections.Generic;
-using System.Web.Script.Serialization;
 using System.Text;
+using System.Web.Script.Serialization;
+using System.Web.UI;
 
 namespace vmpedia
 {
     public partial class _default : System.Web.UI.Page
     {
-        private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
 
         protected void Page_Load(object sender, EventArgs e)
         {
-            Show_List();
-
+            if (!IsPostBack)
+            {
+                Show_List();
+            }
         }
+
         public void Show_List()
         {
-            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+            var rows = new List<Dictionary<string, object>>();
 
-            using (SqlConnection con = new SqlConnection(connectionString))
+            using (var con = new SqlConnection(connectionString))
             {
                 con.Open();
 
-                using (SqlCommand cmd = con.CreateCommand())
+                using (var cmd = new SqlCommand("SELECT VMName, vCenter, VMNumCPU, VMMemoryCapacity, VMTotalStorage, VMPowerState, VMCluster, VMDataCenter, VMGuestOS, VMOwner, VMCreatedDate FROM vminfoVMs", con))
                 {
-                    cmd.CommandType = CommandType.Text;
-                    cmd.CommandText = "SELECT VMName, vCenter, VMNumCPU, VMMemoryCapacity, VMTotalStorage, VMPowerState, VMCluster, VMDataCenter,VMGuestOS, VMOwner, VMCreatedDate FROM vminfoVMs";
-
-                    using (SqlDataReader reader = cmd.ExecuteReader())
+                    using (var reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
                         {
-                            Dictionary<string, object> row = new Dictionary<string, object>();
+                            var row = new Dictionary<string, object>();
                             for (int i = 0; i < reader.FieldCount; i++)
                             {
-                                row.Add(reader.GetName(i), reader.GetValue(i));
+                                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
                             }
                             rows.Add(row);
                         }
@@ -44,45 +45,83 @@ namespace vmpedia
                 }
             }
 
-            JavaScriptSerializer serializer = new JavaScriptSerializer();
-            serializer.MaxJsonLength = Int32.MaxValue;
-            string json = serializer.Serialize(rows);
-            string script = $"<script> data = {json}; initializeTable(); screenName = 'vmscreen'; </script>";
-            ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
-
+            var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            var json = serializer.Serialize(rows);
+            var script = $"<script>data = {json}; initializeTable(); screenName = 'vmscreen';</script>";
+            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
         }
+
         protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            string jsonData = hiddenField.Value;
+            var jsonData = hiddenField.Value;
 
-            if (!string.IsNullOrEmpty(jsonData))
+            if (string.IsNullOrEmpty(jsonData))
             {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue; 
-                string[] vmNames = js.Deserialize<string[]>(jsonData);
+                Response.Write("No data received.");
+                Response.End();
+                return;
+            }
 
-                using (SqlConnection con = new SqlConnection(connectionString))
+            var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            var vmNames = serializer.Deserialize<string[]>(jsonData);
+
+            if (vmNames.Length == 0)
+            {
+                Response.Write("No VM names provided.");
+                Response.End();
+                return;
+            }
+
+            var queryBuilder = new StringBuilder("SELECT * FROM vminfoVMs WHERE VMName IN (");
+            for (int i = 0; i < vmNames.Length; i++)
+            {
+                if (i > 0) queryBuilder.Append(", ");
+                queryBuilder.Append("@name" + i);
+            }
+            queryBuilder.Append(")");
+
+            using (var con = new SqlConnection(connectionString))
+            {
+                con.Open();
+
+                using (var cmd = new SqlCommand(queryBuilder.ToString(), con))
                 {
-                    con.Open();
-
-                    using (SqlCommand cmd = con.CreateCommand())
+                    for (int i = 0; i < vmNames.Length; i++)
                     {
-                        cmd.CommandType = CommandType.Text;
-                        cmd.CommandText = "SELECT * FROM vminfoVMs WHERE VMName=";
+                        cmd.Parameters.AddWithValue("@name" + i, vmNames[i]);
+                    }
 
-                        //add here
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        var csv = new StringBuilder();
+
+                        // Append the header row
+                        for (int i = 0; i < reader.FieldCount; i++)
+                        {
+                            if (i > 0) csv.Append(",");
+                            csv.Append(reader.GetName(i));
+                        }
+                        csv.AppendLine();
+
+                        // Append data rows
+                        while (reader.Read())
+                        {
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                if (i > 0) csv.Append(",");
+                                csv.Append(reader.IsDBNull(i) ? string.Empty : reader.GetValue(i).ToString());
+                            }
+                            csv.AppendLine();
+                        }
+
+                        Response.Clear();
+                        Response.ContentType = "text/csv";
+                        Response.AddHeader("content-disposition", "attachment;filename=vmsData.csv");
+                        Response.Write(csv.ToString());
+                        Response.End();
                     }
                 }
-                StringBuilder csv = new StringBuilder();
-
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=vmsData.csv");
-                Response.Write(csv.ToString());
-                Response.End();
             }
         }
-
     }
 }
