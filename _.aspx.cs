@@ -1,155 +1,88 @@
 using System;
-using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using System.Web.Configuration;
+using System.Collections.Generic;
 using System.Web.Script.Serialization;
-using System.Xml.Linq;
+using System.Text;
 
-namespace vminfo
+namespace vmpedia
 {
-    public class TokenManager
+    public partial class _default : System.Web.UI.Page
     {
-        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+        private string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
 
-        private readonly HttpClient _httpClient;
-        private readonly string _username;
-        private readonly string _password;
-
-        public TokenManager(HttpClient httpClient)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _username = WebConfigurationManager.AppSettings["VropsUsername"]
-                        ?? throw new ArgumentNullException(nameof(_username));
-            _password = WebConfigurationManager.AppSettings["VropsPassword"]
-                        ?? throw new ArgumentNullException(nameof(_password));
+            Show_List();
+
         }
-
-        public async Task<string> GetTokenAsync(string vcenter)
+        public void Show_List()
         {
-            if (vcenter == "apgaraavcs801" || vcenter == "apgartksvcs801" || vcenter == "ptekvcsd01")
+            List<Dictionary<string, object>> rows = new List<Dictionary<string, object>>();
+
+            using (SqlConnection con = new SqlConnection(connectionString))
             {
-                return await CheckTokenAsync("https://apgaravrops801.fw.garanti.com.tr", "ankara");
-            }
-            return await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
-        }
+                con.Open();
 
-        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
-        {
-            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
-
-            if (DateTime.Now >= tokenInfo.ExpiryDate)
-            {
-                string newToken = await AcquireTokenAsync(vropsServer);
-
-                if (newToken != null)
+                using (SqlCommand cmd = con.CreateCommand())
                 {
-                    var newTokenInfo = new TokenInfo
+                    cmd.CommandType = CommandType.Text;
+                    cmd.CommandText = "SELECT VMName, vCenter, VMNumCPU, VMMemoryCapacity, VMTotalStorage, VMPowerState, VMCluster, VMDataCenter,VMGuestOS, VMOwner, VMCreatedDate FROM vminfoVMs";
+
+                    using (SqlDataReader reader = cmd.ExecuteReader())
                     {
-                        Token = newToken,
-                        ExpiryDate = DateTime.Now.Add(TokenLifetime)
-                    };
-                    await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
-                    return await CheckTokenAsync(vropsServer,tokenType);
-                }
-
-                return null;
-            }
-
-            return tokenInfo.Token;
-        }
-
-        private async Task<string> AcquireTokenAsync(string vropsServer)
-        {
-            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new
-            {
-                username = _username,
-                password = _password
-            };
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync(requestUri, content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                string tokenXml = await response.Content.ReadAsStringAsync();
-                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
-            }
-
-            return null;
-        }
-
-        private static string ExtractTokenFromXml(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
-            return tokenElement?.Value;
-        }
-
-        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
-        {
-            var tokenInfo = new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-
-                await connection.OpenAsync();
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    if (await reader.ReadAsync())
-                    {
-                        tokenInfo.Token = reader["Token"] as string;
-                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
+                        while (reader.Read())
+                        {
+                            Dictionary<string, object> row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                row.Add(reader.GetName(i), reader.GetValue(i));
+                            }
+                            rows.Add(row);
+                        }
                     }
                 }
             }
 
-            return tokenInfo;
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = Int32.MaxValue;
+            string json = serializer.Serialize(rows);
+            string script = $"<script> data = {json}; initializeTable(); screenName = 'vmscreen'; </script>";
+            ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
+
         }
-
-        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
+        protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+            string jsonData = hiddenField.Value;
 
-            using (var connection = new SqlConnection(connectionString))
+            if (!string.IsNullOrEmpty(jsonData))
             {
-                var query = @"
-                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
-                    BEGIN
-                        UPDATE TokenInfo
-                        SET Token = @Token, ExpiryDate = @ExpiryDate
-                        WHERE TokenType = @TokenType
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
-                        VALUES (@TokenType, @Token, @ExpiryDate)
-                    END";
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue; 
+                string[] vmNames = js.Deserialize<string[]>(jsonData);
 
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    con.Open();
 
-                await connection.OpenAsync();
-                await command.ExecuteNonQueryAsync();
+                    using (SqlCommand cmd = con.CreateCommand())
+                    {
+                        cmd.CommandType = CommandType.Text;
+                        cmd.CommandText = "SELECT * FROM vminfoVMs WHERE VMName=";
+
+                        //add here
+                    }
+                }
+                StringBuilder csv = new StringBuilder();
+
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=vmsData.csv");
+                Response.Write(csv.ToString());
+                Response.End();
             }
         }
-    }
 
-    public class TokenInfo
-    {
-        public string Token { get; set; }
-        public DateTime ExpiryDate { get; set; }
     }
 }
