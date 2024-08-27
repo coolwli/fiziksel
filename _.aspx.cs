@@ -1,41 +1,155 @@
-protected void hiddenButton_Click(object sender, EventArgs e)
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web.Configuration;
+using System.Web.Script.Serialization;
+using System.Xml.Linq;
+
+namespace vminfo
+{
+    public class TokenManager
+    {
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+
+        private readonly HttpClient _httpClient;
+        private readonly string _username;
+        private readonly string _password;
+
+        public TokenManager(HttpClient httpClient)
         {
-            string jsonData = hiddenField.Value;
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _username = WebConfigurationManager.AppSettings["VropsUsername"]
+                        ?? throw new ArgumentNullException(nameof(_username));
+            _password = WebConfigurationManager.AppSettings["VropsPassword"]
+                        ?? throw new ArgumentNullException(nameof(_password));
+        }
 
-            if (!string.IsNullOrEmpty(jsonData))
+        public async Task<string> GetTokenAsync(string vcenter)
+        {
+            if (vcenter == "apgaraavcs801" || vcenter == "apgartksvcs801" || vcenter == "ptekvcsd01")
             {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue; // Maksimum JSON uzunluğunu ayarla
-                var tableData = js.Deserialize<List<string[]>>(jsonData);
+                return await CheckTokenAsync("https://apgaravrops801.fw.garanti.com.tr", "ankara");
+            }
+            return await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
+        }
 
-                if (tableData.Count == 0)
+        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
+        {
+            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
+
+            if (DateTime.Now >= tokenInfo.ExpiryDate)
+            {
+                string newToken = await AcquireTokenAsync(vropsServer);
+
+                if (newToken != null)
                 {
-                    Response.Write("No data available.");
-                    return;
+                    var newTokenInfo = new TokenInfo
+                    {
+                        Token = newToken,
+                        ExpiryDate = DateTime.Now.Add(TokenLifetime)
+                    };
+                    await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
+                    return await CheckTokenAsync(vropsServer,tokenType);
                 }
 
-                // Kolon başlıklarını belirle
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Host,User");
+                return null;
+            }
 
-                // Her bir satırı CSV formatına dönüştür
-                foreach (var row in tableData)
+            return tokenInfo.Token;
+        }
+
+        private async Task<string> AcquireTokenAsync(string vropsServer)
+        {
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(requestUri, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string tokenXml = await response.Content.ReadAsStringAsync();
+                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
+            }
+
+            return null;
+        }
+
+        private static string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
+            return tokenElement?.Value;
+        }
+
+        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
+        {
+            var tokenInfo = new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
                 {
-                    if (row.Length >= 2)
+                    if (await reader.ReadAsync())
                     {
-                        csv.AppendLine($"{row[0]},{row[1]}");
-                    }
-                    else
-                    {
-                        csv.AppendLine($"{row[0]},"); // User bilgisi yoksa boş bırak
+                        tokenInfo.Token = reader["Token"] as string;
+                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
                     }
                 }
+            }
 
-                // CSV'yi kullanıcıya sun
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=vmsData.csv");
-                Response.Write(csv.ToString());
-                Response.End();
+            return tokenInfo;
+        }
+
+        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
+        {
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+                    BEGIN
+                        UPDATE TokenInfo
+                        SET Token = @Token, ExpiryDate = @ExpiryDate
+                        WHERE TokenType = @TokenType
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
+                        VALUES (@TokenType, @Token, @ExpiryDate)
+                    END";
+
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
+
+                await connection.OpenAsync();
+                await command.ExecuteNonQueryAsync();
             }
         }
+    }
+
+    public class TokenInfo
+    {
+        public string Token { get; set; }
+        public DateTime ExpiryDate { get; set; }
+    }
+}
