@@ -20,15 +20,13 @@ protected void hiddenButton_Click(object sender, EventArgs e)
     }
 
     var csv = new StringBuilder();
-
-    // Define the batch size
-    int batchSize = 2000;
+    int batchSize = 2000; // Maximum number of parameters allowed per query
     for (int batchStart = 0; batchStart < vmNames.Length; batchStart += batchSize)
     {
-        // Get the current batch of VM names
+        // Get a batch of VM names
         var batch = vmNames.Skip(batchStart).Take(batchSize).ToArray();
 
-        // Build query for the current batch
+        // Build SQL query for the current batch
         var queryBuilder = new StringBuilder("SELECT * FROM vminfoVMs WHERE VMName IN (");
         for (int i = 0; i < batch.Length; i++)
         {
