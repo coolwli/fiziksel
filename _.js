@@ -1,6 +1,12 @@
 let filteredDates;
+const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+
+let cpuChart, memoryChart;
+
 const createChart = (ctx, data, dates, label, borderColor) => {
     ctx.canvas.style.display = "block";
+
     const min = Math.min(...data.map(d => d.y));
     const max = Math.max(...data.map(d => d.y));
 
@@ -12,48 +18,41 @@ const createChart = (ctx, data, dates, label, borderColor) => {
         type: 'line',
         data: {
             labels: dates,
-            datasets: [{
-                label: 'Minimum: %' + min,
-                data: [{
-                    x: dates[minIndex],
-                    y: min
-                }],
-                borderColor: 'red',
-                fill: true,
-                pointRadius: 6,
-                pointHoverRadius: 4,
-                pointBackgroundColor: 'red'
-            },
-            {
-                label: 'Maximum: %' + max,
-                data: [{
-                    x: dates[maxIndex],
-                    y: max
-                }],
-                borderColor: 'black',
-                fill: true,
-                pointRadius: 6,
-                pointHoverRadius: 4,
-                pointBackgroundColor: 'black'
-            },
-            {
-                label: label,
-                data: data,
-                borderColor: borderColor,
-                backgroundColor: backgroundColor,
-                fill: true,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                borderWidth: 1,
-                tension: 0.01
-            }
+            datasets: [
+                {
+                    label: `Minimum: %${min}`,
+                    data: [{ x: dates[minIndex], y: min }],
+                    borderColor: 'red',
+                    fill: true,
+                    pointRadius: 6,
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: 'red'
+                },
+                {
+                    label: `Maximum: %${max}`,
+                    data: [{ x: dates[maxIndex], y: max }],
+                    borderColor: 'black',
+                    fill: true,
+                    pointRadius: 6,
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: 'black'
+                },
+                {
+                    label: label,
+                    data: data,
+                    borderColor: borderColor,
+                    backgroundColor: backgroundColor,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    borderWidth: 1,
+                    tension: 0.01
+                }
             ]
         },
         options: {
             responsive: true,
-            animation: {
-                duration:0
-            },
+            animation: { duration: 0 },
             plugins: {
                 title: {
                     display: true,
@@ -66,21 +65,13 @@ const createChart = (ctx, data, dates, label, borderColor) => {
             scales: {
                 x: {
                     type: 'time',
-                    time: {
-                        unit: 'day'
-                    },
+                    time: { unit: 'day' },
                     display: true,
-                    title: {
-                        display: true,
-                        text: 'Date'
-                    }
+                    title: { display: true, text: 'Date' }
                 },
                 y: {
                     display: true,
-                    title: {
-                        display: true,
-                        text: 'Value'
-                    },
+                    title: { display: true, text: 'Value' },
                     suggestedMin: Math.max(0, min - min * 0.1),
                     suggestedMax: max + max * 0.1
                 }
@@ -92,7 +83,6 @@ const createChart = (ctx, data, dates, label, borderColor) => {
 };
 
 const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) => {
-
     if (data.length <= maxPoints) {
         return {
             data: data.map((value, index) => ({
@@ -106,9 +96,7 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
     const step = Math.ceil(data.length / maxPoints);
     const reducedData = [];
     const reducedDates = [];
-    let sum = 0,
-        count = 0,
-        sumDates = 0;
+    let sum = 0, count = 0, sumDates = 0;
 
     for (let i = 0; i < data.length; i++) {
         sum += data[i];
@@ -118,10 +106,7 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
         if ((i + 1) % step === 0) {
             const average = sum / count;
             const averageDate = new Date(sumDates / count);
-            reducedData.push({
-                x: averageDate,
-                y: average
-            });
+            reducedData.push({ x: averageDate, y: average });
             reducedDates.push(averageDate);
             sum = 0;
             sumDates = 0;
@@ -132,10 +117,7 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
     if (count > 0) {
         const average = sum / count;
         const averageDate = new Date(sumDates / count);
-        reducedData.push({
-            x: averageDate,
-            y: average
-        });
+        reducedData.push({ x: averageDate, y: average });
         reducedDates.push(averageDate);
     }
 
@@ -143,18 +125,10 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
         const extremePoints = [];
         for (let i = 0; i < data.length; i++) {
             if (extremePoints.length < numPoints) {
-                extremePoints.push({
-                    x: new Date(dates[i]),
-                    y: data[i]
-                });
+                extremePoints.push({ x: new Date(dates[i]), y: data[i] });
                 extremePoints.sort(comparator);
-            } else if (comparator({
-                y: data[i]
-            }, extremePoints[numPoints - 1])) {
-                extremePoints[numPoints - 1] = {
-                    x: new Date(dates[i]),
-                    y: data[i]
-                };
+            } else if (comparator({ y: data[i] }, extremePoints[numPoints - 1])) {
+                extremePoints[numPoints - 1] = { x: new Date(dates[i]), y: data[i] };
                 extremePoints.sort(comparator);
             }
         }
@@ -162,7 +136,7 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
     };
 
     const minPoints = addExtremePoints(data, dates, numExtremePoints, (a, b) => a.y - b.y);
-    const othermaxPoints = addExtremePoints(data, dates, numExtremePoints, (a, b) => b.y - a.y);
+    const maxPoints = addExtremePoints(data, dates, numExtremePoints, (a, b) => b.y - a.y);
 
     minPoints.forEach(point => {
         if (!reducedData.some(d => d.x.getTime() === point.x.getTime())) {
@@ -171,7 +145,7 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
         }
     });
 
-    othermaxPoints.forEach(point => {
+    maxPoints.forEach(point => {
         if (!reducedData.some(d => d.x.getTime() === point.x.getTime())) {
             reducedData.push(point);
             reducedDates.push(point.x);
@@ -181,19 +155,39 @@ const processLargeData = (data, dates, numExtremePoints = 10, maxPoints = 300) =
     reducedData.sort((a, b) => a.x - b.x);
     reducedDates.sort((a, b) => a - b);
 
+    // Fill in missing dates with zero values
+    const completeData = [];
+    const completeDates = [];
+    const dateSet = new Set(reducedDates.map(date => date.toISOString()));
+
+    let currentDate = new Date(reducedDates[0]);
+    while (currentDate <= new Date(reducedDates[reducedDates.length - 1])) {
+        const isoDate = currentDate.toISOString();
+        if (!dateSet.has(isoDate)) {
+            completeData.push({ x: currentDate, y: 0 });
+        } else {
+            const index = reducedDates.findIndex(date => date.toISOString() === isoDate);
+            completeData.push(reducedData[index]);
+        }
+        completeDates.push(currentDate);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
     return {
-        dates: reducedDates,
-        data: reducedData
+        dates: completeDates,
+        data: completeData
     };
 };
 
 function fetchData() {
-    const timeRange = parseInt(document.getElementById('timeRange').value);
+    const timeRange = parseInt(document.getElementById('timeRange').value, 10);
     filteredDates = dates.filter(dateString => {
         return new Date() - new Date(dateString) <= (timeRange * 24 * 60 * 60 * 1000);
     });
+
     const filteredCpuData = cpuDatas.slice(-filteredDates.length);
     const filteredMemoryData = memDatas.slice(-filteredDates.length);
+
     const processedCPUData = processLargeData(filteredCpuData, filteredDates);
     const processedMemoryData = processLargeData(filteredMemoryData, filteredDates);
 
@@ -207,8 +201,3 @@ function fetchData() {
     if (processedMemoryData.dates.length > 0)
         memoryChart = createChart(memoryCtx, processedMemoryData.data, processedMemoryData.dates, 'Memory Usage', 'rgba(153, 102, 255, 1)');
 }
-
-const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-
-let cpuChart, memoryChart;
