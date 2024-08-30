@@ -203,7 +203,6 @@ function fetchData() {
     cpuCtx.canvas.style.display = "none";
     memoryCtx.canvas.style.display = "none";
 
-    console.log(processedCPUData.dates);
     if (filteredDates.length > 0)
         cpuChart = createChart(cpuCtx, processedCPUData.data, processedCPUData.dates, 'CPU Usage', 'rgba(84, 175, 228, 1)');
     if (filteredDates.length > 0)
