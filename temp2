@@ -1,21 +1,58 @@
-private async Task<string> GetVmIdAsync(string vmName)
+private async Task<string> GetParentIdAsync()
+{
+    // URL'yi vCenter'ları listelemek için güncelle
+    string getVcUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=vc";
+
+    var request = new HttpRequestMessage(HttpMethod.Get, getVcUrl);
+    request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+    using (var response = await _httpClient.SendAsync(request))
+    {
+        response.EnsureSuccessStatusCode();
+        string responseText = await response.Content.ReadAsStringAsync();
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(responseText);
+
+        var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+        nsManager.AddNamespace("ops", OpsNamespace);
+
+        // vCenter'ların liste olduğu XML düğümünü seç
+        var vcNodes = xmlDoc.SelectNodes("//ops:resource", nsManager);
+
+        // Burada uygun vCenter'ı belirleyin
+        // Örnek: İlk vCenter'ı döndür
+        if (vcNodes.Count > 0)
         {
-            string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}";
-
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-            using (var response = await _httpClient.SendAsync(request))
-            {
-                response.EnsureSuccessStatusCode();
-                string responseText = await response.Content.ReadAsStringAsync();
-                var xmlDoc = new XmlDocument();
-                xmlDoc.LoadXml(responseText);
-
-                var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                nsManager.AddNamespace("ops", OpsNamespace);
-
-                var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                return identifierNode?.Value;
-            }
+            var firstVcNode = vcNodes[0];
+            return firstVcNode.Attributes["identifier"]?.Value;
         }
+        return null;
+    }
+}
+
+
+
+
+
+private async Task<string> GetVmIdAsync(string vmName, string parentId)
+{
+    // URL'yi parentId ile güncelle
+    string getIdUrl = $"{vRopsServer}/suite-api/api/resources?resourceKind=VirtualMachine&name={vmName}&parentId={parentId}";
+
+    var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+    request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+    using (var response = await _httpClient.SendAsync(request))
+    {
+        response.EnsureSuccessStatusCode();
+        string responseText = await response.Content.ReadAsStringAsync();
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(responseText);
+
+        var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
+        nsManager.AddNamespace("ops", OpsNamespace);
+
+        var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
+        return identifierNode?.Value;
+    }
+}
