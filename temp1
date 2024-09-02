@@ -1,236 +1,155 @@
-let ROWS_PER_PAGE = 20;
-const MAX_PAGE = 10;
-var screenName = "";
-let data = [];
-let currentPage = 1;
-let ascending = true;
-let filteredData = [];
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Web.Configuration;
+using System.Web.Script.Serialization;
+using System.Xml.Linq;
 
+namespace vmpedia
+{
+    public class TokenManager
+    {
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
 
-function sortDatas(index) {
-    filteredData.sort(function (a, b) {
-        let aValue = a[Object.keys(a)[index]];
-        let bValue = b[Object.keys(b)[index]];
+        private readonly HttpClient _httpClient;
+        private readonly string _username;
+        private readonly string _password;
 
-
-        if (!isNaN(aValue) && !isNaN(bValue)) {
-            return ascending ? aValue - bValue : bValue - aValue;
+        public TokenManager(HttpClient httpClient)
+        {
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _username = WebConfigurationManager.AppSettings["VropsUsername"]
+                        ?? throw new ArgumentNullException(nameof(_username));
+            _password = WebConfigurationManager.AppSettings["VropsPassword"]
+                        ?? throw new ArgumentNullException(nameof(_password));
         }
-        else if (index === 9) {
-            if (aValue == "-") return 1;
-            if (bValue == "-") return -1;
-            aValue = new Date(aValue.trim());
-            bValue = new Date(bValue.trim());
-            return ascending ? aValue - bValue : bValue - aValue;
+
+        public async Task<string> GetTokenAsync(string vcenter)
+        {
+            if (vcenter == "apgaraavcs801" || vcenter == "apgartksvcs801" || vcenter == "ptekvcsd01")
+            {
+                return await CheckTokenAsync("https://apgaravrops801.fw.garanti.com.tr", "ankara");
+            }
+            return await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
         }
-        return ascending ? aValue.trim().localeCompare(bValue.trim()) : bValue.trim().localeCompare(aValue.trim());
-    });
-    currentPage = 1;
-    renderPage(currentPage);
 
-}
+        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
+        {
+            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
-function renderPage(pageNumber) {
-    const start = (pageNumber - 1) * ROWS_PER_PAGE;
-    const end = start + ROWS_PER_PAGE;
-    const paginatedData = filteredData.slice(start, end);
+            if (DateTime.Now >= tokenInfo.ExpiryDate)
+            {
+                string newToken = await AcquireTokenAsync(vropsServer);
 
-    const tableBody = document.getElementById('tableBody');
-    tableBody.innerHTML = '';
-
-    paginatedData.forEach(row => {
-        const tr = document.createElement('tr');
-        for (const cellData of Object.values(row)) {
-            const td = document.createElement('td');
-            td.textContent = cellData;
-            tr.appendChild(td);
-            tr.addEventListener('click', function () {
-                window.location.href = screenName + ".aspx" + "?id=" + row[Object.keys(row)[0]] + "&vc="+row[Object.keys(row)[1]] ;
-            });
-        }
-        tableBody.appendChild(tr);
-    });
-}
-
-function renderPagination() {
-    const totalPages = Math.ceil(filteredData.length / ROWS_PER_PAGE);
-    const paginationDiv = document.getElementById('pagination');
-    paginationDiv.innerHTML = '';
-
-    let startPage = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
-    let endPage = Math.min(totalPages, currentPage + Math.floor(MAX_PAGE / 2));
-
-    if (endPage - startPage < MAX_PAGE) {
-        if (startPage === 1) {
-            endPage = Math.min(totalPages, startPage + MAX_PAGE - 1);
-        } else if (endPage === totalPages) {
-            startPage = Math.max(1, endPage - MAX_PAGE + 1);
-        }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        const button = document.createElement('button');
-        button.textContent = i;
-        button.className = 'page-link';
-        if (i === currentPage) {
-            button.classList.add('active');
-        }
-        button.addEventListener('click', () => {
-            currentPage = i;
-            renderPage(currentPage);
-            renderPagination();
-        });
-        paginationDiv.appendChild(button);
-    }
-}
-
-function initializeTable() {
-    filteredData = data;
-    document.querySelectorAll(".select-all-div input[type='checkbox']").forEach(selectAllCheckbox => {
-        selectAllCheckbox.addEventListener("change", () => {
-            const checkboxes = selectAllCheckbox.closest(".dropdown-content").querySelectorAll("input[type='checkbox']:not([style*='display: none'])");
-            const visibleCheckboxes = Array.from(checkboxes).filter(checkbox => checkbox.parentElement.style.display !== "none");
-            visibleCheckboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
-            filterTable();
-        });
-    });
-    document.querySelectorAll(".dropdown-content").forEach((column) => {
-        generateColumnCheckboxes(column);
-    });
-    renderPagination();
-    updateCounter();
-    sortDatas(0);
-}
-
-function generateColumnCheckboxes(dropdownContent) {
-    const columnIndex = Array.from(document.querySelectorAll(".dropdown-content")).indexOf(dropdownContent);
-    const checkboxesDiv = dropdownContent.querySelector(".checkboxes");
-
-    checkboxesDiv.querySelectorAll("div").forEach((div) => {
-        const checkbox = div.querySelector("input[type='checkbox']");
-        if (!checkbox.checked) {
-            div.remove();
-        }
-    });
-
-    const values = [...new Set(filteredData.map(row => row[Object.keys(row)[columnIndex]].toString().trim()))];
-    values.sort(function (a, b) {
-        if (!isNaN(a) && !isNaN(b)) {
-            return ascending ? a - b : b - a;
-        }
-        else if (columnIndex == 9) {
-            if (a == "-") return 1;
-            if (b == "-") return -1;
-            a = new Date(a);
-            b = new Date(b);
-            return ascending ? a - b : b - a;
-        }
-        if (a == null) return -1;
-        if (b == null) return 1;
-
-        return ascending ? a.localeCompare(b) : b.localeCompare(a);
-    });
-
-    const fragment = document.createDocumentFragment();
-    values.forEach((value) => {
-        if (checkboxesDiv.querySelector(`input[value='${value}']`)) {
-            return;
-        }
-        const div = document.createElement("div");
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = value;
-        checkbox.addEventListener("change", function () {
-            selectAll = dropdownContent.querySelector(".select-all-div input[type='checkbox']");
-            if (!checkbox.checked && selectAll.checked) {
-                selectAll.checked = false;
+                if (newToken != null)
+                {
+                    var newTokenInfo = new TokenInfo
+                    {
+                        Token = newToken,
+                        ExpiryDate = DateTime.Now.Add(TokenLifetime)
+                    };
+                    await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
+                    return newToken;
+                }
+                else
+                    return null;
             }
 
-            filterTable(checkbox);
-        });
-        const label = document.createElement("label");
-        label.textContent = value;
-
-        div.appendChild(checkbox);
-        div.appendChild(label);
-        div.appendChild(document.createElement("br"));
-        fragment.appendChild(div);
-    });
-    checkboxesDiv.appendChild(fragment);
-}
-
-function filterTable(checkbox) {
-    filteredData = data;
-    const lastSelectedColumn = checkbox ? checkbox.closest(".dropdown-content") : null;
-
-    const columns = document.querySelectorAll(".dropdown-content");
-    const checkedValues = Array.from(columns).map(column => {
-        return Array.from(column.querySelectorAll("input[type='checkbox']:checked")).map(checkbox => checkbox.value);
-    });
-    const checkedValuesLength = checkedValues.map(values => values.length);
-    const sumOfArrayLengths = checkedValuesLength.reduce((total, length) => total + length, 0);
-    console.log(sumOfArrayLengths);
-    filteredData = data.filter(row => {
-        return checkedValues.every((values, columnIndex) => {
-            if (values.length === 0) return true;
-            return values.includes(row[Object.keys(row)[columnIndex]].toString());
-        });
-    });
-    columns.forEach((column) => {
-        if (column !== lastSelectedColumn || sumOfArrayLengths == 0) {
-            generateColumnCheckboxes(column);
+            return tokenInfo.Token;
         }
-    });
 
-    currentPage = 1;
-    renderPagination();
-    renderPage(currentPage);
-    updateCounter();
-}
+        private async Task<string> AcquireTokenAsync(string vropsServer)
+        {
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-function searchCheckboxes(searchInput) {
-    const filter = searchInput.value.toUpperCase();
-    const checkboxesDiv = searchInput.parentElement.querySelector(".checkboxes");
-    const divs = checkboxesDiv.getElementsByTagName("div");
-    for (let i = 0; i < divs.length; i++) {
-        const label = divs[i].getElementsByTagName("label")[0];
-        const txtValue = label.textContent || label.innerText;
-        if (txtValue.toUpperCase().indexOf(filter) > -1) {
-            divs[i].style.display = "";
-        } else {
-            divs[i].style.display = "none";
+            var response = await _httpClient.PostAsync(requestUri, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string tokenXml = await response.Content.ReadAsStringAsync();
+                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
+            }
+
+            return null;
+        }
+
+        private static string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
+            return tokenElement?.Value;
+        }
+
+        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
+        {
+            var tokenInfo = new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        tokenInfo.Token = reader["Token"] as string;
+                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
+                    }
+                }
+            }
+
+            return tokenInfo;
+        }
+
+        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
+        {
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+                    BEGIN
+                        UPDATE TokenInfo
+                        SET Token = @Token, ExpiryDate = @ExpiryDate
+                        WHERE TokenType = @TokenType
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
+                        VALUES (@TokenType, @Token, @ExpiryDate)
+                    END";
+
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
+
+                await connection.OpenAsync();
+                await command.ExecuteNonQueryAsync();
+            }
         }
     }
+
+    public class TokenInfo
+    {
+        public string Token { get; set; }
+        public DateTime ExpiryDate { get; set; }
+    }
 }
-
-function updateCounter() {
-    document.getElementById('rowCounter').textContent = `${filteredData.length} Satır Listelendi..`;
-}
-
-function setRowsPerPage(selectedButton) {
-    const buttons = document.querySelector(".button-container").querySelectorAll('.button');
-    buttons.forEach(button => button.classList.remove('active'));
-    selectedButton.classList.add('active');
-    ROWS_PER_PAGE = selectedButton.textContent;
-    CURRENT_PAGE = 1;
-    renderPagination();
-    renderPage(CURRENT_PAGE);
-}
-
-document.querySelectorAll("th").forEach((th, index) => {
-    th.addEventListener('click', function (event) {
-        if (!event.target.closest('.dropdown-content')) {
-            ascending = !ascending;
-            sortDatas(index);
-        }
-    });
-});
-
-document.getElementById('reset-button').addEventListener('click', () => {
-    event.preventDefault();
-    document.querySelectorAll("input[type='checkbox']").forEach((checkbox) => { checkbox.checked = false; });
-    document.querySelectorAll("input[type='text']").forEach((input) => { input.value = ""; });
-    ascending = true;
-    filterTable();
-    sortDatas(0);
-});
