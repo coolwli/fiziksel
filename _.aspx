@@ -1,92 +1,118 @@
-            document.getElementById('export-button').addEventListener('click', () => {
-                event.preventDefault();
-                const hdnInput = document.getElementById('hiddenField');
-                const vmNames = filteredData.map(row => row.VMName);
+document.getElementById('export-button').addEventListener('click', (event) => {
+    event.preventDefault();
 
-                var jsondata = JSON.stringify(vmNames);
-                hdnInput.value = jsondata;
-                console.log(vmNames);
-                document.getElementById('hiddenButton').click();
-            });
+    const hdnInput = document.getElementById('hiddenField');
+    // `filteredData` içindeki her bir öğeyi nesneye dönüştürüyoruz
+    const vmData = filteredData.map(row => ({
+        VMName: row.VMName,
+        vCenter: row.vCenter
+    }));
+
+    // `vmData` dizisini JSON formatına çeviriyoruz
+    var jsondata = JSON.stringify(vmData);
+    hdnInput.value = jsondata;
+
+    console.log(vmData);
+    document.getElementById('hiddenButton').click();
+});
 
 
+
+
+
+
+
+public class VMData
+{
+    public string VMName { get; set; }
+    public string vCenter { get; set; }
+}
+
+
+using System.Collections.Generic;
+using System.Text;
+using System.Web.Script.Serialization;
+using System.Data.SqlClient;
+using System.Linq;
 
 protected void hiddenButton_Click(object sender, EventArgs e)
+{
+    var jsonData = hiddenField.Value;
+
+    if (string.IsNullOrEmpty(jsonData))
+    {
+        Response.Write("No data received.");
+        Response.End();
+        return;
+    }
+
+    var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+    var vmDataList = serializer.Deserialize<List<VMData>>(jsonData);
+
+    if (vmDataList.Count == 0)
+    {
+        Response.Write("No VM data provided.");
+        Response.End();
+        return;
+    }
+
+    var csv = new StringBuilder();
+    int batchSize = 2000;
+    for (int batchStart = 0; batchStart < vmDataList.Count; batchStart += batchSize)
+    {
+        var batch = vmDataList.Skip(batchStart).Take(batchSize).ToList();
+
+        var queryBuilder = new StringBuilder("SELECT VMName, vCenter FROM vminfoVMs WHERE (");
+        for (int i = 0; i < batch.Count; i++)
         {
-            var jsonData = hiddenField.Value;
+            if (i > 0) queryBuilder.Append(" OR ");
+            queryBuilder.Append("(VMName = @name" + i + " AND vCenter = @vCenter" + i + ")");
+        }
+        queryBuilder.Append(")");
 
-            if (string.IsNullOrEmpty(jsonData))
+        using (var con = new SqlConnection(connectionString))
+        {
+            con.Open();
+
+            using (var cmd = new SqlCommand(queryBuilder.ToString(), con))
             {
-                Response.Write("No data received.");
-                Response.End();
-                return;
-            }
-
-            var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
-            var vmNames = serializer.Deserialize<string[]>(jsonData);
-
-            if (vmNames.Length == 0)
-            {
-                Response.Write("No VM names provided.");
-                Response.End();
-                return;
-            }
-
-            var csv = new StringBuilder();
-            int batchSize = 2000; 
-            for (int batchStart = 0; batchStart < vmNames.Length; batchStart += batchSize)
-            {
-                var batch = vmNames.Skip(batchStart).Take(batchSize).ToArray();
-
-                var queryBuilder = new StringBuilder("SELECT * FROM vminfoVMs WHERE VMName IN (");
-                for (int i = 0; i < batch.Length; i++)
+                for (int i = 0; i < batch.Count; i++)
                 {
-                    if (i > 0) queryBuilder.Append(", ");
-                    queryBuilder.Append("@name" + i);
+                    cmd.Parameters.AddWithValue("@name" + i, batch[i].VMName);
+                    cmd.Parameters.AddWithValue("@vCenter" + i, batch[i].vCenter);
                 }
-                queryBuilder.Append(")");
 
-                using (var con = new SqlConnection(connectionString))
+                using (var reader = cmd.ExecuteReader())
                 {
-                    con.Open();
-
-                    using (var cmd = new SqlCommand(queryBuilder.ToString(), con))
+                    if (batchStart == 0)
                     {
-                        for (int i = 0; i < batch.Length; i++)
+                        for (int i = 0; i < reader.FieldCount; i++)
                         {
-                            cmd.Parameters.AddWithValue("@name" + i, batch[i]);
+                            if (i > 0) csv.Append(";");
+                            csv.Append(reader.GetName(i));
                         }
+                        csv.AppendLine();
+                    }
 
-                        using (var reader = cmd.ExecuteReader())
+                    while (reader.Read())
+                    {
+                        for (int i = 0; i < reader.FieldCount; i++)
                         {
-                            if (batchStart == 0)
-                            {
-                                for (int i = 0; i < reader.FieldCount; i++)
-                                {
-                                    if (i > 0) csv.Append(";");
-                                    csv.Append(reader.GetName(i));
-                                }
-                                csv.AppendLine();
-                            }
-
-                            while (reader.Read())
-                            {
-                                for (int i = 0; i < reader.FieldCount; i++)
-                                {
-                                    if (i > 0) csv.Append(";");
-                                    csv.Append(reader.IsDBNull(i) ? string.Empty : reader.GetValue(i).ToString());
-                                }
-                                csv.AppendLine();
-                            }
+                            if (i > 0) csv.Append(";");
+                            csv.Append(reader.IsDBNull(i) ? string.Empty : reader.GetValue(i).ToString());
                         }
+                        csv.AppendLine();
                     }
                 }
             }
-
-            Response.Clear();
-            Response.ContentType = "text/csv";
-            Response.ContentEncoding = Encoding.UTF32;
-            Response.AddHeader("content-disposition", "attachment;filename=vmpedia_vms.csv");
-            Response.Write(csv.ToString());
-            Response.End();
         }
+    }
+
+    Response.Clear();
+    Response.ContentType = "text/csv";
+    Response.ContentEncoding = Encoding.UTF32;
+    Response.AddHeader("content-disposition", "attachment;filename=vmpedia_vms.csv");
+    Response.Write(csv.ToString());
+    Response.End();
+}
+
