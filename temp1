@@ -1,66 +1,159 @@
-<!DOCTYPE html>
-<html lang="en">
+Name	Description
+adapterInstanceId
+array[string]
+(query)	
+Array of uuids that identify adapter instances
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Üst Header Menü</title>
-    <style>
-        /* Genel stil ayarları */
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
+adapterKind
+array[string]
+(query)	
+Array of Adapter Kind keys
 
-        /* Header stil ayarları */
-        .header {
-            background-color: #333;
-            padding: 10px 0;
-        }
+collectorId
+array[integer]
+(query)	
+Array of Collector Identifiers
 
-        /* Menü stili ayarları */
-        .nav {
-            display: flex;
-            justify-content: flex-start;
-            /* Menü öğelerini sola yasla */
-            align-items: center;
-            padding-left: 20px;
-            /* Header'ın solundan biraz boşluk bırak */
-        }
+collectorName
+array[string]
+(query)	
+Array of Collector names
 
-        .nav-item {
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            position: relative;
-            display: inline-block;
-            font-size: 18px;
-            /* Font boyutunu büyüt */
-        }
+credentialId
+array[string]
+(query)	
+Array of CredentialIDs
 
-        .nav-item:not(:last-child)::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: -1px;
-            /* Çizgi genişliği */
-            height: 20px;
-            width: 1px;
-            /* Çizgi genişliği */
-            background-color: white;
-            transform: translateY(-50%);
-        }
-    </style>
-</head>
+includeRelated
+string
+(query)	
+None null value specifies to include related resource ids of given relationship type in resource result.
+Uses the RelationshipType.representation value.
 
-<body>
-    <header class="header">
-        <nav class="nav">
-            <a href="#" class="nav-item">Menü 1</a>
-            <a href="#" class="nav-item">Menü 2</a>
-            <a href="#" class="nav-item">Menü 3</a>
-        </nav>
-    </header>
-</body>
+Available values : PARENT, CHILD, CONTAINS, CONTAINED_BY, REFERENCES, REFERENCED_BY, USES, USED_BY, SELF, DESCENDANT, ANCESTOR, TST, ALL
 
-</html>
+
+--
+maintenanceScheduleId
+array[string]
+(query)	
+Array of {@link UUID} that identify Maintenance Schedules.
+Since vROps 6.1.0 release onwards, we don't support search
+and look up of Resources using Maintenance Schedules' identifiers.
+
+name
+array[string]
+(query)	
+Array of resource names to query for.
+NOTE: Currently, only single element supported
+
+others
+array[object]
+(query)	
+page
+integer($int32)
+(query)	
+Page number from which data needs to be displayed (0-based)
+
+Default value : 0
+
+0
+pageSize
+integer($int32)
+(query)	
+Expected number of entries per page
+
+Default value : 1000
+
+1000
+parentId
+array[string]
+(query)	
+Array of UUID of object that are the parent resource in a parent child relationship
+
+propertyName
+string
+(query)	
+Name of property. Query only supports filtering for a single property.
+
+propertyName - Name of property. Query only supports filtering for a single property.
+propertyValue
+string
+(query)	
+Value of property. Omitting the property value will check for existence
+of the property name on the resource.
+NOTE: Use 'propertyConditions' to specify lookup of Resource using multiple properties.
+
+propertyValue - Value of property. Omitting the property value will check for existenceof the property name on the resource.<b>NOTE:</b> Use 'propertyConditions' to specify lookup of Resource using multiple properties.
+recentlyAdded
+integer($int64)
+(query)	
+Return resources created after the specified value. Value is the number of seconds since Midnight January 1, 1970 GMT.
+
+recentlyAdded - Return resources created after the specified value. Value is the number of seconds since Midnight January 1, 1970 GMT.
+regex
+array[string]
+(query)	
+Array of resource names in java regex format.
+NOTE: regex and name are mutually exclusive. If both are specified, name is given preference.
+
+resourceHealth
+array[string]
+(query)	
+Array of resource health
+
+Available values : GREEN, YELLOW, ORANGE, RED, GREY
+
+--GREENYELLOWORANGEREDGREY
+resourceId
+array[string]
+(query)	
+Array of Resource Identifiers
+
+resourceKind
+array[string]
+(query)	
+Array of Resource Kind keys
+
+resourceState
+array[string]
+(query)	
+Array of resource states
+
+Available values : STOPPED, STARTING, STARTED, STOPPING, UPDATING, FAILED, MAINTAINED, MAINTAINED_MANUAL, REMOVING, NOT_EXISTING, NONE, UNKNOWN
+
+--STOPPEDSTARTINGSTARTEDSTOPPINGUPDATINGFAILEDMAINTAINEDMAINTAINED_MANUALREMOVINGNOT_EXISTINGNONEUNKNOWN
+resourceStatus
+array[string]
+(query)	
+Array of resource data collection stats
+
+Available values : NONE, ERROR, UNKNOWN, DOWN, DATA_RECEIVING, OLD_DATA_RECEIVING, NO_DATA_RECEIVING, NO_PARENT_MONITORING, COLLECTOR_DOWN
+
+--NONEERRORUNKNOWNDOWNDATA_RECEIVINGOLD_DATA_RECEIVINGNO_DATA_RECEIVINGNO_PARENT_MONITORINGCOLLECTOR_DOWN
+statKey
+string
+(query)	
+Name of resource StatKey to validate value is within a range.
+Use with statKeyLowerBound, statKeyUpperBound and statKeyInclusive to create comparison conditions
+NOTE: Use 'statConditions' to specify lookup of Resource using multiple stat keys.
+
+statKey - Name of resource StatKey to validate value is within a range.Use with statKeyLowerBound, statKeyUpperBound and statKeyInclusive to create comparison conditions<b>NOTE:</b> Use 'statConditions' to specify lookup of Resource using multiple stat keys.
+statKeyInclusive
+boolean
+(query)	
+Filtering by statKey values is inclusive or exclusive of boundary values. Defaults to true
+
+
+--
+statKeyLowerBound
+number($double)
+(query)	
+StatKey value matching range lower bound
+
+statKeyLowerBound - StatKey value matching range lower bound
+statKeyUpperBound
+number($double)
+(query)	
+StatKey value matching range upper bound
+
