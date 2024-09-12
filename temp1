@@ -1,159 +1,47 @@
-Name	Description
-adapterInstanceId
-array[string]
-(query)	
-Array of uuids that identify adapter instances
+# Excel dosyasının yolu
+$excelFile = "F:\Ali\deneme.xlsx"
 
-adapterKind
-array[string]
-(query)	
-Array of Adapter Kind keys
+$vcenter = "apgaraavcs801"
 
-collectorId
-array[integer]
-(query)	
-Array of Collector Identifiers
+$excelObj = New-Object -ComObject Excel.Application
+$excelObj.Visible = $false
 
-collectorName
-array[string]
-(query)	
-Array of Collector names
+try {
+    $workbook = $excelObj.Workbooks.Open($excelFile)
+    $worksheet = $workbook.Sheets.Item(1) 
 
-credentialId
-array[string]
-(query)	
-Array of CredentialIDs
+ 
+    $usedRange = $worksheet.UsedRange
+    $rows = $usedRange.Rows.Count
+    $columns = $usedRange.Columns.Count
 
-includeRelated
-string
-(query)	
-None null value specifies to include related resource ids of given relationship type in resource result.
-Uses the RelationshipType.representation value.
+    try {
+        Connect-VIServer -Server $vcenter -ErrorAction Stop
+        for ($row = 2; $row -le $rows; $row++) {
+            $esxName = $worksheet.Cells.Item($row, 1).Value2 
+            $esxName
+        
+    }
+        
 
-Available values : PARENT, CHILD, CONTAINS, CONTAINED_BY, REFERENCES, REFERENCED_BY, USES, USED_BY, SELF, DESCENDANT, ANCESTOR, TST, ALL
+    } catch {
+        Write-Warning "vCenter $vcenter bağlantı hatası: $_"
+    } finally {
+        Disconnect-VIServer -Server $vcenter -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    
+    $workbook.Save()
+} catch {
+    Write-Error "Excel dosyası ile ilgili bir hata oluştu: $_"
+} finally {
+    # Çalışma kitabını kapatın ve Excel uygulamasını kapatın
+    $workbook.Close() | Out-Null
+    $excelObj.Quit()
 
-
---
-maintenanceScheduleId
-array[string]
-(query)	
-Array of {@link UUID} that identify Maintenance Schedules.
-Since vROps 6.1.0 release onwards, we don't support search
-and look up of Resources using Maintenance Schedules' identifiers.
-
-name
-array[string]
-(query)	
-Array of resource names to query for.
-NOTE: Currently, only single element supported
-
-others
-array[object]
-(query)	
-page
-integer($int32)
-(query)	
-Page number from which data needs to be displayed (0-based)
-
-Default value : 0
-
-0
-pageSize
-integer($int32)
-(query)	
-Expected number of entries per page
-
-Default value : 1000
-
-1000
-parentId
-array[string]
-(query)	
-Array of UUID of object that are the parent resource in a parent child relationship
-
-propertyName
-string
-(query)	
-Name of property. Query only supports filtering for a single property.
-
-propertyName - Name of property. Query only supports filtering for a single property.
-propertyValue
-string
-(query)	
-Value of property. Omitting the property value will check for existence
-of the property name on the resource.
-NOTE: Use 'propertyConditions' to specify lookup of Resource using multiple properties.
-
-propertyValue - Value of property. Omitting the property value will check for existenceof the property name on the resource.<b>NOTE:</b> Use 'propertyConditions' to specify lookup of Resource using multiple properties.
-recentlyAdded
-integer($int64)
-(query)	
-Return resources created after the specified value. Value is the number of seconds since Midnight January 1, 1970 GMT.
-
-recentlyAdded - Return resources created after the specified value. Value is the number of seconds since Midnight January 1, 1970 GMT.
-regex
-array[string]
-(query)	
-Array of resource names in java regex format.
-NOTE: regex and name are mutually exclusive. If both are specified, name is given preference.
-
-resourceHealth
-array[string]
-(query)	
-Array of resource health
-
-Available values : GREEN, YELLOW, ORANGE, RED, GREY
-
---GREENYELLOWORANGEREDGREY
-resourceId
-array[string]
-(query)	
-Array of Resource Identifiers
-
-resourceKind
-array[string]
-(query)	
-Array of Resource Kind keys
-
-resourceState
-array[string]
-(query)	
-Array of resource states
-
-Available values : STOPPED, STARTING, STARTED, STOPPING, UPDATING, FAILED, MAINTAINED, MAINTAINED_MANUAL, REMOVING, NOT_EXISTING, NONE, UNKNOWN
-
---STOPPEDSTARTINGSTARTEDSTOPPINGUPDATINGFAILEDMAINTAINEDMAINTAINED_MANUALREMOVINGNOT_EXISTINGNONEUNKNOWN
-resourceStatus
-array[string]
-(query)	
-Array of resource data collection stats
-
-Available values : NONE, ERROR, UNKNOWN, DOWN, DATA_RECEIVING, OLD_DATA_RECEIVING, NO_DATA_RECEIVING, NO_PARENT_MONITORING, COLLECTOR_DOWN
-
---NONEERRORUNKNOWNDOWNDATA_RECEIVINGOLD_DATA_RECEIVINGNO_DATA_RECEIVINGNO_PARENT_MONITORINGCOLLECTOR_DOWN
-statKey
-string
-(query)	
-Name of resource StatKey to validate value is within a range.
-Use with statKeyLowerBound, statKeyUpperBound and statKeyInclusive to create comparison conditions
-NOTE: Use 'statConditions' to specify lookup of Resource using multiple stat keys.
-
-statKey - Name of resource StatKey to validate value is within a range.Use with statKeyLowerBound, statKeyUpperBound and statKeyInclusive to create comparison conditions<b>NOTE:</b> Use 'statConditions' to specify lookup of Resource using multiple stat keys.
-statKeyInclusive
-boolean
-(query)	
-Filtering by statKey values is inclusive or exclusive of boundary values. Defaults to true
-
-
---
-statKeyLowerBound
-number($double)
-(query)	
-StatKey value matching range lower bound
-
-statKeyLowerBound - StatKey value matching range lower bound
-statKeyUpperBound
-number($double)
-(query)	
-StatKey value matching range upper bound
-
+    # COM nesnelerini serbest bırakın
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObj) | Out-Null
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+}
