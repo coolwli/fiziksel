@@ -1,5 +1,6 @@
 # Excel dosyasının yolu
 $excelFile = "F:\Ali\deneme.xlsx"
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01","apgartksvcs201","apgartksvcs801")
 
 $vcenter = "apgaraavcs801"
 
@@ -18,12 +19,13 @@ try {
         
         for ($row = 2; $row -le $rows; $row++) {
             $esxName = $worksheet.Cells.Item($row, 1).Value2
-            $esxHost = Get-VMHost -Name $esxName -ErrorAction Stop
+            $esxName="fsesxpc801.fw.garanti.com.tr"
+            $esxHost = Get-VMHost -Name $esxName -ErrorAction SilentlyContinue
             
             # İşlemci türünü ve diğer bilgileri al
             $cpuType = $esxHost.ProcessorType
-            $processorCount = $esxHost.NumCpu
-            $totalCores = $esxHost.NumCpuCores
+            $processorCount = [string]$esxHost.ExtensionData.summary.hardware.NumCpuThreads 
+            $totalCores = [string]($esxHost.NumCpu*$esxHost.ExtensionData.Summary.Hardware.NumCpuPkgs)
             
             # Excel dosyasındaki ilgili hücreleri doldur
             $worksheet.Cells.Item($row, 2).Value2 = $cpuType
@@ -32,7 +34,7 @@ try {
         }
 
     } catch {
-        Write-Warning "vCenter $vcenter bağlantı hatası: $_"
+        Write-Warning "$_"
     } finally {
         Disconnect-VIServer -Server $vcenter -Confirm:$false -ErrorAction SilentlyContinue
     }
