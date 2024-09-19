@@ -16,15 +16,15 @@ namespace windows_users
 
             try
             {
-                var csvFiles = Directory.GetFiles(folderPath, "*.csv");
+                var txtFiles = Directory.GetFiles(folderPath, "*.txt");
 
-                if (csvFiles.Length == 0)
+                if (txtFiles.Length == 0)
                 {
-                    Response.Write("CSV dosyası bulunamadı.");
+                    Response.Write("TXT dosyası bulunamadı.");
                     return;
                 }
 
-                string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
+                string latestFile = txtFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
                 List<string[]> rows = new List<string[]>();
 
                 using (StreamReader reader = new StreamReader(latestFile))
@@ -32,14 +32,22 @@ namespace windows_users
                     string line;
                     while ((line = reader.ReadLine()) != null)
                     {
-                        string[] columns = line.Split(',');
-                        if (columns.Length > 0)
+                        // Satırı '+' ile ayrıştır
+                        var entries = line.Split(new[] { "+" }, StringSplitOptions.RemoveEmptyEntries)
+                                          .Select(e => e.Trim())
+                                          .ToArray();
+
+                        if (entries.Length >= 2)
                         {
-                            string[] cell = columns[0].Split('+').Select(c => c.Trim()).ToArray();
-                            rows.Add(cell);
+                            // İlk iki öğeyi al
+                            string serverName = entries[0].Split(':')[1].Trim().Replace("'", "");
+                            string userName = entries[1].Split(':')[1].Trim().Replace("'", "");
+
+                            rows.Add(new[] { serverName, userName });
                         }
                     }
                 }
+
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
                 serializer.MaxJsonLength = Int32.MaxValue;
                 string json = serializer.Serialize(rows);
@@ -51,6 +59,7 @@ namespace windows_users
                 Response.Write("Hata: " + ex.Message);
             }
         }
+
         protected void hiddenButton_Click(object sender, EventArgs e)
         {
             string jsonData = hiddenField.Value;
@@ -73,12 +82,11 @@ namespace windows_users
                 foreach (var row in tableData)
                 {
                     csv.AppendLine($"{row[0]},{row[1]}");
-
                 }
 
                 Response.Clear();
                 Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=local users.csv");
+                Response.AddHeader("content-disposition", "attachment;filename=local_users.csv");
                 Response.Write(csv.ToString());
                 Response.End();
             }
