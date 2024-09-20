@@ -1,73 +1,83 @@
-$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01","apgartksvcs201","apgartksvcs801")
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 $conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 $conn.Open()
-foreach($vcenter in $vcenters){
+
+# Collect all host data into a list
+$hostDataList = @()
+
+foreach ($vcenter in $vcenters) {
     Connect-VIServer -Server $vcenter -User "AliCanda1" -Password "Rhygp4971"
-    $VMHosts= Get-VMHost            
-    foreach($VMHost in $VMHosts){
-        $hostName=$VMHost.Name
-        $hostCluster=$VMHost.Parent.Name-replace '#',''
-        $hostDataCenter=$VMHost.Parent.ParentFolder.Parent.Name
-        $hostModel=$VMHost.Model
-        $hosManufacturer=$VMHost.Manufacturer
-        $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+    
+    $VMHosts = Get-VMHost
+    foreach ($VMHost in $VMHosts) {
+        $hostName = $VMHost.Name
+        $hostCluster = $VMHost.Parent.Name -replace '#', ''
+        $hostDataCenter = $VMHost.Parent.ParentFolder.Parent.Name
+        $hostModel = $VMHost.Model
+        $hostManufacturer = $VMHost.Manufacturer
+        $lastWriteTime = Get-Date -Format "yyyy-MM-dd HH:mm"
 
-        $hostTotalMemory= "{0:F2}" -f [decimal]($VMHost.MemoryTotalGB)
-        $hostMemoryUsage= "{0:F2}" -f [decimal]($VMHost.MemoryUsageGB)
-        $hostTotalCpu="{0:F2}" -f [decimal]($VMHost.CpuTotalMhz/1000)
-        $hostCpuUsage="{0:F2}" -f [decimal]($VMHost.CpuUsageMhz/1000)
-        $hostNumNics=$VMHost.ExtensionData.Summary.Hardware.NumNics
-        $version=$VMHost.Version
+        $hostTotalMemory = "{0:F2}" -f [decimal]($VMHost.MemoryTotalGB)
+        $hostMemoryUsage = "{0:F2}" -f [decimal]($VMHost.MemoryUsageGB)
+        $hostTotalCpu = "{0:F2}" -f [decimal]($VMHost.CpuTotalMhz / 1000)
+        $hostCpuUsage = "{0:F2}" -f [decimal]($VMHost.CpuUsageMhz / 1000)
+        $hostNumNics = $VMHost.ExtensionData.Summary.Hardware.NumNics
+        $version = $VMHost.Version
 
+        $NumCpuThreads = $VMHost.ExtensionData.summary.hardware.NumCpuThreads
+        $cpuModel = $VMHost.ExtensionData.summary.hardware.CpuModel
 
-        $NumCpuThreads=$VMHost.ExtensionData.summary.hardware.NumCpuThreads
-        $cpuModel=$VMHost.ExtensionData.summary.hardware.CpuModel
-
-        $dss= $VMHost |Get-Datastore
-        $dsName=""
-        $dsCapacity=""
-        $dsFree=""
-        $dsPercentUsing=""
-        $storageCapacity=0
-        $freeStorage=0
-        foreach ($ds in $dss) {
-            $dsName+= "$($ds.Name)~"
-            $dsCapacity+= "$("{0:F2}" -f [decimal]$ds.CapacityGB)~"
-            $dsFree+= "$("{0:F2}" -f [decimal]$ds.FreeSpaceGB)~"
-            $dsPercentUsing+= "$([math]::Round(($ds.CapacityGB-$ds.FreeSpaceGB)/$ds.CapacityGB*100,2))~"
-            $storageCapacity += $ds.CapacityGB
-            $freeStorage += $ds.FreeSpaceGB
-            
+        # Gather datastore information
+        $datastores = $VMHost | Get-Datastore
+        $dsData = $datastores | ForEach-Object {
+            [PSCustomObject]@{
+                Name        = $_.Name
+                CapacityGB  = $_.CapacityGB
+                FreeSpaceGB = $_.FreeSpaceGB
+                PercentUsed = [math]::Round(($_.CapacityGB - $_.FreeSpaceGB) / $_.CapacityGB * 100, 2)
+            }
         }
 
-        $VMs = $VMHost |Get-VM
-        $vmsCount=$VMs.Count
-        $vmsName=""
-        foreach ($VM in $VMs) {
-            $vmsName+= "$($vm.Name)~"
+        $dsNames = ($dsData | Select-Object -ExpandProperty Name) -join '~'
+        $dsCapacity = ($dsData | ForEach-Object { "{0:F2}" -f $_.CapacityGB }) -join '~'
+        $dsFree = ($dsData | ForEach-Object { "{0:F2}" -f $_.FreeSpaceGB }) -join '~'
+        $dsPercentUsing = ($dsData | ForEach-Object { $_.PercentUsed }) -join '~'
+        $storageCapacity = ($dsData | Measure-Object -Property CapacityGB -Sum).Sum
+        $freeStorage = ($dsData | Measure-Object -Property FreeSpaceGB -Sum).Sum
 
-        }
+        $VMs = $VMHost | Get-VM
+        $vmsCount = $VMs.Count
+        $vmsNames = ($VMs | Select-Object -ExpandProperty Name) -join '~'
 
+        $uptimeDays = ((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
 
-        $uptimeDays=((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
-
-        $command = $conn.CreateCommand()
-        $sql = @"
-        INSERT INTO vminfoHosts (
-        HostName,HostModel,vCenter,HostManufacturer,HostCluster,HostDataCenter,LastWriteTime,HostTotalMemory,HostMemoryUsage,HostTotalCPU,HostCPUUsage,
-        HostNumNics,esxiVersion,NumCpuThreads,CPUModel,DSName,DSCapacity,DSFree,DSPercentUsing,HostStorageCapacity,HostFreeStorage,VMsCount,VMsName,UptimeDay) 
-        VALUES
-        ('$hostName','$hostModel','$vcenter','$hosManufacturer','$hostCluster','$hostDataCenter','$lastWriteTime'
-        ,$hostTotalMemory,$hostMemoryUsage,$hostTotalCpu,$hostCpuUsage,$hostNumNics,'$version',$NumCpuThreads,'$cpuModel','$dsName','$dsCapacity','$dsFree','$dsPercentUsing',$("{0:F2}" -f [decimal]($storageCapacity)),
-        $("{0:F2}" -f [decimal]($freeStorage)),$vmsCount,'$vmsName',$uptimeDays)
+        # Add host data to the list
+        $hostDataList += @"
+('$hostName', '$hostModel', '$vcenter', '$hostManufacturer', '$hostCluster', '$hostDataCenter', '$lastWriteTime',
+ $hostTotalMemory, $hostMemoryUsage, $hostTotalCpu, $hostCpuUsage, $hostNumNics, '$version',
+ $NumCpuThreads, '$cpuModel', '$dsNames', '$dsCapacity', '$dsFree', '$dsPercentUsing',
+ $("{0:F2}" -f [decimal]($storageCapacity)), $("{0:F2}" -f [decimal]($freeStorage)), $vmsCount, '$vmsNames', $uptimeDays)
 "@
-        $command.CommandText = $sql
-        $row=$command.ExecuteNonQuery()
-        
     }
+    
     Disconnect-VIServer -Server $vcenter -Confirm:$false
-
-
 }
 
-$conn.Close() 
+# Create a single insert command
+if ($hostDataList.Count -gt 0) {
+    $values = $hostDataList -join ","
+    $sql = @"
+INSERT INTO vminfoHosts (
+    HostName, HostModel, vCenter, HostManufacturer, HostCluster, HostDataCenter, LastWriteTime, 
+    HostTotalMemory, HostMemoryUsage, HostTotalCPU, HostCPUUsage, HostNumNics, esxiVersion,
+    NumCpuThreads, CPUModel, DSName, DSCapacity, DSFree, DSPercentUsing, 
+    HostStorageCapacity, HostFreeStorage, VMsCount, VMsName, UptimeDay) 
+VALUES $values
+"@
+
+    $command = $conn.CreateCommand()
+    $command.CommandText = $sql
+    $command.ExecuteNonQuery()
+}
+
+$conn.Close()
