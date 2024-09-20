@@ -1,4 +1,73 @@
-+'Sunucu Adi:'OGMKAPPBAP01+'UserName':admsys+'Disabled:'False+'Lockout:'False+'PasswordExpire:'False+'ChangeAble:' 15.09.2024 20:33:29+'LastSet:' 14.09.2024 20:33:29+'GroupMembers:'    *Administrators       *Remote Desktop Users +'LastLogon:' 14.09.2024 20:33:29+'Fullname:'+'AccountType:'512+'PasswordRequired:'True+'PasswordChangeabled:'True
-+'Sunucu Adi:'OGMKAPPBAP01+'UserName':BladeLogicRSCD+'Disabled:'False+'Lockout:'False+'PasswordExpire:'False+'ChangeAble:'  9.12.2022 15:29:22+'LastSet:'  8.12.2022 15:29:22+'GroupMembers:'    +'LastLogon:' 16.09.2024 05:05:16+'Fullname:'BladeLogicRSCD+'AccountType:'512+'PasswordRequired:'True+'PasswordChangeabled:'True
-+'Sunucu Adi:'OGMKAPPBAP01+'UserName':DefaultAccount+'Disabled:'True+'Lockout:'False+'PasswordExpire:'False+'ChangeAble:' 17.09.2024 05:05:17+'LastSet:' 16.09.2024 05:05:17+'GroupMembers:'    *System Managed Group +'LastLogon:'               Never+'Fullname:'+'AccountType:'512+'PasswordRequired:'False+'PasswordChangeabled:'True
-+'Sunucu Adi:'OGMKAPPBAP01+'UserName':EstGu+'Disabled:
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01","apgartksvcs201","apgartksvcs801")
+
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+foreach($vcenter in $vcenters){
+    Connect-VIServer -Server $vcenter -User "AliCanda1" -Password "Rhygp4971"
+    $clusters = Get-Cluster
+    foreach($cluster in $clusters){
+        $clusterName=$cluster.Name-replace '#',''
+        if($clusterName -match "^#"){
+            $j=$j+1
+            $cluster=$clusters[$j]
+            $clusterName=$cluster.Name
+
+        }
+        $datacenter=($cluster |Get-Datacenter).Name
+        $clusterHAE=$cluster.HAEnabled
+        $clusterDrsEnabled=$cluster.DRSEnabled
+
+        $clusterTotalCPU="{0:F2}" -f [decimal]($cluster.ExtensionData.Summary.TotalCpu/1000)
+        $clusterTotalMemory= "{0:F2}" -f [decimal]($cluster.ExtensionData.Summary.TotalMemory/1024/1024/1024)
+
+        $clusterNumVmotions=$cluster.ExtensionData.Summary.NumVmotions
+
+        $clusterNumHosts=$cluster.ExtensionData.Summary.NumHosts
+        $clusterNumCpuCores=$cluster.ExtensionData.Summary.NumCpuCores
+        $totalVmCount=$cluster.ExtensionData.Summary.UsageSummary.TotalVmCount
+
+        $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+
+        $dss= $cluster | Get-Datastore
+        $dsName=""
+        $dsCapacity=""
+        $dsFree=""
+        $dsPercentUsing=""
+        $totalStorage=0
+        $freeStorage=0
+                                        foreach ($ds in $dss) {
+                $dsName+= "$($ds.Name)~"
+                $dsCapacity+= "$("{0:F2}" -f [decimal]$ds.CapacityGB)~"
+                $dsFree+= "$("{0:F2}" -f [decimal]$ds.FreeSpaceGB)~"
+                $dsPercentUsing+= "$([math]::Round(($ds.CapacityGB-$ds.FreeSpaceGB)/$ds.CapacityGB*100,2))~"
+                $totalStorage += $ds.CapacityGB
+                $freeStorage += $ds.FreeSpaceGB
+         
+            }
+
+
+        $hosts = $cluster|Get-VMHost
+        $vmhostName=""
+                foreach ($vmhost in $hosts) {
+                $vmhostName+="$($vmhost.Name)~"
+
+            }
+
+        $command = $conn.CreateCommand()
+
+        $sql = @"
+        INSERT INTO vminfoClusters (
+        ClusterName,DataCenter,ClusterHAE,vCenter,ClusterDRSEnabled,ClusterTotalMemory,ClusterTotalCPU,ClusterNumVmotions,
+        ClusterNumHosts,ClusterNumCPUCores,TotalVMCount,LastWriteTime,DSName,DSCapacity,DSFree,DSPercentUsing,ClusterTotalStorage,ClusterFreeStorage,VMHostNames) 
+        VALUES
+        ('$clusterName','$datacenter','$clusterHAE','$vcenter','$clusterDrsEnabled',$clusterTotalMemory,$clusterTotalCPU,$clusterNumVmotions,
+        $clusterNumHosts,$clusterNumCpuCores,$totalVmCount,'$lastWriteTime','$dsName','$dsCapacity','$dsFree','$dsPercentUsing',$("{0:F2}" -f [decimal]($totalStorage)), $("{0:F2}" -f [decimal]($freeStorage)),'$vmhostName') 
+"@
+
+        $command.CommandText = $sql
+        $row=$command.ExecuteNonQuery()
+    }
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+} 
+       
+$conn.Close() 
