@@ -93,3 +93,8 @@ namespace windows_users
         }
     }
 }
+
+
+Severity	Code	Description	Project	File	Line	Suppression State
+Error	CS0136	A local or parameter named 'e' cannot be declared in this scope because that name is used in an enclosing local scope to define a local or parameter	windows users	C:\inetpub\wwwroot\windows users\windows users\local.aspx.cs	38	Active
+
