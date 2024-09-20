@@ -1,99 +1,73 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ops:resources xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xm
-lns:ops="http://webservice.vmware.com/vRealizeOpsMgr/1.0/"><ops:pageInfo totalCount="19030"><ops:page>0</ops:page><ops:pageSize>1000</ops:pageSize></ops:pageInfo><ops:lin
-ks><ops:link href="/suite-api/api/resources?page=0&amp;pageSize=1000" rel="SELF" name="current" /><ops:link href="/suite-api/api/resources?page=1&amp;pageSize=1000" rel="
-NEXT" name="next" /><ops:link href="/suite-api/api/resources?page=0&amp;pageSize=1000" rel="RELATED" name="first" /><ops:link href="/suite-api/api/resources?page=19&amp;p
-ageSize=1000" rel="RELATED" name="last" /></ops:links><ops:resource creationTime="1724739576334" identifier="00008c42-184d-4a57-86e5-0b475bc4fb1f"><ops:resourceKey><ops:n
-ame>APGBARCLOG04</ops:name><ops:adapterKindKey>VMWARE</ops:adapterKindKey><ops:resourceKindKey>VirtualMachine</ops:resourceKindKey><ops:resourceIdentifiers><ops:resourceI
-dentifier><ops:identifierType name="isPingEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:value></ops:value></ops:resourceIdentifier><ops:resourceIdentifier>
-<ops:identifierType name="VMEntityInstanceUUID" dataType="STRING" isPartOfUniqueness="false" /><ops:value>503f8af4-787b-cf20-5bea-d720ec151236</ops:value></ops:resourceId
-entifier><ops:resourceIdentifier><ops:identifierType name="VMEntityName" dataType="STRING" isPartOfUniqueness="false" /><ops:value>APGBARCLOG04</ops:value></ops:resourceI
-dentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityObjectID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>vm-1687524</ops:value></ops:resourc
-eIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityVCID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>4917d226-0a54-4ae8-ac89-35f6f5622ffd<
-/ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMServiceMonitoringEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:valu
-e></ops:value></ops:resourceIdentifier></ops:resourceIdentifiers></ops:resourceKey><ops:resourceStatusStates><ops:resourceStatusState><ops:adapterInstanceId>a2eeeb06-51fd
--4815-ad65-b3a8f994c466</ops:adapterInstanceId><ops:resourceState>NOT_EXISTING</ops:resourceState></ops:resourceStatusState></ops:resourceStatusStates><ops:resourceHealth
->GREY</ops:resourceHealth><ops:resourceHealthValue>-1.0</ops:resourceHealthValue><ops:dtEnabled>true</ops:dtEnabled><ops:badges /><ops:relatedResources /><ops:links><ops:
-link href="/suite-api/api/resources/00008c42-184d-4a57-86e5-0b475bc4fb1f" rel="SELF" name="linkToSelf" /><ops:link href="/suite-api/api/resources/00008c42-184d-4a57-86e5-
-0b475bc4fb1f/relationships" rel="RELATED" name="relationsOfResource" /><ops:link href="/suite-api/api/resources/00008c42-184d-4a57-86e5-0b475bc4fb1f/properties" rel="RELA
-TED" name="propertiesOfResource" /><ops:link href="/suite-api/api/alerts?resourceId=00008c42-184d-4a57-86e5-0b475bc4fb1f" rel="RELATED" name="alertsOfResource" /><ops:lin
-k href="/suite-api/api/symptoms?resourceId=00008c42-184d-4a57-86e5-0b475bc4fb1f" rel="RELATED" name="symptomsOfResource" /><ops:link href="/suite-api/api/resources/00008c
-42-184d-4a57-86e5-0b475bc4fb1f/statkeys" rel="RELATED" name="statKeysOfResource" /><ops:link href="/suite-api/api/resources/00008c42-184d-4a57-86e5-0b475bc4fb1f/stats/lat
-est" rel="RELATED" name="latestStatsOfResource" /><ops:link href="/suite-api/api/resources/00008c42-184d-4a57-86e5-0b475bc4fb1f/properties" rel="RELATED" name="latestProp
-ertiesOfResource" /><ops:link href="/suite-api/api/credentials/" rel="RELATED" name="credentialsOfResource" /></ops:links></ops:resource><ops:resource creationTime="17253
-44654397" identifier="0000a96b-1b28-47ef-ad0e-801e8b4d0fb3"><ops:resourceKey><ops:name>PGARWEBPEX01</ops:name><ops:adapterKindKey>VMWARE</ops:adapterKindKey><ops:resource
-KindKey>VirtualMachine</ops:resourceKindKey><ops:resourceIdentifiers><ops:resourceIdentifier><ops:identifierType name="isPingEnabled" dataType="STRING" isPartOfUniqueness
-="false" /><ops:value></ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityInstanceUUID" dataType="STRING" isPartOfUniqueness="f
-alse" /><ops:value>503fe97b-7b7e-7ba2-b745-0d8cfe9fd7e6</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityName" dataType="STRI
-NG" isPartOfUniqueness="false" /><ops:value>PGARWEBPEX01</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityObjectID" dataType=
-"STRING" isPartOfUniqueness="true" /><ops:value>vm-1695063</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityVCID" dataType="S
-TRING" isPartOfUniqueness="true" /><ops:value>4917d226-0a54-4ae8-ac89-35f6f5622ffd</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="V
-MServiceMonitoringEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:value></ops:value></ops:resourceIdentifier></ops:resourceIdentifiers></ops:resourceKey><ops
-:resourceStatusStates><ops:resourceStatusState><ops:adapterInstanceId>a2eeeb06-51fd-4815-ad65-b3a8f994c466</ops:adapterInstanceId><ops:resourceStatus>DATA_RECEIVING</ops:
-resourceStatus><ops:resourceState>STARTED</ops:resourceState><ops:statusMessage></ops:statusMessage></ops:resourceStatusState></ops:resourceStatusStates><ops:resourceHeal
-th>GREY</ops:resourceHealth><ops:resourceHealthValue>-1.0</ops:resourceHealthValue><ops:dtEnabled>true</ops:dtEnabled><ops:badges><ops:badge type="CAPACITY_REMAINING" col
-or="GREEN" score="42.902113538768205" /><ops:badge type="RISK" color="GREEN" score="0.0" /><ops:badge type="EFFICIENCY" color="GREEN" score="100.0" /><ops:badge type="HEA
-LTH" color="GREEN" score="100.0" /><ops:badge type="TIME_REMAINING" color="GREEN" score="366.0" /><ops:badge type="COMPLIANCE" color="GREY" score="-1.0" /><ops:badge type
-="WORKLOAD" color="GREEN" score="46.904625097910554" /></ops:badges><ops:relatedResources /><ops:links><ops:link href="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-80
-1e8b4d0fb3" rel="SELF" name="linkToSelf" /><ops:link href="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-801e8b4d0fb3/relationships" rel="RELATED" name="relationsOfRes
-ource" /><ops:link href="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-801e8b4d0fb3/properties" rel="RELATED" name="propertiesOfResource" /><ops:link href="/suite-api/
-api/alerts?resourceId=0000a96b-1b28-47ef-ad0e-801e8b4d0fb3" rel="RELATED" name="alertsOfResource" /><ops:link href="/suite-api/api/symptoms?resourceId=0000a96b-1b28-47ef-
-ad0e-801e8b4d0fb3" rel="RELATED" name="symptomsOfResource" /><ops:link href="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-801e8b4d0fb3/statkeys" rel="RELATED" name="s
-tatKeysOfResource" /><ops:link href="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-801e8b4d0fb3/stats/latest" rel="RELATED" name="latestStatsOfResource" /><ops:link hr
-ef="/suite-api/api/resources/0000a96b-1b28-47ef-ad0e-801e8b4d0fb3/properties" rel="RELATED" name="latestPropertiesOfResource" /><ops:link href="/suite-api/api/credentials
-/" rel="RELATED" name="credentialsOfResource" /></ops:links></ops:resource><ops:resource creationTime="1725344420189" identifier="00064580-c90d-4543-b85a-12e25cf0c670"><o
-ps:resourceKey><ops:name>PGOHPKIECA01</ops:name><ops:adapterKindKey>VMWARE</ops:adapterKindKey><ops:resourceKindKey>VirtualMachine</ops:resourceKindKey><ops:resourceIdent
-ifiers><ops:resourceIdentifier><ops:identifierType name="isPingEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:value></ops:value></ops:resourceIdentifier><op
-s:resourceIdentifier><ops:identifierType name="VMEntityInstanceUUID" dataType="STRING" isPartOfUniqueness="false" /><ops:value>503fe2a6-502b-de62-18e2-59c5e703a69f</ops:v
-alue></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityName" dataType="STRING" isPartOfUniqueness="false" /><ops:value>PGOHPKIECA01</ops:
-value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityObjectID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>vm-1693571</op
-s:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityVCID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>4917d226-0a54-4a
-e8-ac89-35f6f5622ffd</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMServiceMonitoringEnabled" dataType="STRING" isPartOfUniquenes
-s="false" /><ops:value></ops:value></ops:resourceIdentifier></ops:resourceIdentifiers></ops:resourceKey><ops:resourceStatusStates><ops:resourceStatusState><ops:adapterIns
-tanceId>a2eeeb06-51fd-4815-ad65-b3a8f994c466</ops:adapterInstanceId><ops:resourceStatus>DATA_RECEIVING</ops:resourceStatus><ops:resourceState>STARTED</ops:resourceState><
-ops:statusMessage></ops:statusMessage></ops:resourceStatusState></ops:resourceStatusStates><ops:resourceHealth>GREY</ops:resourceHealth><ops:resourceHealthValue>-1.0</ops
-:resourceHealthValue><ops:dtEnabled>true</ops:dtEnabled><ops:badges><ops:badge type="CAPACITY_REMAINING" color="GREEN" score="47.05970561884224" /><ops:badge type="RISK" 
-color="GREEN" score="0.0" /><ops:badge type="EFFICIENCY" color="GREEN" score="100.0" /><ops:badge type="HEALTH" color="GREEN" score="100.0" /><ops:badge type="TIME_REMAIN
-ING" color="GREEN" score="366.0" /><ops:badge type="COMPLIANCE" color="GREY" score="-1.0" /><ops:badge type="WORKLOAD" color="GREEN" score="45.09438912073771" /></ops:bad
-ges><ops:relatedResources /><ops:links><ops:link href="/suite-api/api/resources/00064580-c90d-4543-b85a-12e25cf0c670" rel="SELF" name="linkToSelf" /><ops:link href="/suit
-e-api/api/resources/00064580-c90d-4543-b85a-12e25cf0c670/relationships" rel="RELATED" name="relationsOfResource" /><ops:link href="/suite-api/api/resources/00064580-c90d-
-4543-b85a-12e25cf0c670/properties" rel="RELATED" name="propertiesOfResource" /><ops:link href="/suite-api/api/alerts?resourceId=00064580-c90d-4543-b85a-12e25cf0c670" rel=
-"RELATED" name="alertsOfResource" /><ops:link href="/suite-api/api/symptoms?resourceId=00064580-c90d-4543-b85a-12e25cf0c670" rel="RELATED" name="symptomsOfResource" /><op
-s:link href="/suite-api/api/resources/00064580-c90d-4543-b85a-12e25cf0c670/statkeys" rel="RELATED" name="statKeysOfResource" /><ops:link href="/suite-api/api/resources/00
-064580-c90d-4543-b85a-12e25cf0c670/stats/latest" rel="RELATED" name="latestStatsOfResource" /><ops:link href="/suite-api/api/resources/00064580-c90d-4543-b85a-12e25cf0c67
-0/properties" rel="RELATED" name="latestPropertiesOfResource" /><ops:link href="/suite-api/api/credentials/" rel="RELATED" name="credentialsOfResource" /></ops:links></op
-s:resource><ops:resource creationTime="1725260960260" identifier="0006f1a0-e4d0-43d4-8fba-77c40736eea6"><ops:resourceKey><ops:name>gbocpdrcprod1-bank-prod-9</ops:name><op
-s:adapterKindKey>VMWARE</ops:adapterKindKey><ops:resourceKindKey>VirtualMachine</ops:resourceKindKey><ops:resourceIdentifiers><ops:resourceIdentifier><ops:identifierType 
-name="isPingEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:value></ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEn
-tityInstanceUUID" dataType="STRING" isPartOfUniqueness="false" /><ops:value>503fcb79-f7d2-3983-1863-97f6413186bd</ops:value></ops:resourceIdentifier><ops:resourceIdentifi
-er><ops:identifierType name="VMEntityName" dataType="STRING" isPartOfUniqueness="false" /><ops:value>gbocpdrcprod1-bank-prod-9</ops:value></ops:resourceIdentifier><ops:re
-sourceIdentifier><ops:identifierType name="VMEntityObjectID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>vm-1691774</ops:value></ops:resourceIdentifier><ops:
-resourceIdentifier><ops:identifierType name="VMEntityVCID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>4917d226-0a54-4ae8-ac89-35f6f5622ffd</ops:value></ops:
-resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMServiceMonitoringEnabled" dataType="STRING" isPartOfUniqueness="false" /><ops:value></ops:value></o
-ps:resourceIdentifier></ops:resourceIdentifiers></ops:resourceKey><ops:resourceStatusStates><ops:resourceStatusState><ops:adapterInstanceId>a2eeeb06-51fd-4815-ad65-b3a8f9
-94c466</ops:adapterInstanceId><ops:resourceState>NOT_EXISTING</ops:resourceState></ops:resourceStatusState></ops:resourceStatusStates><ops:resourceHealth>GREY</ops:resour
-ceHealth><ops:resourceHealthValue>-1.0</ops:resourceHealthValue><ops:dtEnabled>true</ops:dtEnabled><ops:badges /><ops:relatedResources /><ops:links><ops:link href="/suite
--api/api/resources/0006f1a0-e4d0-43d4-8fba-77c40736eea6" rel="SELF" name="linkToSelf" /><ops:link href="/suite-api/api/resources/0006f1a0-e4d0-43d4-8fba-77c40736eea6/rela
-tionships" rel="RELATED" name="relationsOfResource" /><ops:link href="/suite-api/api/resources/0006f1a0-e4d0-43d4-8fba-77c40736eea6/properties" rel="RELATED" name="proper
-tiesOfResource" /><ops:link href="/suite-api/api/alerts?resourceId=0006f1a0-e4d0-43d4-8fba-77c40736eea6" rel="RELATED" name="alertsOfResource" /><ops:link href="/suite-ap
-i/api/symptoms?resourceId=0006f1a0-e4d0-43d4-8fba-77c40736eea6" rel="RELATED" name="symptomsOfResource" /><ops:link href="/suite-api/api/resources/0006f1a0-e4d0-43d4-8fba
--77c40736eea6/statkeys" rel="RELATED" name="statKeysOfResource" /><ops:link href="/suite-api/api/resources/0006f1a0-e4d0-43d4-8fba-77c40736eea6/stats/latest" rel="RELATED
-" name="latestStatsOfResource" /><ops:link href="/suite-api/api/resources/0006f1a0-e4d0-43d4-8fba-77c40736eea6/properties" rel="RELATED" name="latestPropertiesOfResource"
- /><ops:link href="/suite-api/api/credentials/" rel="RELATED" name="credentialsOfResource" /></ops:links></ops:resource><ops:resource creationTime="1645084892150" identif
-ier="0009a77e-e420-431e-9103-de0a5fa42061"><ops:resourceKey><ops:name>dvS_GB_DMZ_Inter-DVUplinks-63084</ops:name><ops:adapterKindKey>VMWARE</ops:adapterKindKey><ops:resou
-rceKindKey>DistributedVirtualPortgroup</ops:resourceKindKey><ops:resourceIdentifiers><ops:resourceIdentifier><ops:identifierType name="VMEntityName" dataType="STRING" isP
-artOfUniqueness="false" /><ops:value>dvS_GB_DMZ_Inter-DVUplinks-63084</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEntityObject
-ID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>dvportgroup-63085</ops:value></ops:resourceIdentifier><ops:resourceIdentifier><ops:identifierType name="VMEnt
-ityVCID" dataType="STRING" isPartOfUniqueness="true" /><ops:value>4917d226-0a54-4ae8-ac89-35f6f5622ffd</ops:value></ops:resourceIdentifier></ops:resourceIdentifiers></ops
-:resourceKey><ops:resourceStatusStates><ops:resourceStatusState><ops:adapterInstanceId>a2eeeb06-51fd-4815-ad65-b3a8f994c466</ops:adapterInstanceId><ops:resourceStatus>DAT
-A_RECEIVING</ops:resourceStatus><ops:resourceState>STARTED</ops:resourceState><ops:statusMessage></ops:statusMessage></ops:resourceStatusState></ops:resourceStatusStates>
-<ops:resourceHealth>GREY</ops:resourceHealth><ops:resourceHealthValue>-1.0</ops:resourceHealthValue><ops:dtEnabled>true</ops:dtEnabled><ops:badges><ops:badge type="RISK" 
-color="GREEN" score="0.0" /><ops:badge type="EFFICIENCY" color="GREEN" score="100.0" /><ops:badge type="HEALTH" color="GREEN" score="100.0" /><ops:badge type="COMPLIANCE"
- color="GREY" score="-1.0" /><ops:badge type="WORKLOAD" color="GREEN" score="0.0" /></ops:badges><ops:relatedResources /><ops:links><ops:link href="/suite-api/api/resourc
-es/0009a77e-e420-431e-9103-de0a5fa42061" rel="SELF" name="linkToSelf" /><ops:link href="/suite-api/api/resources/0009a77e-e420-431e-9103-de0a5fa42061/relationships" rel="
-RELATED" name="relationsOfResource" /><ops:link href="/suite-api/api/resources/0009a77e-e420-431e-9103-de0a5fa42061/properties" rel="RELATED" name="propertiesOfResource" 
-/><ops:link href="/suite-api/api/alerts?resourceId=0009a77e-e420-431e-9103-de0a5fa42061" rel="RELATED" name="alertsOfResource" /><ops:link href="/suite-api/api/symptoms?r
-esourceId=0009a77e-e420-431e-9103-de0a5fa42061" rel="RELATED" name="symptomsOfResource" /><ops:link href="/suite-api/api/resources/0009a77e-e420-431e-9103-de0a5fa42061/st
-atkeys" rel="RELATED" name="statKeysOfResource" /><ops:link href="/suite-api/api/resources/0009a77e-e420-431e-9103-de0a5fa42061/stats/latest" rel="RELATED" name="latestSt
-atsOfResource" /><ops:link href="/suite-api/api/resources/0009a77e-e420-431e-9103-de0a5fa42061/properties" rel="RELATED" name="latestPropertiesOfResource" /><ops:link hre
-f="/suite-api/api/credentials/" rel="RELATED" name="credentialsOfResource" /></ops:links></ops:resource><ops:resource creationTime="1724755299331" identifier="0009dd64-91
-e6-4d1c-a320-a939a1a7f0a3"><ops:resourceKey><ops:name>GBIREST03</ops:name>
+$vcenters=("ptekvcs01","apgaraavcs801","apgartstvcs201","ptekvcsd01","apgartksvcs201","apgartksvcs801")
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+foreach($vcenter in $vcenters){
+    Connect-VIServer -Server $vcenter -User "AliCanda1" -Password "Rhygp4971"
+    $VMHosts= Get-VMHost            
+    foreach($VMHost in $VMHosts){
+        $hostName=$VMHost.Name
+        $hostCluster=$VMHost.Parent.Name-replace '#',''
+        $hostDataCenter=$VMHost.Parent.ParentFolder.Parent.Name
+        $hostModel=$VMHost.Model
+        $hosManufacturer=$VMHost.Manufacturer
+        $lastWriteTime= Get-Date -Format "yyyy-MM-dd HH:mm"
+
+        $hostTotalMemory= "{0:F2}" -f [decimal]($VMHost.MemoryTotalGB)
+        $hostMemoryUsage= "{0:F2}" -f [decimal]($VMHost.MemoryUsageGB)
+        $hostTotalCpu="{0:F2}" -f [decimal]($VMHost.CpuTotalMhz/1000)
+        $hostCpuUsage="{0:F2}" -f [decimal]($VMHost.CpuUsageMhz/1000)
+        $hostNumNics=$VMHost.ExtensionData.Summary.Hardware.NumNics
+        $version=$VMHost.Version
+
+
+        $NumCpuThreads=$VMHost.ExtensionData.summary.hardware.NumCpuThreads
+        $cpuModel=$VMHost.ExtensionData.summary.hardware.CpuModel
+
+        $dss= $VMHost |Get-Datastore
+        $dsName=""
+        $dsCapacity=""
+        $dsFree=""
+        $dsPercentUsing=""
+        $storageCapacity=0
+        $freeStorage=0
+        foreach ($ds in $dss) {
+            $dsName+= "$($ds.Name)~"
+            $dsCapacity+= "$("{0:F2}" -f [decimal]$ds.CapacityGB)~"
+            $dsFree+= "$("{0:F2}" -f [decimal]$ds.FreeSpaceGB)~"
+            $dsPercentUsing+= "$([math]::Round(($ds.CapacityGB-$ds.FreeSpaceGB)/$ds.CapacityGB*100,2))~"
+            $storageCapacity += $ds.CapacityGB
+            $freeStorage += $ds.FreeSpaceGB
+            
+        }
+
+        $VMs = $VMHost |Get-VM
+        $vmsCount=$VMs.Count
+        $vmsName=""
+        foreach ($VM in $VMs) {
+            $vmsName+= "$($vm.Name)~"
+
+        }
+
+
+        $uptimeDays=((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
+
+        $command = $conn.CreateCommand()
+        $sql = @"
+        INSERT INTO vminfoHosts (
+        HostName,HostModel,vCenter,HostManufacturer,HostCluster,HostDataCenter,LastWriteTime,HostTotalMemory,HostMemoryUsage,HostTotalCPU,HostCPUUsage,
+        HostNumNics,esxiVersion,NumCpuThreads,CPUModel,DSName,DSCapacity,DSFree,DSPercentUsing,HostStorageCapacity,HostFreeStorage,VMsCount,VMsName,UptimeDay) 
+        VALUES
+        ('$hostName','$hostModel','$vcenter','$hosManufacturer','$hostCluster','$hostDataCenter','$lastWriteTime'
+        ,$hostTotalMemory,$hostMemoryUsage,$hostTotalCpu,$hostCpuUsage,$hostNumNics,'$version',$NumCpuThreads,'$cpuModel','$dsName','$dsCapacity','$dsFree','$dsPercentUsing',$("{0:F2}" -f [decimal]($storageCapacity)),
+        $("{0:F2}" -f [decimal]($freeStorage)),$vmsCount,'$vmsName',$uptimeDays)
+"@
+        $command.CommandText = $sql
+        $row=$command.ExecuteNonQuery()
+        
+    }
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+
+
+}
+
+$conn.Close() 
