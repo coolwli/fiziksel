@@ -1,7 +1,6 @@
 $historical_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 $fiziksel_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=PGTRPRALS,1453;Initial Catalog=gtreportdb;User Id=preportdb_usr; Password=Le68JqSz5p9MCu1w ;"
 
-
 $today = (Get-Date).ToString("yyyy-MM-dd")
 
 $query = @"
@@ -31,17 +30,24 @@ SELECT
 
 $fiziksel_conn.Open()
 
-
 $cmd = $fiziksel_conn.CreateCommand()
 $cmd.CommandText = $query
 $reader = $cmd.ExecuteReader()
 
 # Sonuçları oku ve tabloya ekle
-if ($reader.Read()) {
-    $reader["memory"]
+while ($reader.Read()) {
+    $uretimci_firma = $reader["üretici_firma"]
+    $model = $reader["model"]
+    $cihaz_tipi = $reader["cihaz_tipi"]
+    $isletim_sistemi = $reader["isletim_sistemi"]
+    $kapsam = $reader["kapsam"]
+    $enviroment = $reader["enviroment"]
+    $total_core = $reader["total_core"]
+    $memory = $reader["memory"]
 
-    # Verileri yeni tabloya ekle
-
+    # Verileri yeni tabloya ekleme kısmı burada yapılmalı
+    # Örneğin, başka bir sorgu ile INSERT INTO yapılabilir
+    Write-Output "Üretici Firma: $uretimci_firma, Model: $model, Core: $total_core, Memory: $memory"
 }
 
 # Bağlantıyı kapat
