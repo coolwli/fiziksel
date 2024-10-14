@@ -1,7 +1,48 @@
+$historical_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$fiziksel_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=PGTRPRALS,1453;Initial Catalog=gtreportdb;User Id=preportdb_usr; Password=Le68JqSz5p9MCu1w ;"
+
+
+$today = (Get-Date).ToString("yyyy-MM-dd")
+
+$query = @"
 SELECT 
     (SELECT 
-        TextColumn + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~'
-     FROM YourTable
-     GROUP BY TextColumn
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS Column1
+        [Üretici Firma] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Üretici Firma]
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS üretici_firma,
+	(SELECT 
+        model + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY model
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS model,
+	 (SELECT 
+        [Cihaz Tipi]+ '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Cihaz Tipi]
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS cihaz_tipi,
+	(SELECT 
+        [İşletim Sistemi] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [İşletim Sistemi]
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS isletim_sistemi,
+	(SELECT 
+        [Kapsam-BBVA Metrics] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Kapsam-BBVA Metrics]
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS kapsam,
+	(SELECT 
+        Enviroment+ '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY Enviroment
+     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS enviroment,
 
+	 (SELECT SUM([Toplam Core Adet]) FROM fiziksel) AS total_core,
+	 (SELECT SUM([Memory (GB)]) FROM fiziksel) AS memory
+"@
+
+$fiziksel_conn.Open()
+
+
+$cmd = $fiziksel_conn.CreateCommand()
+$cmd.CommandText = $query
+$reader = $cmd.ExecuteReader()
+
+# Sonuçları oku ve tabloya ekle
+if ($reader.Read()) {
+    $reader["memory"]
+
+    # Verileri yeni tabloya ekle
+
+}
+
+# Bağlantıyı kapat
+$fiziksel_conn.Close()
