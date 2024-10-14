@@ -1,1 +1,42 @@
+# SQL Server bağlantı bilgileri
+$server = "ServerName"
+$database = "DatabaseName"
+$connectionString = "Server=$server;Database=$database;Integrated Security=True;"
 
+# Bugünkü tarihi al
+$today = (Get-Date).ToString("yyyy-MM-dd")
+
+# Her sütun için verileri topla
+$query = @"
+SELECT 
+    (SELECT STRING_AGG(CONCAT(TextColumn, '''', COUNT(*)), '~') FROM YourTable GROUP BY TextColumn) AS Column1, -- Text sütun için
+    (SELECT SUM(IntColumn) FROM YourTable) AS Column2 -- Integer sütun için
+    -- Diğer sütunlar için aynı şekilde sorgular ekle
+"@
+
+# SQL bağlantısını aç
+$conn = New-Object System.Data.SqlClient.SqlConnection
+$conn.ConnectionString = $connectionString
+$conn.Open()
+
+# SQL komutunu çalıştır
+$cmd = $conn.CreateCommand()
+$cmd.CommandText = $query
+$reader = $cmd.ExecuteReader()
+
+# Sonuçları oku ve tabloya ekle
+if ($reader.Read()) {
+    $column1 = $reader["Column1"]
+    $column2 = $reader["Column2"]
+    # Diğer sütunlar
+
+    # Verileri yeni tabloya ekle
+    $insertQuery = "INSERT INTO DailySummary (SummaryDate, Column1, Column2) VALUES ('$today', '$column1', $column2)"
+    # Diğer sütunlar için de eklemeler yap
+    $insertCmd = $conn.CreateCommand()
+    $insertCmd.CommandText = $insertQuery
+    $insertCmd.ExecuteNonQuery()
+}
+
+# Bağlantıyı kapat
+$conn.Close()
