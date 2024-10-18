@@ -1,54 +1,23 @@
-$historical_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
-$fiziksel_conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=PGTRPRALS,1453;Initial Catalog=gtreportdb;User Id=preportdb_usr; Password=Le68JqSz5p9MCu1w ;"
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Text;
+using System.Web.Script.Serialization;
+using System.Linq;
 
-$today = (Get-Date).ToString("yyyy-MM-dd")
+namespace historicDatas
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
 
-$query = @"
-SELECT 
-    (SELECT 
-        [Üretici Firma] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Üretici Firma]
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS üretici_firma,
-	(SELECT 
-        model + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY model
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS model,
-	 (SELECT 
-        [Cihaz Tipi]+ '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Cihaz Tipi]
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS cihaz_tipi,
-	(SELECT 
-        [İşletim Sistemi] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [İşletim Sistemi]
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS isletim_sistemi,
-	(SELECT 
-        [Kapsam-BBVA Metrics] + '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY [Kapsam-BBVA Metrics]
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS kapsam,
-	(SELECT 
-        Enviroment+ '''' + CAST(COUNT(*) AS VARCHAR(10)) + '~' FROM fiziksel GROUP BY Enviroment
-     FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)') AS enviroment,
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            using (var con = new SqlConnection(connectionString))
+            {
+                con.Open();
 
-	 (SELECT SUM([Toplam Core Adet]) FROM fiziksel) AS total_core,
-	 (SELECT SUM([Memory (GB)]) FROM fiziksel) AS memory
-"@
-
-$fiziksel_conn.Open()
-
-$cmd = $fiziksel_conn.CreateCommand()
-$cmd.CommandText = $query
-$reader = $cmd.ExecuteReader()
-
-# Sonuçları oku ve tabloya ekle
-while ($reader.Read()) {
-    $uretimci_firma = $reader["üretici_firma"]
-    $model = $reader["model"]
-    $cihaz_tipi = $reader["cihaz_tipi"]
-    $isletim_sistemi = $reader["isletim_sistemi"]
-    $kapsam = $reader["kapsam"]
-    $enviroment = $reader["enviroment"]
-    $total_core = $reader["total_core"]
-    $memory = $reader["memory"]
-
-    # Verileri yeni tabloya ekleme kısmı burada yapılmalı
-    # Örneğin, başka bir sorgu ile INSERT INTO yapılabilir
-    Write-Output "Üretici Firma: $uretimci_firma, Model: $model, Core: $total_core, Memory: $memory"
+            }
+        }
+    }
 }
-
-# Bağlantıyı kapat
-$fiziksel_conn.Close()
