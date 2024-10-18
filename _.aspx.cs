@@ -1,100 +1,104 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Collections.Generic;
-using System.Web.UI;
-using System.Web.Script.Serialization;
 
-namespace windows_users
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Web.UI;
+
+namespace historicDatas
 {
-    public partial class local : System.Web.UI.Page
+    public partial class _default : System.Web.UI.Page
     {
+        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
         protected void Page_Load(object sender, EventArgs e)
         {
-            string folderPath = @"C:\temp\windows users\local users";
-
-            try
+            if (!IsPostBack)
             {
-                var txtFiles = Directory.GetFiles(folderPath, "*.txt");
+                string sqlQuery = "SELECT * FROM fiziksel_historic";
+                List<string> dates;
+                Dictionary<string, Dictionary<string, List<int>>> datasets;
 
-                if (txtFiles.Length == 0)
+                GetAllDatasets(sqlQuery, out dates, out datasets);
+            }
+        }
+
+        private void GetAllDatasets(string query, out List<string> dates, out Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            dates = new List<string>();
+            datasets = new Dictionary<string, Dictionary<string, List<int>>>();
+
+            using (var con = new SqlConnection(connectionString))
+            {
+                con.Open();
+                using (var cmd = new SqlCommand(query, con))
                 {
-                    Response.Write("TXT dosyası bulunamadı.");
-                    return;
-                }
-
-                string latestFile = txtFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
-                List<string[]> rows = new List<string[]>();
-
-                using (StreamReader reader = new StreamReader(latestFile))
-                {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
+                    using (var reader = cmd.ExecuteReader())
                     {
-                        // Satırı '+' ile ayrıştır
-                        var entries = line.Split(new[] { "+" }, StringSplitOptions.RemoveEmptyEntries)
-                                          .Select(e => e.Trim())
-                                          .ToArray();
-
-                        if (entries.Length >= 2)
+                        while (reader.Read())
                         {
-                            // İlk iki öğeyi al
-                            string serverName = entries[0].Split(':')[1].Trim().Replace("'", "");
-                            string userName = entries[1].Split(':')[1].Trim().Replace("'", "");
-
-                            rows.Add(new[] { serverName, userName });
+                            ProcessRow(reader, datasets, dates);
                         }
                     }
                 }
-
-                JavaScriptSerializer serializer = new JavaScriptSerializer();
-                serializer.MaxJsonLength = Int32.MaxValue;
-                string json = serializer.Serialize(rows);
-                string script = $"<script> data = {json};initializeTable();</script>";
-                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
-            }
-            catch (Exception ex)
-            {
-                Response.Write("Hata: " + ex.Message);
             }
         }
 
-        protected void hiddenButton_Click(object sender, EventArgs e)
+        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets, List<string> dates)
         {
-            string jsonData = hiddenField.Value;
+            dates.Add(reader[0].ToString());
 
-            if (!string.IsNullOrEmpty(jsonData))
+            AddFixedValues(datasets, reader);
+
+            ProcessDynamicValues(reader, datasets);
+        }
+
+        private void AddFixedValues(Dictionary<string, Dictionary<string, List<int>>> datasets, SqlDataReader reader)
+        {
+            AddValue(datasets, "Total CPU", "Total CPU", Convert.ToInt32(reader["Total CPU"])); // Adjust column name
+            AddValue(datasets, "Total Memory", "Total Memory", Convert.ToInt32(reader["Total Memory"])); // Adjust column name
+            AddValue(datasets, "Host Count", "Host Count", Convert.ToInt32(reader["Host Count"])); // Adjust column name
+        }
+
+        private void AddValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
+        {
+            if (!datasets.ContainsKey(key))
             {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<string[]>>(jsonData);
+                datasets[key] = new Dictionary<string, List<int>>();
+            }
 
-                if (tableData.Count == 0)
-                {
-                    Response.Write("No data available.");
-                    return;
-                }
+            if (!datasets[key].ContainsKey(columnName))
+            {
+                datasets[key][columnName] = new List<int>();
+            }
 
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Host,User");
+            datasets[key][columnName].Add(value);
+        }
 
-                foreach (var row in tableData)
-                {
-                    csv.AppendLine($"{row[0]},{row[1]}");
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=local_users.csv");
-                Response.Write(csv.ToString());
-                Response.End();
+        private void ProcessDynamicValues(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            for (int i = 1; i < reader.FieldCount; i++) // Assuming the first column is the date
+            {
+                var columnName = reader.GetName(i);
+                var value = reader.GetValue(i).ToString();
+                ParseDynamicValues(value, columnName, datasets);
             }
         }
+
+        private void ParseDynamicValues(string value, string columnName, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var entry in entries)
+            {
+                var parts = entry.Split('|');
+
+                if (parts.Length == 2 && int.TryParse(parts[1], out int number))
+                {
+                    var company = parts[0].Trim();
+                    AddValue(datasets, company, columnName, number);
+                }
+            }
+        }
+
     }
 }
-
-
-Severity	Code	Description	Project	File	Line	Suppression State
-Error	CS0136	A local or parameter named 'e' cannot be declared in this scope because that name is used in an enclosing local scope to define a local or parameter	windows users	C:\inetpub\wwwroot\windows users\windows users\local.aspx.cs	38	Active
-
