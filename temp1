@@ -1,4 +1,24 @@
-CISCO|798~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
-CISCO|798~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
-CISCO|798~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
-CISCO|793~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
+public Dictionary<string, List<int>> ParseVeri(string veri)
+{
+    var markalar = veri.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
+    var markaDizisi = new Dictionary<string, List<int>>();
+
+    foreach (var marka in markalar)
+    {
+        var parcalanmis = marka.Split('|');
+        if (parcalanmis.Length == 2)
+        {
+            var markaAdi = parcalanmis[0];
+            var deger = int.Parse(parcalanmis[1]);
+
+            // Markayı ekle veya mevcut olanı güncelle
+            if (!markaDizisi.ContainsKey(markaAdi))
+            {
+                markaDizisi[markaAdi] = new List<int>();
+            }
+            markaDizisi[markaAdi].Add(deger);
+        }
+    }
+
+    return markaDizisi;
+}
