@@ -1,41 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Linq;
-using System.Web.UI;
-
-namespace historicDatas
-{
-    public partial class _default : System.Web.UI.Page
-    {
-        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-        protected void Page_Load(object sender, EventArgs e)
+        private Dictionary<string, Dictionary<string, int[]>[]>[] GetAllDatasets(string query)
         {
-            if (!IsPostBack)
-            {
-                // SQL'den veriyi çekme
-                string sqlQuery = "SELECT Marka, Deger, Tarih, Kategori FROM Veriler"; // Tablo ve sütun isimlerini güncelleyin
-                var markaVerileri = GetVeriFromDatabase(sqlQuery);
-
-                // Burada markaVerileri kullanarak grafiği oluşturun
-                foreach (var marka in markaVerileri)
-                {
-                    string markaAdi = marka.Key;
-                    var degerler = marka.Value.Item1; // Değerler
-                    var tarihler = marka.Value.Item2; // Tarihler
-                    var kategoriler = marka.Value.Item3; // Kategoriler
-
-                    // Örneğin: değerleri konsola yazdırma
-                    Response.Write($"Marka: {markaAdi}, Değerler: {string.Join(", ", degerler)}, Tarihler: {string.Join(", ", tarihler)}, Kategoriler: {string.Join(", ", kategoriler)}<br />");
-                }
-            }
-        }
-
-        private Dictionary<string, (List<int> Değerler, List<DateTime> Tarihler, List<string> Kategoriler)> GetVeriFromDatabase(string query)
-        {
-            var markaDizisi = new Dictionary<string, (List<int>, List<DateTime>, List<string>)>();
-
+            Dictionary<string, Dictionary<string, int[]>[]>[] datasets;
             using (var con = new SqlConnection(connectionString))
             {
                 con.Open();
@@ -45,25 +10,13 @@ namespace historicDatas
                     {
                         while (reader.Read())
                         {
-                            var markaAdi = reader["Marka"].ToString();
-                            var deger = Convert.ToInt32(reader["Deger"]);
-                            var tarih = Convert.ToDateTime(reader["Tarih"]);
-                            var kategori = reader["Kategori"].ToString();
-
-                            if (!markaDizisi.ContainsKey(markaAdi))
-                            {
-                                markaDizisi[markaAdi] = (new List<int>(), new List<DateTime>(), new List<string>());
-                            }
-
-                            markaDizisi[markaAdi].Değerler.Add(deger);
-                            markaDizisi[markaAdi].Tarihler.Add(tarih);
-                            markaDizisi[markaAdi].Kategoriler.Add(kategori);
+                            //burada her bir sütun için Dictionary<string, Dictionary<string, int[]>[]> oluşturalacak ve bunların birleşimi döndğrğlecek
+                            //stringe o kolonun adı yazılacak, Dictionary<string, int[]>[] kısmındaysa dinamik a|10~ba|10~ca|10~ gibi gün gün tutulan isimleri aynı
+                            //değışkende toplayıp mesela "a",[10,4,70] gibi tum satırlara bakıp oluşturulacak
                         }
                     }
                 }
             }
 
-            return markaDizisi;
+            return datasets;
         }
-    }
-}
