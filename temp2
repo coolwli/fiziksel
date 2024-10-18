@@ -15,7 +15,6 @@ namespace historicDatas
             {
                 string sqlQuery = "SELECT * FROM fiziksel_historic";
                 var allDatas = GetAllDatasets(sqlQuery);
-
                 DisplayData(allDatas);
             }
         }
@@ -33,40 +32,7 @@ namespace historicDatas
                     {
                         while (reader.Read())
                         {
-                            for (int i = 1; i < reader.FieldCount; i++)
-                            {
-                                var columnName = reader.GetName(i);
-                                var value = reader.GetValue(i).ToString();
-
-                                // Assuming the value format is "Company|Number"
-                                var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
-
-                                foreach (var entry in entries)
-                                {
-                                    var parts = entry.Split('|');
-
-                                    if (parts.Length == 2 && int.TryParse(parts[1], out int number))
-                                    {
-                                        var element = parts[0].Trim();
-
-                                        if (!datasets.ContainsKey(element))
-                                        {
-                                            datasets[element] = new Dictionary<string, List<int>>();
-                                        }
-
-                                        if (!datasets[element].ContainsKey(columnName))
-                                        {
-                                            datasets[element][columnName] = new List<int>();
-                                        }
-
-                                        // Add the value for the specific column
-                                        datasets[element][columnName].Add(number);
-                                    }
-                                }
-                            }
-                            add datasets["dates"]
-                            add datasets["total_core"]
-                            add datasets["total_memory"] they dont has ~ just values please
+                            ProcessRow(reader, datasets);
                         }
                     }
                 }
@@ -75,13 +41,67 @@ namespace historicDatas
             return datasets;
         }
 
+        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            // Process fixed columns
+            AddFixedValue(datasets, "dates", "dates", Convert.ToInt32(reader[0])); // Adjust index if needed
+            AddFixedValue(datasets, "total_core", "total_core", Convert.ToInt32(reader["total_core"])); // Adjust column name
+            AddFixedValue(datasets, "total_memory", "total_memory", Convert.ToInt32(reader["total_memory"])); // Adjust column name
+
+            // Process dynamic company values
+            for (int i = 1; i < reader.FieldCount; i++)
+            {
+                var columnName = reader.GetName(i);
+                var value = reader.GetValue(i).ToString();
+                ProcessDynamicValues(value, columnName, datasets);
+            }
+        }
+
+        private void AddFixedValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
+        {
+            if (!datasets.ContainsKey(key))
+            {
+                datasets[key] = new Dictionary<string, List<int>>();
+                datasets[key][columnName] = new List<int>();
+            }
+
+            datasets[key][columnName].Add(value);
+        }
+
+        private void ProcessDynamicValues(string value, string columnName, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var entry in entries)
+            {
+                var parts = entry.Split('|');
+
+                if (parts.Length == 2 && int.TryParse(parts[1], out int number))
+                {
+                    var element = parts[0].Trim();
+
+                    if (!datasets.ContainsKey(element))
+                    {
+                        datasets[element] = new Dictionary<string, List<int>>();
+                    }
+
+                    if (!datasets[element].ContainsKey(columnName))
+                    {
+                        datasets[element][columnName] = new List<int>();
+                    }
+
+                    datasets[element][columnName].Add(number);
+                }
+            }
+        }
+
         private void DisplayData(Dictionary<string, Dictionary<string, List<int>>> datasets)
         {
-            foreach (var company in datasets)
+            foreach (var category in datasets)
             {
-                Response.Write($"<h3>Company: {company.Key}</h3>");
+                Response.Write($"<h3>{category.Key}</h3>");
 
-                foreach (var column in company.Value)
+                foreach (var column in category.Value)
                 {
                     Response.Write($"<strong>Column: {column.Key}</strong><br />");
                     Response.Write("Values: ");
