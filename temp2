@@ -129,3 +129,9 @@ namespace historicDatas
         }
     }
 }
+
+
+Severity	Code	Description	Project	File	Line	Suppression State
+Error	CS8179	Predefined type 'System.ValueTuple`2' is not defined or imported	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	42	Active
+Error	CS8137	Cannot define a class or member that utilizes tuples because the compiler required type 'System.Runtime.CompilerServices.TupleElementNamesAttribute' cannot be found. Are you missing a reference?	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	22	Active
+Error	CS8179	Predefined type 'System.ValueTuple`2' is not defined or imported	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	22	Active
