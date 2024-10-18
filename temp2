@@ -1,22 +1,62 @@
-        private Dictionary<string, Dictionary<string, int[]>[]>[] GetAllDatasets(string query)
+private Dictionary<string, Dictionary<string, int[]>> GetAllDatasets(string query)
+{
+    var datasets = new Dictionary<string, Dictionary<string, int[]>>();
+
+    using (var con = new SqlConnection(connectionString))
+    {
+        con.Open();
+        using (var cmd = new SqlCommand(query, con))
         {
-            Dictionary<string, Dictionary<string, int[]>[]>[] datasets;
-            using (var con = new SqlConnection(connectionString))
+            using (var reader = cmd.ExecuteReader())
             {
-                con.Open();
-                using (var cmd = new SqlCommand(query, con))
+                // Sütun isimlerini ve değerlerini dinamik olarak saklamak için geçici bir yapı
+                var tempData = new Dictionary<string, List<int>>();
+
+                while (reader.Read())
                 {
-                    using (var reader = cmd.ExecuteReader())
+                    // Her sütun için işlemler yapılacak
+                    for (int i = 0; i < reader.FieldCount; i++)
                     {
-                        while (reader.Read())
+                        var columnName = reader.GetName(i);
+                        var value = reader.GetValue(i);
+
+                        // Eğer değer int türünde değilse geç
+                        if (value is int intValue)
                         {
-                            //burada her bir sütun için Dictionary<string, Dictionary<string, int[]>[]> oluşturalacak ve bunların birleşimi döndğrğlecek
-                            //stringe o kolonun adı yazılacak, Dictionary<string, int[]>[] kısmındaysa dinamik a|10~ba|10~ca|10~ gibi gün gün tutulan isimleri aynı
-                            //değışkende toplayıp mesela "a",[10,4,70] gibi tum satırlara bakıp oluşturulacak
+                            // Geçici yapıda toplama yapılacak
+                            if (!tempData.ContainsKey(columnName))
+                            {
+                                tempData[columnName] = new List<int>();
+                            }
+
+                            // Dinamik isimlerin tutulması
+                            tempData[columnName].Add(intValue);
                         }
                     }
                 }
-            }
 
-            return datasets;
+                // Geçici yapıdan ana yapıya dönüşüm
+                foreach (var entry in tempData)
+                {
+                    var columnName = entry.Key;
+                    var values = entry.Value;
+
+                    // Değerleri gruplamak için Dictionary
+                    var groupedData = new Dictionary<string, int[]>();
+
+                    for (int j = 0; j < values.Count; j++)
+                    {
+                        var dynamicName = $"row{j}"; // Örnek dinamik isim
+                        groupedData[dynamicName] = new int[values.Count];
+                        groupedData[dynamicName][j] = values[j];
+                    }
+
+                    // Sonucu datasets'e ekleme
+                    datasets[columnName] = groupedData;
+                }
+            }
         }
+    }
+
+    return datasets;
+}
