@@ -1,132 +1,295 @@
-using System;
-using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Web.UI;
+<!DOCTYPE html>
+<html lang="en">
 
-namespace historicDatas
-{
-    public partial class _default : System.Web.UI.Page
-    {
-        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-        protected void Page_Load(object sender, EventArgs e)
-        {
-            if (!IsPostBack)
-            {
-                string sqlQuery = "SELECT * FROM fiziksel_historic";
-                List<string> dates;
-                Dictionary<string, Dictionary<string, List<int>>> datasets;
-
-                GetAllDatasets(sqlQuery, out dates, out datasets);
-                DisplayData(dates, datasets);
-            }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Charts with Table</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
         }
 
-        private void GetAllDatasets(string query, out List<string> dates, out Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            dates = new List<string>();
-            datasets = new Dictionary<string, Dictionary<string, List<int>>>();
+        .panel-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+        }
 
-            using (var con = new SqlConnection(connectionString))
-            {
-                con.Open();
-                using (var cmd = new SqlCommand(query, con))
+        .chart-table-wrapper {
+            display: flex;
+            width: 100%;
+        }
+
+        .panel {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            width: 80%;
+            min-width: 300px;
+        }
+
+        .table-container {
+            width: 20%;
+            padding-left: 20px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 250px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            border-radius: 8px;
+            max-height: 500px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        table th,
+        table td {
+            padding: 12px;
+            border: none;
+            text-align: center;
+            transition: background-color 0.3s;
+        }
+
+        table th {
+            background-color: #6d6d6d;
+            color: white;
+            font-weight: bold;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        table tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        .chart-container {
+            margin-bottom: 20px;
+        }
+
+        .date-selector {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="date-selector">
+        <label for="start-date">Başlangıç Tarihi:</label>
+        <input type="date" id="start-date">
+        <label for="end-date">Bitiş Tarihi:</label>
+        <input type="date" id="end-date">
+        <button id="filter-button">Filtrele</button>
+    </div>
+
+    <div id="chart-tables" class="panel-container"></div>
+
+    <script>
+        const totalDays = 30; // Toplam gün sayısı
+        const generatedDates = generateDates('2023-01-01', totalDays);
+        let chartData = fetchData();
+
+        const generateDates = (startDate, days) => {
+            const dates = [];
+            const date = new Date(startDate);
+            for (let i = 0; i < days; i++) {
+                const nextDate = new Date(date);
+                nextDate.setDate(date.getDate() + i);
+                dates.push(nextDate.toISOString().split('T')[0]);
+            }
+            return dates;
+        };
+
+        const generateDynamicData = () => {
+            return [
                 {
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            ProcessRow(reader, datasets, dates);
+                    label: 'Dataset A',
+                    data: Array.from({ length: totalDays }, () => Math.floor(Math.random() * 100)),
+                },
+                {
+                    label: 'Dataset B',
+                    data: Array.from({ length: totalDays }, () => Math.floor(Math.random() * 100)),
+                },
+                {
+                    label: 'Dataset C',
+                    data: Array.from({ length: totalDays }, () => Math.floor(Math.random() * 100)),
+                }
+            ];
+        };
+
+        const getRandomColor = () => {
+            const r = Math.floor(Math.random() * 255);
+            const g = Math.floor(Math.random() * 255);
+            const b = Math.floor(Math.random() * 255);
+            return {
+                borderColor: `rgba(${r}, ${g}, ${b}, 1)`,
+                backgroundColor: `rgba(${r}, ${g}, ${b}, 0.2)`
+            };
+        };
+
+        const createChart = (ctx, datasets, dates, chartTitle) => {
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: datasets.map((dataset) => {
+                        const colors = getRandomColor();
+                        return {
+                            label: dataset.label,
+                            data: dataset.data.map((y, i) => ({ x: dates[i], y })),
+                            borderColor: colors.borderColor,
+                            backgroundColor: colors.backgroundColor,
+                            borderWidth: 2,
+                            tension: 0.1,
+                            pointRadius: 3,
+                            fill: false
+                        };
+                    })
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chartTitle
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            }
                         }
                     }
                 }
-            }
-        }
+            });
+        };
 
-        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets, List<string> dates)
-        {
-            // Add date to the list
-            dates.Add(reader[0].ToString()); // Adjust the index for the correct date column
+        const createTable = (datasets, dates) => {
+            let table = `<table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>First Day</th>
+                        <th>Last Day</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            datasets.forEach((dataset) => {
+                const firstValue = dataset.data[0];
+                const lastValue = dataset.data[dataset.data.length - 1];
+                table += `
+                    <tr>
+                        <td>${dataset.label}</td>
+                        <td>${firstValue}</td>
+                        <td>${lastValue}</td>
+                    </tr>`;
+            });
+            table += `</tbody></table>`;
+            return table;
+        };
 
-            // Process total core and memory
-            AddFixedValues(datasets, reader);
+        const initializeChartsAndTables = (data, startDate, endDate) => {
+            const chartTablesContainer = document.getElementById('chart-tables');
+            chartTablesContainer.innerHTML = '';
 
-            // Process dynamic company values
-            ProcessDynamicValues(reader, datasets);
-        }
+            const filteredDates = generatedDates.filter(date => date >= startDate && date <= endDate);
 
-        private void AddFixedValues(Dictionary<string, Dictionary<string, List<int>>> datasets, SqlDataReader reader)
-        {
-            AddValue(datasets, "total_core", "total_core", Convert.ToInt32(reader["total_core"])); // Adjust column name
-            AddValue(datasets, "total_memory", "total_memory", Convert.ToInt32(reader["total_memory"])); // Adjust column name
-        }
+            data.forEach((datasetGroup, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('chart-table-wrapper');
 
-        private void AddValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
-        {
-            if (!datasets.ContainsKey(key))
-            {
-                datasets[key] = new Dictionary<string, List<int>>();
-            }
+                const panel = document.createElement('div');
+                panel.classList.add('panel');
 
-            if (!datasets[key].ContainsKey(columnName))
-            {
-                datasets[key][columnName] = new List<int>();
-            }
+                const chartContainer = document.createElement('div');
+                chartContainer.classList.add('chart-container');
+                const tableContainer = document.createElement('div');
+                tableContainer.classList.add('table-container');
 
-            datasets[key][columnName].Add(value);
-        }
+                chartContainer.innerHTML = `<canvas id="chart${index}"></canvas>`;
+                tableContainer.innerHTML = createTable(datasetGroup.datasets, filteredDates);
 
-        private void ProcessDynamicValues(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            for (int i = 1; i < reader.FieldCount; i++) // Assuming the first column is the date
-            {
-                var columnName = reader.GetName(i);
-                var value = reader.GetValue(i).ToString();
-                ParseDynamicValues(value, columnName, datasets);
-            }
-        }
+                panel.appendChild(chartContainer);
+                wrapper.appendChild(panel);
+                wrapper.appendChild(tableContainer);
+                chartTablesContainer.appendChild(wrapper);
 
-        private void ParseDynamicValues(string value, string columnName, Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
+                const ctx = document.getElementById(`chart${index}`).getContext('2d');
+                const chartTitle = datasetGroup.title;
 
-            foreach (var entry in entries)
-            {
-                var parts = entry.Split('|');
+                createChart(ctx, datasetGroup.datasets, filteredDates, chartTitle);
+            });
+        };
 
-                if (parts.Length == 2 && int.TryParse(parts[1], out int number))
+        const fetchData = () => {
+            return [
                 {
-                    var company = parts[0].Trim();
-                    AddValue(datasets, company, columnName, number);
-                }
-            }
-        }
-
-        private void DisplayData(List<string> dates, Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            Response.Write("<h3>Dates</h3>");
-            foreach (var date in dates)
-            {
-                Response.Write($"{date}<br />");
-            }
-
-            foreach (var category in datasets)
-            {
-                Response.Write($"<h3>{category.Key}</h3>");
-
-                foreach (var column in category.Value)
+                    title: "Money Chart",
+                    datasets: generateDynamicData()
+                },
                 {
-                    Response.Write($"<strong>Column: {column.Key}</strong><br />");
-                    Response.Write("Values: ");
-
-                    foreach (var value in column.Value)
-                    {
-                        Response.Write($"{value} ");
-                    }
-
-                    Response.Write("<br /><br />");
+                    title: "Age Chart",
+                    datasets: generateDynamicData()
+                },
+                {
+                    title: "Temperature Chart",
+                    datasets: generateDynamicData()
                 }
+            ];
+        };
+
+        const handleFilterClick = () => {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            if (startDate && endDate) {
+                initializeChartsAndTables(chartData, startDate, endDate);
+            } else {
+                alert('Lütfen başlangıç ve bitiş tarihlerini seçin.');
             }
-        }
-    }
-}
+        };
+
+        // Sayfa yüklendiğinde tarih alanlarını otomatik doldur
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start-date').value = generatedDates[0];
+        document.getElementById('end-date').value = generatedDates[generatedDates.length - 1];
+
+        document.getElementById('filter-button').addEventListener('click', handleFilterClick);
+
+        // Başlangıçta grafik ve tablo oluştur
+        initializeChartsAndTables(chartData, generatedDates[0], generatedDates[generatedDates.length - 1]);
+    </script>
+
+</body>
+
+</html>
