@@ -44,7 +44,7 @@ namespace historicDatas
         private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
         {
             // Process fixed columns
-            AddFixedValue(datasets, "dates", "dates", Convert.ToInt32(reader[0])); // Adjust index if needed
+            AddFixedValue(datasets, "dates", "dates", reader[0].ToString()); // Adjust index if needed
             AddFixedValue(datasets, "total_core", "total_core", Convert.ToInt32(reader["total_core"])); // Adjust column name
             AddFixedValue(datasets, "total_memory", "total_memory", Convert.ToInt32(reader["total_memory"])); // Adjust column name
 
@@ -55,6 +55,19 @@ namespace historicDatas
                 var value = reader.GetValue(i).ToString();
                 ProcessDynamicValues(value, columnName, datasets);
             }
+        }
+
+        private void AddFixedValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, string value)
+        {
+            if (!datasets.ContainsKey(key))
+            {
+                datasets[key] = new Dictionary<string, List<int>>();
+                datasets[key][columnName] = new List<int>();
+            }
+
+            // Since we're adding a string, we need to convert it for storing as int.
+            // Assuming the date string needs to be converted to an int (e.g., as timestamp)
+            datasets[key][columnName].Add(Convert.ToInt32(value)); // Adjust this as needed
         }
 
         private void AddFixedValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
