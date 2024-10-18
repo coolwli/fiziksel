@@ -1,24 +1,4 @@
-public Dictionary<string, List<int>> ParseVeri(string veri)
-{
-    var markalar = veri.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
-    var markaDizisi = new Dictionary<string, List<int>>();
-
-    foreach (var marka in markalar)
-    {
-        var parcalanmis = marka.Split('|');
-        if (parcalanmis.Length == 2)
-        {
-            var markaAdi = parcalanmis[0];
-            var deger = int.Parse(parcalanmis[1]);
-
-            // Markayı ekle veya mevcut olanı güncelle
-            if (!markaDizisi.ContainsKey(markaAdi))
-            {
-                markaDizisi[markaAdi] = new List<int>();
-            }
-            markaDizisi[markaAdi].Add(deger);
-        }
-    }
-
-    return markaDizisi;
-}
+        var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            var json = serializer.Serialize(rows);
+            var script = $"<script>data = {json}; initializeTable(); screenName = 'vmscreen';</script>";
+            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
