@@ -1,62 +1,65 @@
-private Dictionary<string, Dictionary<string, int[]>> GetAllDatasets(string query)
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Web.UI;
+
+namespace historicDatas
 {
-    var datasets = new Dictionary<string, Dictionary<string, int[]>>();
-
-    using (var con = new SqlConnection(connectionString))
+    public partial class _default : System.Web.UI.Page
     {
-        con.Open();
-        using (var cmd = new SqlCommand(query, con))
+        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+        protected void Page_Load(object sender, EventArgs e)
         {
-            using (var reader = cmd.ExecuteReader())
+            if (!IsPostBack)
             {
-                // Sütun isimlerini ve değerlerini dinamik olarak saklamak için geçici bir yapı
-                var tempData = new Dictionary<string, List<int>>();
+                string sqlQuery = "SELECT * FROM Veriler"; 
+                var allDatas = GetAllDatasets(sqlQuery);
 
-                while (reader.Read())
+                foreach (var data in allDatas)
                 {
-                    // Her sütun için işlemler yapılacak
-                    for (int i = 0; i < reader.FieldCount; i++)
-                    {
-                        var columnName = reader.GetName(i);
-                        var value = reader.GetValue(i);
-
-                        // Eğer değer int türünde değilse geç
-                        if (value is int intValue)
-                        {
-                            // Geçici yapıda toplama yapılacak
-                            if (!tempData.ContainsKey(columnName))
-                            {
-                                tempData[columnName] = new List<int>();
-                            }
-
-                            // Dinamik isimlerin tutulması
-                            tempData[columnName].Add(intValue);
-                        }
-                    }
-                }
-
-                // Geçici yapıdan ana yapıya dönüşüm
-                foreach (var entry in tempData)
-                {
-                    var columnName = entry.Key;
-                    var values = entry.Value;
-
-                    // Değerleri gruplamak için Dictionary
-                    var groupedData = new Dictionary<string, int[]>();
-
-                    for (int j = 0; j < values.Count; j++)
-                    {
-                        var dynamicName = $"row{j}"; // Örnek dinamik isim
-                        groupedData[dynamicName] = new int[values.Count];
-                        groupedData[dynamicName][j] = values[j];
-                    }
-
-                    // Sonucu datasets'e ekleme
-                    datasets[columnName] = groupedData;
+                    //ekraba yazdır
                 }
             }
         }
-    }
 
-    return datasets;
+        private Dictionary<string, Dictionary<string, int[]>> GetAllDatasets(string query)
+        {
+            var datasets = new Dictionary<string, Dictionary<string, int[]>>();
+
+            using (var con = new SqlConnection(connectionString))
+            {
+                con.Open();
+                using (var cmd = new SqlCommand(query, con))
+                {
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        var tempData = new Dictionary<string, List<int>>();
+
+                        while (reader.Read())
+                        {
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                var columnName = reader.GetName(i);
+                                var value = reader.GetValue(i);
+                                /*simple value gün gün 
+                                    CISCO|798~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
+                                    CISCO | 798~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
+                                    CISCO | 798~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
+                                    CISCO | 793~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
+                                    şeklinde her bir değişken için uygun bir dizide tutmalıyız cisco icin bir dizi ibm icin bir dizi gibi
+                                    sonra bunu tuple kullanmadan uygun bir veri yapısıyla gerş döndğrmeliyim
+                                */
+
+                            }
+                        }
+                        
+                    }
+                }
+            }
+
+            return datasets;
+        }
+    }
 }
