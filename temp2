@@ -1,2 +1,96 @@
-Severity	Code	Description	Project	File	Line	Suppression State
-Error	CS1503	Argument 2: cannot convert from 'System.StringSplitOptions' to 'char'	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	42	Active
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Web.UI;
+
+namespace historicDatas
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            if (!IsPostBack)
+            {
+                string sqlQuery = "SELECT * FROM Veriler"; 
+                var allDatas = GetAllDatasets(sqlQuery);
+
+                DisplayData(allDatas);
+            }
+        }
+
+        private Dictionary<string, Dictionary<string, List<int>>> GetAllDatasets(string query)
+        {
+            var datasets = new Dictionary<string, Dictionary<string, List<int>>>();
+
+            using (var con = new SqlConnection(connectionString))
+            {
+                con.Open();
+                using (var cmd = new SqlCommand(query, con))
+                {
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            for (int i = 1; i < reader.FieldCount; i++)
+                            {
+                                var columnName = reader.GetName(i);
+                                var value = reader.GetValue(i).ToString();
+
+                                // Assuming the value format is "Company|Number"
+                                var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                foreach (var entry in entries)
+                                {
+                                    var parts = entry.Split('|');
+
+                                    if (parts.Length == 2 && int.TryParse(parts[1], out int number))
+                                    {
+                                        var company = parts[0].Trim();
+                                        
+                                        if (!datasets.ContainsKey(company))
+                                        {
+                                            datasets[company] = new Dictionary<string, List<int>>();
+                                        }
+
+                                        if (!datasets[company].ContainsKey(columnName))
+                                        {
+                                            datasets[company][columnName] = new List<int>();
+                                        }
+
+                                        // Add the value for the specific column
+                                        datasets[company][columnName].Add(number);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return datasets;
+        }
+
+        private void DisplayData(Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            foreach (var company in datasets)
+            {
+                Response.Write($"<h3>Company: {company.Key}</h3>");
+                
+                foreach (var column in company.Value)
+                {
+                    Response.Write($"<strong>Column: {column.Key}</strong><br />");
+                    Response.Write("Values: ");
+
+                    foreach (var value in column.Value)
+                    {
+                        Response.Write($"{value} ");
+                    }
+
+                    Response.Write("<br /><br />");
+                }
+            }
+        }
+    }
+}
