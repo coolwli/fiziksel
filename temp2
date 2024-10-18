@@ -14,15 +14,18 @@ namespace historicDatas
             if (!IsPostBack)
             {
                 string sqlQuery = "SELECT * FROM fiziksel_historic";
-                var (dates, datasets) = GetAllDatasets(sqlQuery);
+                List<string> dates;
+                Dictionary<string, Dictionary<string, List<int>>> datasets;
+
+                GetAllDatasets(sqlQuery, out dates, out datasets);
                 DisplayData(dates, datasets);
             }
         }
 
-        private (List<string> Dates, Dictionary<string, Dictionary<string, List<int>>> Datasets) GetAllDatasets(string query)
+        private void GetAllDatasets(string query, out List<string> dates, out Dictionary<string, Dictionary<string, List<int>>> datasets)
         {
-            var dates = new List<string>();
-            var datasets = new Dictionary<string, Dictionary<string, List<int>>>();
+            dates = new List<string>();
+            datasets = new Dictionary<string, Dictionary<string, List<int>>>();
 
             using (var con = new SqlConnection(connectionString))
             {
@@ -38,8 +41,6 @@ namespace historicDatas
                     }
                 }
             }
-
-            return (dates, datasets);
         }
 
         private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets, List<string> dates)
@@ -129,9 +130,3 @@ namespace historicDatas
         }
     }
 }
-
-
-Severity	Code	Description	Project	File	Line	Suppression State
-Error	CS8179	Predefined type 'System.ValueTuple`2' is not defined or imported	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	42	Active
-Error	CS8137	Cannot define a class or member that utilizes tuples because the compiler required type 'System.Runtime.CompilerServices.TupleElementNamesAttribute' cannot be found. Are you missing a reference?	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	22	Active
-Error	CS8179	Predefined type 'System.ValueTuple`2' is not defined or imported	historicDatas	C:\inetpub\wwwroot\historicDatas\historicDatas\default.aspx.cs	22	Active
