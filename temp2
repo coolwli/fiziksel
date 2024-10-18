@@ -19,8 +19,9 @@ namespace historicDatas
             }
         }
 
-        private Dictionary<string, Dictionary<string, List<int>>> GetAllDatasets(string query)
+        private (List<string> Dates, Dictionary<string, Dictionary<string, List<int>>> Datasets) GetAllDatasets(string query)
         {
+            var dates = new List<string>();
             var datasets = new Dictionary<string, Dictionary<string, List<int>>>();
 
             using (var con = new SqlConnection(connectionString))
@@ -32,19 +33,21 @@ namespace historicDatas
                     {
                         while (reader.Read())
                         {
-                            ProcessRow(reader, datasets);
+                            ProcessRow(reader, datasets, dates);
                         }
                     }
                 }
             }
 
-            return datasets;
+            return (dates, datasets);
         }
 
-        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets, List<string> dates)
         {
+            // Capture the date as a string and add it to the dates list
+            dates.Add(reader[0].ToString()); // Adjust index if needed
+
             // Process fixed columns
-            AddFixedValue(datasets, "dates", "dates", reader[0].ToString()); // Adjust index if needed
             AddFixedValue(datasets, "total_core", "total_core", Convert.ToInt32(reader["total_core"])); // Adjust column name
             AddFixedValue(datasets, "total_memory", "total_memory", Convert.ToInt32(reader["total_memory"])); // Adjust column name
 
@@ -55,19 +58,6 @@ namespace historicDatas
                 var value = reader.GetValue(i).ToString();
                 ProcessDynamicValues(value, columnName, datasets);
             }
-        }
-
-        private void AddFixedValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, string value)
-        {
-            if (!datasets.ContainsKey(key))
-            {
-                datasets[key] = new Dictionary<string, List<int>>();
-                datasets[key][columnName] = new List<int>();
-            }
-
-            // Since we're adding a string, we need to convert it for storing as int.
-            // Assuming the date string needs to be converted to an int (e.g., as timestamp)
-            datasets[key][columnName].Add(Convert.ToInt32(value)); // Adjust this as needed
         }
 
         private void AddFixedValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
@@ -108,9 +98,15 @@ namespace historicDatas
             }
         }
 
-        private void DisplayData(Dictionary<string, Dictionary<string, List<int>>> datasets)
+        private void DisplayData((List<string> Dates, Dictionary<string, Dictionary<string, List<int>>> Datasets) allDatas)
         {
-            foreach (var category in datasets)
+            Response.Write("<h3>Dates</h3>");
+            foreach (var date in allDatas.Dates)
+            {
+                Response.Write($"{date}<br />");
+            }
+
+            foreach (var category in allDatas.Datasets)
             {
                 Response.Write($"<h3>{category.Key}</h3>");
 
