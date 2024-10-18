@@ -13,7 +13,7 @@ namespace historicDatas
         {
             if (!IsPostBack)
             {
-                string sqlQuery = "SELECT * FROM Veriler"; 
+                string sqlQuery = "SELECT * FROM fiziksel_historic";
                 var allDatas = GetAllDatasets(sqlQuery);
 
                 DisplayData(allDatas);
@@ -47,23 +47,26 @@ namespace historicDatas
 
                                     if (parts.Length == 2 && int.TryParse(parts[1], out int number))
                                     {
-                                        var company = parts[0].Trim();
-                                        
-                                        if (!datasets.ContainsKey(company))
+                                        var element = parts[0].Trim();
+
+                                        if (!datasets.ContainsKey(element))
                                         {
-                                            datasets[company] = new Dictionary<string, List<int>>();
+                                            datasets[element] = new Dictionary<string, List<int>>();
                                         }
 
-                                        if (!datasets[company].ContainsKey(columnName))
+                                        if (!datasets[element].ContainsKey(columnName))
                                         {
-                                            datasets[company][columnName] = new List<int>();
+                                            datasets[element][columnName] = new List<int>();
                                         }
 
                                         // Add the value for the specific column
-                                        datasets[company][columnName].Add(number);
+                                        datasets[element][columnName].Add(number);
                                     }
                                 }
                             }
+                            add datasets["dates"]
+                            add datasets["total_core"]
+                            add datasets["total_memory"] they dont has ~ just values please
                         }
                     }
                 }
@@ -77,7 +80,7 @@ namespace historicDatas
             foreach (var company in datasets)
             {
                 Response.Write($"<h3>Company: {company.Key}</h3>");
-                
+
                 foreach (var column in company.Value)
                 {
                     Response.Write($"<strong>Column: {column.Key}</strong><br />");
