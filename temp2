@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
-using System.Linq;
 using System.Web.UI;
 
 namespace historicDatas
@@ -17,16 +16,13 @@ namespace historicDatas
                 string sqlQuery = "SELECT * FROM Veriler"; 
                 var allDatas = GetAllDatasets(sqlQuery);
 
-                foreach (var data in allDatas)
-                {
-                    //ekraba yazdır
-                }
+                DisplayData(allDatas);
             }
         }
 
-        private Dictionary<string, Dictionary<string, int[]>> GetAllDatasets(string query)
+        private Dictionary<string, Dictionary<string, List<int>>> GetAllDatasets(string query)
         {
-            var datasets = new Dictionary<string, Dictionary<string, int[]>>();
+            var datasets = new Dictionary<string, Dictionary<string, List<int>>>();
 
             using (var con = new SqlConnection(connectionString))
             {
@@ -35,31 +31,69 @@ namespace historicDatas
                 {
                     using (var reader = cmd.ExecuteReader())
                     {
-                        var tempData = new Dictionary<string, List<int>>();
-
                         while (reader.Read())
                         {
-                            for (int i = 0; i < reader.FieldCount; i++)
+                            // Assuming the first column is the date and the rest are company values
+                            var date = reader.GetDateTime(0).ToString("yyyy-MM-dd"); // Adjust format as needed
+                            
+                            for (int i = 1; i < reader.FieldCount; i++)
                             {
                                 var columnName = reader.GetName(i);
-                                var value = reader.GetValue(i);
-                                /*simple value gün gün 
-                                    CISCO|798~IBM|3~DELL|24~HPE|810~Lenovo|2~MEINBERG|7~FUJITSU|687~
-                                    CISCO | 798~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
-                                    CISCO | 798~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
-                                    CISCO | 793~IBM | 3~DELL | 24~HPE | 810~Lenovo | 2~MEINBERG | 7~FUJITSU | 687~
-                                    şeklinde her bir değişken için uygun bir dizide tutmalıyız cisco icin bir dizi ibm icin bir dizi gibi
-                                    sonra bunu tuple kullanmadan uygun bir veri yapısıyla gerş döndğrmeliyim
-                                */
+                                var value = reader.GetValue(i).ToString();
 
+                                // Assuming the value format is "Company|Number"
+                                var entries = value.Split('~', StringSplitOptions.RemoveEmptyEntries);
+
+                                foreach (var entry in entries)
+                                {
+                                    var parts = entry.Split('|');
+
+                                    if (parts.Length == 2 && int.TryParse(parts[1], out int number))
+                                    {
+                                        var company = parts[0].Trim();
+                                        
+                                        if (!datasets.ContainsKey(company))
+                                        {
+                                            datasets[company] = new Dictionary<string, List<int>>();
+                                        }
+
+                                        if (!datasets[company].ContainsKey(columnName))
+                                        {
+                                            datasets[company][columnName] = new List<int>();
+                                        }
+
+                                        // Add the daily value for the specific date
+                                        datasets[company][columnName].Add(number);
+                                    }
+                                }
                             }
                         }
-                        
                     }
                 }
             }
 
             return datasets;
+        }
+
+        private void DisplayData(Dictionary<string, Dictionary<string, List<int>>> datasets)
+        {
+            foreach (var company in datasets)
+            {
+                Response.Write($"<h3>Company: {company.Key}</h3>");
+                
+                foreach (var column in company.Value)
+                {
+                    Response.Write($"<strong>Column: {column.Key}</strong><br />");
+                    Response.Write("Daily Values: ");
+
+                    foreach (var value in column.Value)
+                    {
+                        Response.Write($"{value} ");
+                    }
+
+                    Response.Write("<br /><br />");
+                }
+            }
         }
     }
 }
