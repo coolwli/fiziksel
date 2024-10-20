@@ -33,6 +33,8 @@
         .table-container {
             width: 20%;
             padding-left: 20px;
+            max-height: 570px;
+            overflow: auto;
         }
 
         canvas {
