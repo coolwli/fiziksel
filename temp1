@@ -2,24 +2,21 @@ using System;
 using System.Net;
 using System.IO;
 using System.Linq;
-using System.Xml;
+using System.Xml.Linq;
 using System.Text;
 using System.Data;
 using System.Net.Http;
-using System.Xml.Linq;
 using System.Configuration;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Web.Configuration;
-using System.Web.UI.WebControls;
+using System.Web.UI;
 using System.Collections.Generic;
-using System.Web.UI.HtmlControls;
-
 using System.Web.Script.Serialization;
 
 namespace odmvms
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class _default : Page
     {
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
@@ -35,9 +32,11 @@ namespace odmvms
 
         protected async void Page_Load(object sender, EventArgs e)
         {
+            // Retrieve credentials from configuration
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
+            // Attempt to fetch dashboard data
             var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
             if (dashboardData == null)
             {
@@ -53,9 +52,10 @@ namespace odmvms
         {
             var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
-            if (DateTime.Now >= tokenInfo.ExpiryDate)
+            if (tokenInfo.ExpiryDate <= DateTime.Now)
             {
-                string newToken = await AcquireTokenAsync(vropsServer);
+                // Token expired or doesn't exist, acquire a new one
+                var newToken = await AcquireTokenAsync(vropsServer);
                 if (newToken != null)
                 {
                     await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
@@ -64,6 +64,7 @@ namespace odmvms
                 return null;
             }
 
+            // Token is still valid; extend its lifetime and fetch data
             var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
             await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
             return await GetDataAsync(vropsServer, tokenInfo.Token);
@@ -79,7 +80,7 @@ namespace odmvms
             var response = await _httpClient.PostAsync(requestUri, content);
             if (response.IsSuccessStatusCode)
             {
-                string tokenXml = await response.Content.ReadAsStringAsync();
+                var tokenXml = await response.Content.ReadAsStringAsync();
                 return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
             }
             return null;
@@ -103,7 +104,7 @@ namespace odmvms
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    string jsonData = await response.Content.ReadAsStringAsync();
+                    var jsonData = await response.Content.ReadAsStringAsync();
                     return ParseDashboardData(jsonData);
                 }
             }
@@ -112,10 +113,9 @@ namespace odmvms
 
         private string ParseDashboardData(string jsonData)
         {
-            JavaScriptSerializer js = new JavaScriptSerializer();
+            var js = new JavaScriptSerializer();
             dynamic data = js.Deserialize<dynamic>(jsonData);
             var tableRows = new List<Dictionary<string, object>>();
-            var tableRow = new Dictionary<string, object>();
 
             foreach (var view in data)
             {
@@ -123,7 +123,7 @@ namespace odmvms
                 {
                     foreach (var rows in elements["rows"])
                     {
-                        tableRow = null;
+                        var tableRow = new Dictionary<string, object>();
                         foreach (var row in rows)
                         {
                             tableRow["name"] = row.Value["objId"];
@@ -134,14 +134,14 @@ namespace odmvms
                             tableRow["vc"] = row.Value["5"];
                         }
                         tableRows.Add(tableRow);
-                    }   
+                    }
                 }
             }
-            Response.Write(tableRows.Count+":"+tableRows[0].Count);
 
+            // For debugging purposes, consider using logging instead of Response.Write
+            Response.Write($"Rows Count: {tableRows.Count}, First Row Count: {tableRows.FirstOrDefault()?.Count}");
             return "1"; 
         }
-
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
         {
@@ -176,14 +176,11 @@ namespace odmvms
                 var query = @"
                     IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
                     BEGIN
-                        UPDATE TokenInfo
-                        SET Token = @Token, ExpiryDate = @ExpiryDate
-                        WHERE TokenType = @TokenType
+                        UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
                     END
                     ELSE
                     BEGIN
-                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
-                        VALUES (@TokenType, @Token, @ExpiryDate)
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
                     END";
 
                 var command = new SqlCommand(query, connection);
