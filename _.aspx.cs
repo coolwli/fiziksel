@@ -23,6 +23,8 @@ namespace odmvms
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+
         private string _username;
         private string _password;
 
@@ -104,6 +106,9 @@ namespace odmvms
                 if (response.IsSuccessStatusCode)
                 {
                     string xmlData= await response.Content.ReadAsStringAsync();
+
+                    var xmlDoc = XDocument.Parse(xmlData);
+
                     return parsed xml for my table
 
                 }
