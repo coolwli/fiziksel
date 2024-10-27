@@ -24,7 +24,6 @@ namespace odmvms
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-
         private string _username;
         private string _password;
 
@@ -38,16 +37,19 @@ namespace odmvms
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-            ? dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik", "9646af37-b6cc-4be7-9445-3595dec7ff03");
-            if(dashboardData==null)
-                form1.InnerHtml =  "Bir hata olustu daha sonra deneyiniz..";
+            var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik", "9646af37-b6cc-4be7-9445-3595dec7ff03");
+            if (dashboardData == null)
+            {
+                form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
+            }
             else
             {
-                Response.Write(dashboard table);
+                // Dashboard verisini ekrana yazdır
+                form1.InnerHtml = GenerateDashboardHtml(dashboardData);
             }
         }
 
-        private async Task<?> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType, string dashboardId)
+        private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType, string dashboardId)
         {
             var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
@@ -59,11 +61,9 @@ namespace odmvms
                     await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
                     return await GetDashboardDataAsync(vropsServer, newToken, dashboardId);
                 }
-
                 return null;
             }
 
-            // Extend existing token's lifetime and fetch dashboard data
             var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
             await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
             return await GetDashboardDataAsync(vropsServer, tokenInfo.Token, dashboardId);
@@ -82,39 +82,47 @@ namespace odmvms
                 string tokenXml = await response.Content.ReadAsStringAsync();
                 return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
             }
-
             return null;
         }
 
         private static string ExtractTokenFromXml(string xmlData)
         {
             var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
             return tokenElement?.Value;
         }
 
         private async Task<string> GetDashboardDataAsync(string vropsServer, string token, string dashboardId)
         {
-            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+            var getIdUrl = $"{vropsServer}/suite-api/internal/views/{dashboardId}/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
 
             var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
             request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
 
-            // Send the request
             using (var response = await _httpClient.SendAsync(request))
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    string xmlData= await response.Content.ReadAsStringAsync();
-
-                    var xmlDoc = XDocument.Parse(xmlData);
-
-                    return parsed xml for my table
-
+                    string xmlData = await response.Content.ReadAsStringAsync();
+                    return ParseDashboardData(xmlData);
                 }
             }
             return null;
+        }
 
+        private string ParseDashboardData(string xmlData)
+        {
+            var xmlDoc = XDocument.Parse(xmlData);
+            var dataElements = xmlDoc.Descendants("YourElementName").Select(x => x.Value).ToList(); // Değiştirin
+            var tableHtml = new StringBuilder("<table><tr><th>Başlık 1</th><th>Başlık 2</th></tr>");
+
+            foreach (var data in dataElements)
+            {
+                tableHtml.AppendFormat("<tr><td>{0}</td><td>{1}</td></tr>", data, "Diğer Değer"); // Uygun alanları yerleştirin
+            }
+
+            tableHtml.Append("</table>");
+            return tableHtml.ToString();
         }
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
@@ -138,7 +146,6 @@ namespace odmvms
                     }
                 }
             }
-
             return tokenInfo;
         }
 
