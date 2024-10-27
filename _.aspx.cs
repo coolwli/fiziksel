@@ -1,104 +1,183 @@
+9646af37-b6cc-4be7-9445-3595dec7ff03
 
 using System;
-using System.Collections.Generic;
+using System.Net;
+using System.IO;
+using System.Linq;
+using System.Xml;
+using System.Text;
+using System.Data;
+using System.Net.Http;
+using System.Xml.Linq;
+using System.Configuration;
 using System.Data.SqlClient;
-using System.Web.UI;
+using System.Threading.Tasks;
+using System.Web.Configuration;
+using System.Web.UI.WebControls;
+using System.Collections.Generic;
+using System.Web.UI.HtmlControls;
+using System.Web.Script.Serialization;
 
-namespace historicDatas
+namespace odmvms
 {
     public partial class _default : System.Web.UI.Page
     {
-        private readonly string connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
 
-        protected void Page_Load(object sender, EventArgs e)
+        private static  HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        private string _username;
+        private string _password;
+
+        static _default()
         {
-            if (!IsPostBack)
-            {
-                string sqlQuery = "SELECT * FROM fiziksel_historic";
-                List<string> dates;
-                Dictionary<string, Dictionary<string, List<int>>> datasets;
+            
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+        }
+        protected async void Page_Load(object sender, EventArgs e)
+        {
+            _username = WebConfigurationManager.AppSettings["VropsUsername"];
+            _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-                GetAllDatasets(sqlQuery, out dates, out datasets);
+            string token = await CheckTokenAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
+            if (token == null)
+            {
+                form1.InnerHtml = "Bir hata olustu daha sonra deneyiniz..";
+            }
+            else
+            {
+
             }
         }
 
-        private void GetAllDatasets(string query, out List<string> dates, out Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            dates = new List<string>();
-            datasets = new Dictionary<string, Dictionary<string, List<int>>>();
 
-            using (var con = new SqlConnection(connectionString))
+        private async Task<string> CheckTokenAsync(string vropsServer, string tokenType)
+        {
+            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
+
+            if (DateTime.Now >= tokenInfo.ExpiryDate)
             {
-                con.Open();
-                using (var cmd = new SqlCommand(query, con))
+                string newToken = await AcquireTokenAsync(vropsServer);
+
+                if (newToken != null)
                 {
-                    using (var reader = cmd.ExecuteReader())
+
+                    var newTokenInfo = new TokenInfo
                     {
-                        while (reader.Read())
-                        {
-                            ProcessRow(reader, datasets, dates);
-                        }
+                        Token = newToken,
+                        ExpiryDate = DateTime.Now.Add(TokenLifetime)
+                    };
+                    await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
+                    return newToken;
+                }
+
+                return null;
+            }
+
+
+            // Extend the existing token's lifetime
+            var extendedTokenInfo = new TokenInfo
+            {
+                Token = tokenInfo.Token,
+                ExpiryDate = DateTime.Now.Add(TokenLifetime)
+            };
+            await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
+
+            return tokenInfo.Token;
+        }
+
+        private async Task<string> AcquireTokenAsync(string vropsServer)
+        {
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new
+            {
+                username = _username,
+                password = _password
+            };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(requestUri, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string tokenXml = await response.Content.ReadAsStringAsync();
+                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
+            }
+
+            return null;
+        }
+
+        private static string ExtractTokenFromXml(string xmlData)
+        {
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", "http://webservice.vmware.com/vRealizeOpsMgr/1.0/")).FirstOrDefault();
+            return tokenElement?.Value;
+        }
+
+        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
+        {
+            var tokenInfo = new TokenInfo { Token = null, ExpiryDate = DateTime.MinValue };
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        tokenInfo.Token = reader["Token"] as string;
+                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
                     }
                 }
             }
+
+            return tokenInfo;
         }
 
-        private void ProcessRow(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets, List<string> dates)
+        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
         {
-            dates.Add(reader[0].ToString());
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
 
-            AddFixedValues(datasets, reader);
-
-            ProcessDynamicValues(reader, datasets);
-        }
-
-        private void AddFixedValues(Dictionary<string, Dictionary<string, List<int>>> datasets, SqlDataReader reader)
-        {
-            AddValue(datasets, "Total CPU", "Total CPU", Convert.ToInt32(reader["Total CPU"])); // Adjust column name
-            AddValue(datasets, "Total Memory", "Total Memory", Convert.ToInt32(reader["Total Memory"])); // Adjust column name
-            AddValue(datasets, "Host Count", "Host Count", Convert.ToInt32(reader["Host Count"])); // Adjust column name
-        }
-
-        private void AddValue(Dictionary<string, Dictionary<string, List<int>>> datasets, string key, string columnName, int value)
-        {
-            if (!datasets.ContainsKey(key))
+            using (var connection = new SqlConnection(connectionString))
             {
-                datasets[key] = new Dictionary<string, List<int>>();
-            }
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+                    BEGIN
+                        UPDATE TokenInfo
+                        SET Token = @Token, ExpiryDate = @ExpiryDate
+                        WHERE TokenType = @TokenType
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
+                        VALUES (@TokenType, @Token, @ExpiryDate)
+                    END";
 
-            if (!datasets[key].ContainsKey(columnName))
-            {
-                datasets[key][columnName] = new List<int>();
-            }
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
 
-            datasets[key][columnName].Add(value);
-        }
-
-        private void ProcessDynamicValues(SqlDataReader reader, Dictionary<string, Dictionary<string, List<int>>> datasets)
-        {
-            for (int i = 1; i < reader.FieldCount; i++) // Assuming the first column is the date
-            {
-                var columnName = reader.GetName(i);
-                var value = reader.GetValue(i).ToString();
-                ParseDynamicValues(value, columnName, datasets);
+                await connection.OpenAsync();
+                await command.ExecuteNonQueryAsync();
             }
         }
 
-        private void ParseDynamicValues(string value, string columnName, Dictionary<string, Dictionary<string, List<int>>> datasets)
+        protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            var entries = value.Split(new[] { '~' }, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var entry in entries)
-            {
-                var parts = entry.Split('|');
-
-                if (parts.Length == 2 && int.TryParse(parts[1], out int number))
-                {
-                    var company = parts[0].Trim();
-                    AddValue(datasets, company, columnName, number);
-                }
-            }
         }
 
+
+    }
+
+    public class TokenInfo
+    {
+        public string Token { get; set; }
+        public DateTime ExpiryDate { get; set; }
     }
 }
