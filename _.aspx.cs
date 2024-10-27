@@ -14,6 +14,7 @@ using System.Web.Configuration;
 using System.Web.UI.WebControls;
 using System.Collections.Generic;
 using System.Web.UI.HtmlControls;
+
 using System.Web.Script.Serialization;
 
 namespace odmvms
@@ -111,25 +112,8 @@ namespace odmvms
 
         private string ParseDashboardData(string jsonData)
         {
-            // JSON verisini parse et
-            using (JsonDocument doc = JsonDocument.Parse(jsonData))
-            {
-                var viewsData = doc.RootElement.GetProperty("viewsData");
-        
-                foreach (var view in viewsData.EnumerateArray())
-                {
-                    Response.Write($"View Name: {view.GetProperty("name").GetString()}<br/>");
-        
-                    var rows = view.GetProperty("rows");
-        
-                    foreach (var row in rows.EnumerateArray())
-                    {
-                        var cells = row.GetProperty("cells");
-                        Response.Write($"VM Name: {cells.GetProperty("objId").GetString()}, Power State: {cells.GetProperty("1").GetString()}, IP: {cells.GetProperty("2").GetString()}<br/>");
-                    }
-                }
-            }
-        
+
+
             return jsonData; // İsterseniz başka bir değer döndürebilirsiniz
         }
 
