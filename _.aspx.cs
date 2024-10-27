@@ -37,7 +37,7 @@ namespace odmvms
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-            var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik", "9646af37-b6cc-4be7-9445-3595dec7ff03");
+            var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
             if (dashboardData == null)
             {
                 form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
@@ -45,11 +45,11 @@ namespace odmvms
             else
             {
                 // Dashboard verisini ekrana yazdır
-                form1.InnerHtml = GenerateDashboardHtml(dashboardData);
+                Response.Write(dashboardData);
             }
         }
 
-        private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType, string dashboardId)
+        private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType)
         {
             var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
@@ -59,14 +59,14 @@ namespace odmvms
                 if (newToken != null)
                 {
                     await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
-                    return await GetDashboardDataAsync(vropsServer, newToken, dashboardId);
+                    return await GetDashboardDataAsync(vropsServer, newToken);
                 }
                 return null;
             }
 
             var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
             await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
-            return await GetDashboardDataAsync(vropsServer, tokenInfo.Token, dashboardId);
+            return await GetDashboardDataAsync(vropsServer, tokenInfo.Token);
         }
 
         private async Task<string> AcquireTokenAsync(string vropsServer)
@@ -92,9 +92,9 @@ namespace odmvms
             return tokenElement?.Value;
         }
 
-        private async Task<string> GetDashboardDataAsync(string vropsServer, string token, string dashboardId)
+        private async Task<string> GetDashboardDataAsync(string vropsServer, string token)
         {
-            var getIdUrl = $"{vropsServer}/suite-api/internal/views/{dashboardId}/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
 
             var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
             request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
@@ -113,16 +113,9 @@ namespace odmvms
         private string ParseDashboardData(string xmlData)
         {
             var xmlDoc = XDocument.Parse(xmlData);
-            var dataElements = xmlDoc.Descendants("YourElementName").Select(x => x.Value).ToList(); // Değiştirin
-            var tableHtml = new StringBuilder("<table><tr><th>Başlık 1</th><th>Başlık 2</th></tr>");
-
-            foreach (var data in dataElements)
-            {
-                tableHtml.AppendFormat("<tr><td>{0}</td><td>{1}</td></tr>", data, "Diğer Değer"); // Uygun alanları yerleştirin
-            }
-
-            tableHtml.Append("</table>");
-            return tableHtml.ToString();
+            //var dataElements = xmlDoc.Descendants("YourElementName").Select(x => x.Value).ToList(); // Değiştirin
+            
+            return xmlDoc.ToString();
         }
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
