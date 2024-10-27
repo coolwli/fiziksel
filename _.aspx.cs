@@ -1,11 +1,19 @@
 using System;
 using System.Net;
-using System.Net.Http;
+using System.IO;
+using System.Linq;
+using System.Xml;
 using System.Text;
+using System.Data;
+using System.Net.Http;
+using System.Xml.Linq;
+using System.Configuration;
+using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Web.Configuration;
-using System.Data.SqlClient;
-using System.Xml.Linq;
+using System.Web.UI.WebControls;
+using System.Collections.Generic;
+using System.Web.UI.HtmlControls;
 using System.Web.Script.Serialization;
 
 namespace odmvms
@@ -14,7 +22,7 @@ namespace odmvms
     {
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        
+
         private string _username;
         private string _password;
 
@@ -28,11 +36,16 @@ namespace odmvms
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-            string dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik", "9646af37-b6cc-4be7-9445-3595dec7ff03");
-            form1.InnerHtml = dashboardData ?? "Bir hata olustu daha sonra deneyiniz..";
+            ? dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik", "9646af37-b6cc-4be7-9445-3595dec7ff03");
+            if(dashboardData==null)
+                form1.InnerHtml =  "Bir hata olustu daha sonra deneyiniz..";
+            else
+            {
+                Response.Write(dashboard table);
+            }
         }
 
-        private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType, string dashboardId)
+        private async Task<?> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType, string dashboardId)
         {
             var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
@@ -80,9 +93,8 @@ namespace odmvms
 
         private async Task<string> GetDashboardDataAsync(string vropsServer, string token, string dashboardId)
         {
-            var getIdUrl = $"{vropsServer}/suite-api/api/dashboard/{dashboardId}/data?_no_links=true";
-            
-            // Create the HttpRequestMessage
+            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+
             var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
             request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
 
@@ -91,11 +103,13 @@ namespace odmvms
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadAsStringAsync();
+                    string xmlData= await response.Content.ReadAsStringAsync();
+                    return parsed xml for my table
+
                 }
             }
+            return null;
 
-            return null; // Or handle the error appropriately
         }
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
