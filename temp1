@@ -1,1 +1,56 @@
-{"viewsData":[{"name":"Virtual Machine Replicated VMs- Ediz&Ali","description":"List of all the Virtual Machines(s) in your environment.","type":"list-view","startTime":1729969888214,"endTime":1730056288214,"columns":[{"key":"objId","label":"Name","unit":null},{"key":"1","label":"Power State","unit":null},{"key":"2","label":"IPv4","unit":null},{"key":"3","label":"Operating System","unit":null},{"key":"4","label":"Cluster","unit":null},{"key":"5","label":"VCenter","unit":null},{"key":"summary","label":"Summary","unit":null},{"key":"grandTotal","label":"Grand Total","unit":null},{"key":"groupUUID","label":"Group UUID","unit":null},{"key":"objUUID","label":"Object UUID","unit":null}],"rows":[{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"169.254.251.1","3":"Other (64-bit)","4":"GBCL3","5":"PTEKVCS01","grandTotal":false,"objId":"ABGBIBREPORT","objUUID":"d78aff1b-a747-41e0-a877-8498bef0cc31"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.231.103.59","3":"CentOS 4/5 (64-bit)","4":"GBTSTAPPCL","5":"APGARTSTVCS201","grandTotal":false,"objId":"APCUPSEFT","objUUID":"c3eb08e9-c389-4e2c-a1bc-0a4b29c1a1c6"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.60.150","3":"CentOS 7 (64-bit)","4":"GBAPPCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APDJVFNS01","objUUID":"eb1091b0-4c59-4df0-80c3-bc8c859cc6b8"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.60.151","3":"CentOS 7 (64-bit)","4":"GBAPPCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APDJVFNS02","objUUID":"774d41b3-fccf-462c-bdd8-aaf6bc0f8f1a"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.85.196","3":"Red Hat Enterprise Linux 6 (64-bit)","4":"FSCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APFILCCEFNSNEWP01","objUUID":"586fcae7-5faf-4a11-9e9e-6e6b7b045e8a"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.85.197","3":"Red Hat Enterprise Linux 6 (64-bit)","4":"FSCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APFILCCEFNSNEWP02","objUUID":"883b5565-7f5a-4957-bce7-5537d6684167"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.220.185","3":"CentOS 4/5 (64-bit)","4":"FSTSTCL","5":"APGARTSTVCS201","grandTotal":false,"objId":"APFSINSDMZAPP","objUUID":"b040207e-97ea-496c-932c-f5220a524554"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"192.168.202.12","3":"CentOS 4/5 (64-bit)","4":"GBUXDMZCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APFSINSEXTAPP","objUUID":"371f415e-93d2-4c1c-bacb-a790d7b10e9e"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.145.1.104","3":"CentOS 4/5 (64-bit)","4":"FSTSTCL","5":"APGARTSTVCS201","grandTotal":false,"objId":"APFSTENABLEP01","objUUID":"582ed824-f897-40d2-8850-08c53106185f"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.241.205.205","3":"FreeBSD (64-bit)","4":"GBCL3","5":"PTEKVCS01","grandTotal":false,"objId":"APGARADM01","objUUID":"bd07b6a1-c4c9-4403-bc92-486e58f579d0"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.241.205.206","3":"FreeBSD (64-bit)","4":"GBCL3","5":"PTEKVCS01","grandTotal":false,"objId":"APGARADM02","objUUID":"dfad2832-ed7f-401e-83a3-1cb010afbab6"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.88.145","3":"Ubuntu Linux (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARAPPVM02","objUUID":"26356f8a-c902-49b9-8529-da19c0f842c0"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.88.146","3":"Ubuntu Linux (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARAPPVW04","objUUID":"675f40d1-a789-405b-a209-50206836d73d"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.88.147","3":"Ubuntu Linux (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARAPPVW05","objUUID":"df940c38-7044-4cdb-8632-8633776d17c3"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.230.88.148","3":"Ubuntu Linux (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARAPPVW06","objUUID":"ad43da39-03c9-4497-8058-e812ead3c2ff"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.231.103.111","3":"Red Hat Enterprise Linux 5 (64-bit)","4":"GBAPPCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APGARASS","objUUID":"9df5dad9-e1e8-413c-ad97-f7100a63cf47"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.72.0.254","3":"Red Hat Enterprise Linux 6 (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCCASP01","objUUID":"99205235-2a32-4e40-b09b-3ddf54c1618b"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"10.72.0.254","3":"Red Hat Enterprise Linux 6 (64-bit)","4":"GBAPPCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCCASP02","objUUID":"562e5db1-237d-42c6-afa7-3260bf0a89bc"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"none","3":"Other (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCSGP01","objUUID":"5fbf2760-4317-44d7-b8cb-51eb5b9cb8aa"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"none","3":"Other (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCSGP02","objUUID":"b7bb6a15-60d3-4d17-9d74-3550a94106b4"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"none","3":"Other (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCSGP03","objUUID":"8d775c97-e7f5-4de1-b2e3-a635f06271b2"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"none","3":"Other (64-bit)","4":"GBAPPCL1","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCSGP04","objUUID":"98f76c9f-304f-44d5-957a-41e4f4194b98"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"none","3":"Other (64-bit)","4":"GBAPPCL2","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBCSGP05","objUUID":"1c6a83a8-0013-4882-85d2-37c3fa693e66"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"127.20.0.254","3":"Other (64-bit)","4":"GBCL3","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBIGP01","objUUID":"5633311a-0b89-4570-8b04-31b7e336547b"}},{"cells":{"summary":false,"1":"Powered On","groupUUID":null,"2":"127.20.0.254","3":"Other (64-bit)","4":"GBCL3","5":"PTEKVCS01","grandTotal":false,"objId":"APGARBIGP02","objUUID":"382dffac-92ff-4263-b8b7-746328e621d6"}},
+using System;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
+using System.Web.UI;
+
+public partial class YourPage : Page
+{
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        // Örnek JSON verisi
+        string jsonData = "{\"viewsData\":[{\"name\":\"Virtual Machine Replicated VMs- Ediz&Ali\",\"description\":\"List of all the Virtual Machines(s) in your environment.\",\"rows\":[{\"cells\":{\"objId\":\"ABGBIBREPORT\",\"1\":\"Powered On\",\"2\":\"169.254.251.1\",\"3\":\"Other (64-bit)\"}},{\"cells\":{\"objId\":\"APCUPSEFT\",\"1\":\"Powered On\",\"2\":\"10.231.103.59\",\"3\":\"CentOS 4/5 (64-bit)\"}}]}]}";
+
+        // JavaScriptSerializer ile deserialize et
+        var serializer = new JavaScriptSerializer();
+        var data = serializer.Deserialize<RootObject>(jsonData);
+
+        // Her satırı Dictionary'e yaz
+        var results = new Dictionary<string, Dictionary<string, string>>();
+        foreach (var view in data.ViewsData)
+        {
+            foreach (var row in view.Rows)
+            {
+                var cells = row.Cells;
+                results[cells["objId"]] = cells; // objId'yi anahtar olarak kullan
+            }
+        }
+
+        // Sonuçları ekrana yazdır
+        foreach (var entry in results)
+        {
+            Response.Write($"ID: {entry.Key}<br>");
+            foreach (var cell in entry.Value)
+            {
+                Response.Write($"{cell.Key}: {cell.Value}<br>");
+            }
+            Response.Write("<br>");
+        }
+    }
+
+    public class RootObject
+    {
+        public List<ViewData> ViewsData { get; set; }
+    }
+
+    public class ViewData
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public List<RowData> Rows { get; set; }
+    }
+
+    public class RowData
+    {
+        public Dictionary<string, string> Cells { get; set; }
+    }
+}
