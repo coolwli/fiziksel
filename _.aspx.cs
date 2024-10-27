@@ -44,7 +44,6 @@ namespace odmvms
             }
             else
             {
-                // Dashboard verisini ekrana yazdır
                 Response.Write(dashboardData);
             }
         }
@@ -103,19 +102,19 @@ namespace odmvms
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    string xmlData = await response.Content.ReadAsStringAsync();
-                    return ParseDashboardData(xmlData);
+                    string jsonData = await response.Content.ReadAsStringAsync();
+                    return ParseDashboardData(jsonData);
                 }
             }
             return null;
         }
 
-        private string ParseDashboardData(string xmlData)
+        private string ParseDashboardData(string jsonData)
         {
-            var xmlDoc = XDocument.Parse(xmlData);
-            //var dataElements = xmlDoc.Descendants("YourElementName").Select(x => x.Value).ToList(); // Değiştirin
-            
-            return xmlDoc.ToString();
+            Response.Write(jsonData + "<br/>");
+
+
+            return jsonData.ToString();
         }
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
