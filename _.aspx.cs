@@ -1,16 +1,13 @@
 using System;
 using System.Net;
-using System.IO;
-using System.Linq;
-using System.Xml.Linq;
 using System.Text;
-using System.Data;
+using System.Linq;
+using System.Web.UI;
+using System.Xml.Linq;
 using System.Net.Http;
-using System.Configuration;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Web.Configuration;
-using System.Web.UI;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
 
@@ -32,26 +29,23 @@ namespace odmvms
 
         protected async void Page_Load(object sender, EventArgs e)
         {
-            // Retrieve credentials from configuration
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-            // Attempt to fetch dashboard data
-            var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
-            if (dashboardData == null)
+            var data = await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
+            if (data == null)
             {
                 form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
             }
             
         }
 
-        private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType)
+        private async Task<string> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
         {
-            var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
+            var tokenInfo = await ReadTokenInfoAsync(tokenType);
 
             if (tokenInfo.ExpiryDate <= DateTime.Now)
             {
-                // Token expired or doesn't exist, acquire a new one
                 var newToken = await AcquireTokenAsync(vropsServer);
                 if (newToken != null)
                 {
@@ -61,7 +55,6 @@ namespace odmvms
                 return null;
             }
 
-            // Token is still valid; extend its lifetime and fetch data
             var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
             await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
             return await GetDataAsync(vropsServer, tokenInfo.Token);
@@ -141,7 +134,7 @@ namespace odmvms
             return "1";
         }
 
-        private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
+        private async Task<TokenInfo> ReadTokenInfoAsync(string tokenType)
         {
             var tokenInfo = new TokenInfo();
             var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
@@ -199,7 +192,7 @@ namespace odmvms
             {
                 JavaScriptSerializer js = new JavaScriptSerializer();
                 js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<string[]>>(jsonData);
+                var tableData = js.Deserialize<List<Dictionary<string,object>>>(jsonData);
 
                 if (tableData.Count == 0)
                 {
@@ -212,7 +205,7 @@ namespace odmvms
 
                 foreach (var row in tableData)
                 {
-                    csv.AppendLine($"{row[0]};{row[1]};{row[2]};{row[3]};{row[4]};{row[5]}");
+                    csv.AppendLine($"{row["name"]};{row["ps"]};{row["ip"]};{row["os"]};{row["cl"]};{row["vc"]}");
 
                 }
 
