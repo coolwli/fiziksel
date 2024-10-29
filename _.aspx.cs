@@ -2,24 +2,21 @@ using System;
 using System.Net;
 using System.IO;
 using System.Linq;
-using System.Xml;
+using System.Xml.Linq;
 using System.Text;
 using System.Data;
 using System.Net.Http;
-using System.Xml.Linq;
 using System.Configuration;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
 using System.Web.Configuration;
-using System.Web.UI.WebControls;
+using System.Web.UI;
 using System.Collections.Generic;
-using System.Web.UI.HtmlControls;
-
 using System.Web.Script.Serialization;
 
 namespace odmvms
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class _default : Page
     {
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
@@ -35,38 +32,39 @@ namespace odmvms
 
         protected async void Page_Load(object sender, EventArgs e)
         {
+            // Retrieve credentials from configuration
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
+            // Attempt to fetch dashboard data
             var dashboardData = await CheckTokenAndFetchDashboardDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
             if (dashboardData == null)
             {
                 form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
             }
-            else
-            {
-                Response.Write(dashboardData);
-            }
+            
         }
 
         private async Task<string> CheckTokenAndFetchDashboardDataAsync(string vropsServer, string tokenType)
         {
             var tokenInfo = await ReadTokenInfoFromDatabaseAsync(tokenType);
 
-            if (DateTime.Now >= tokenInfo.ExpiryDate)
+            if (tokenInfo.ExpiryDate <= DateTime.Now)
             {
-                string newToken = await AcquireTokenAsync(vropsServer);
+                // Token expired or doesn't exist, acquire a new one
+                var newToken = await AcquireTokenAsync(vropsServer);
                 if (newToken != null)
                 {
                     await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
-                    return await GetDashboardDataAsync(vropsServer, newToken);
+                    return await GetDataAsync(vropsServer, newToken);
                 }
                 return null;
             }
 
+            // Token is still valid; extend its lifetime and fetch data
             var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
             await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
-            return await GetDashboardDataAsync(vropsServer, tokenInfo.Token);
+            return await GetDataAsync(vropsServer, tokenInfo.Token);
         }
 
         private async Task<string> AcquireTokenAsync(string vropsServer)
@@ -79,7 +77,7 @@ namespace odmvms
             var response = await _httpClient.PostAsync(requestUri, content);
             if (response.IsSuccessStatusCode)
             {
-                string tokenXml = await response.Content.ReadAsStringAsync();
+                var tokenXml = await response.Content.ReadAsStringAsync();
                 return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
             }
             return null;
@@ -92,9 +90,9 @@ namespace odmvms
             return tokenElement?.Value;
         }
 
-        private async Task<string> GetDashboardDataAsync(string vropsServer, string token)
+        private async Task<string> GetDataAsync(string vropsServer, string token)
         {
-            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
 
             var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
             request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
@@ -103,7 +101,7 @@ namespace odmvms
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    string jsonData = await response.Content.ReadAsStringAsync();
+                    var jsonData = await response.Content.ReadAsStringAsync();
                     return ParseDashboardData(jsonData);
                 }
             }
@@ -112,11 +110,36 @@ namespace odmvms
 
         private string ParseDashboardData(string jsonData)
         {
+            var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            dynamic data = js.Deserialize<dynamic>(jsonData);
+            var tableRows = new List<Dictionary<string, object>>();
 
+            foreach (var view in data)
+            {
+                foreach (var elements in view.Value)
+                {
+                    foreach (var rows in elements["rows"])
+                    {
+                        var tableRow = new Dictionary<string, object>();
+                        foreach (var row in rows)
+                        {
+                            tableRow["name"] = row.Value["objId"];
+                            tableRow["ps"] = row.Value["1"];
+                            tableRow["ip"] = row.Value["2"];
+                            tableRow["os"] = row.Value["3"];
+                            tableRow["cl"] = row.Value["4"];
+                            tableRow["vc"] = row.Value["5"];
+                        }
+                        tableRows.Add(tableRow);
+                    }
+                }
+            }
+            var json = js.Serialize(tableRows);
+            var script = $"<script>data = {json}; initializeTable(); </script>";
+            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
 
-            return jsonData; // İsterseniz başka bir değer döndürebilirsiniz
+            return "1";
         }
-
 
         private async Task<TokenInfo> ReadTokenInfoFromDatabaseAsync(string tokenType)
         {
@@ -151,14 +174,11 @@ namespace odmvms
                 var query = @"
                     IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
                     BEGIN
-                        UPDATE TokenInfo
-                        SET Token = @Token, ExpiryDate = @ExpiryDate
-                        WHERE TokenType = @TokenType
+                        UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
                     END
                     ELSE
                     BEGIN
-                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate)
-                        VALUES (@TokenType, @Token, @ExpiryDate)
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
                     END";
 
                 var command = new SqlCommand(query, connection);
@@ -173,7 +193,35 @@ namespace odmvms
 
         protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            // Logic for hidden button can be implemented here
+            string jsonData = hiddenField.Value;
+
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue;
+                var tableData = js.Deserialize<List<string[]>>(jsonData);
+
+                if (tableData.Count == 0)
+                {
+                    Response.Write("No data available.");
+                    return;
+                }
+
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Name;Power State;IPv4;OS;Cluster;VCenter");
+
+                foreach (var row in tableData)
+                {
+                    csv.AppendLine($"{row[0]};{row[1]};{row[2]};{row[3]};{row[4]};{row[5]}");
+
+                }
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=Replicated VMs.csv");
+                Response.Write(csv.ToString());
+                Response.End();
+            }
         }
     }
 
