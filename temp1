@@ -1,24 +1,27 @@
-Server Error in '/' Application.
-Thread was being aborted.
-Description: An unhandled exception occurred during the execution of the current web request. Please review the stack trace for more information about the error and where it originated in the code.
+# Oracle bağlantı bilgilerini tanımlıyoruz
+$oracleConnectionString = "Driver={Oracle in OraClient19Home1};Dbq=YOUR_ORACLE_DB;Uid=YOUR_USERNAME;Pwd=YOUR_PASSWORD;"
 
-Exception Details: System.Threading.ThreadAbortException: Thread was being aborted.
+# Oracle bağlantısını oluşturuyoruz
+$connection = New-Object System.Data.Odbc.OdbcConnection
+$connection.ConnectionString = $oracleConnectionString
 
-Source Error:
+# Bağlantıyı açıyoruz
+$connection.Open()
 
-An unhandled exception was generated during the execution of the current web request. Information regarding the origin and location of the exception can be identified using the exception stack trace below.
+# Sorguyu tanımlıyoruz
+$query = "SELECT * FROM SCHEMA_NAME.TABLE_NAME WHERE ROWNUM <= 10"  # Örneğin ilk 10 satırı çekelim
 
-Stack Trace:
+# Komutu hazırlıyoruz
+$command = $connection.CreateCommand()
+$command.CommandText = $query
 
+# Sorguyu çalıştırıp sonuçları çekiyoruz
+$adapter = New-Object System.Data.Odbc.OdbcDataAdapter($command)
+$dataset = New-Object System.Data.DataSet
+$adapter.Fill($dataset)
 
-[ThreadAbortException: Thread was being aborted.]
-   System.Web.HttpContext.InvokeCancellableCallback(WaitCallback callback, Object state) +316
-   System.Web.Util.<>c__DisplayClass9_0.<WrapContinuation>b__0() +43
-   System.Runtime.CompilerServices.<>c__DisplayClass11_0.<OutputWaitEtwEvents>b__0() +283
-   System.Runtime.CompilerServices.ContinuationWrapper.Invoke() +15
-   System.Threading.Tasks.<>c__DisplayClass6_0.<GetActionLogDelegate>b__0() +69
-   System.Threading.Tasks.<>c.<.cctor>b__8_0(Object state) +40
-   System.Web.<>c__DisplayClass22_0.<Post>b__0() +20
-   System.Web.Util.SynchronizationHelper.SafeWrapCallback(Action action) +90
+# Sonuçları gösteriyoruz
+$dataset.Tables[0] | ForEach-Object { $_ }
 
-Version Information: Microsoft .NET Framework Version:4.0.30319; ASP.NET Version:4.7.4092.0
+# Bağlantıyı kapatıyoruz
+$connection.Close()
