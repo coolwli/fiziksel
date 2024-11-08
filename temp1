@@ -25,3 +25,19 @@ $dataset.Tables[0] | ForEach-Object { $_ }
 
 # Bağlantıyı kapatıyoruz
 $connection.Close()
+
+
+Exception calling "Open" with "0" argument(s): "ERROR [IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified"
+At line:9 char:1
++ $connection.Open()
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : OdbcException
+ 
+Exception calling "Fill" with "1" argument(s): "ERROR [IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified"
+At line:21 char:1
++ $adapter.Fill($dataset)
++ ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
+    + FullyQualifiedErrorId : OdbcException
+ 
