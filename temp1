@@ -1,43 +1,39 @@
-# Oracle bağlantı bilgilerini tanımlıyoruz
-$oracleConnectionString = "Driver={Oracle in OraClient19Home1};Dbq=YOUR_ORACLE_DB;Uid=YOUR_USERNAME;Pwd=YOUR_PASSWORD;"
+using System;
+using System.Data.Odbc;
+using System.Web.UI;
 
-# Oracle bağlantısını oluşturuyoruz
-$connection = New-Object System.Data.Odbc.OdbcConnection
-$connection.ConnectionString = $oracleConnectionString
+public partial class YourPage : System.Web.UI.Page
+{
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        string connectionString = "Driver={Oracle ODBC Driver};Dbq=yourDB;Uid=yourUserId;Pwd=yourPassword;";
 
-# Bağlantıyı açıyoruz
-$connection.Open()
+        try
+        {
+            using (OdbcConnection conn = new OdbcConnection(connectionString))
+            {
+                conn.Open();
 
-# Sorguyu tanımlıyoruz
-$query = "SELECT * FROM SCHEMA_NAME.TABLE_NAME WHERE ROWNUM <= 10"  # Örneğin ilk 10 satırı çekelim
+                string query = "SELECT * FROM your_table_name";
+                OdbcCommand cmd = new OdbcCommand(query, conn);
+                OdbcDataReader reader = cmd.ExecuteReader();
 
-# Komutu hazırlıyoruz
-$command = $connection.CreateCommand()
-$command.CommandText = $query
+                string resultHtml = "";
 
-# Sorguyu çalıştırıp sonuçları çekiyoruz
-$adapter = New-Object System.Data.Odbc.OdbcDataAdapter($command)
-$dataset = New-Object System.Data.DataSet
-$adapter.Fill($dataset)
+                while (reader.Read())
+                {
+                    // Veritabanı verisini HTML formatında hazırlıyoruz
+                    resultHtml += "<tr><td>" + reader["column_name"].ToString() + "</td></tr>";
+                }
 
-# Sonuçları gösteriyoruz
-$dataset.Tables[0] | ForEach-Object { $_ }
-
-# Bağlantıyı kapatıyoruz
-$connection.Close()
-
-
-Exception calling "Open" with "0" argument(s): "ERROR [IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified"
-At line:9 char:1
-+ $connection.Open()
-+ ~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
-    + FullyQualifiedErrorId : OdbcException
- 
-Exception calling "Fill" with "1" argument(s): "ERROR [IM002] [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified"
-At line:21 char:1
-+ $adapter.Fill($dataset)
-+ ~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [], MethodInvocationException
-    + FullyQualifiedErrorId : OdbcException
- 
+                // HTML sonucu sayfadaki tbody'ye ekliyoruz
+                results.InnerHtml = resultHtml;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Hata mesajını HTML'e ekleyelim
+            results.InnerHtml = "<tr><td colspan='1'>Hata: " + ex.Message + "</td></tr>";
+        }
+    }
+}
