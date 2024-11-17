@@ -107,6 +107,46 @@ namespace authconfiger
             return users;
         }
 
+        // Kullanıcıyı config dosyasına ekler
+        private void AddUserToConfig(string configFile, string username)
+        {
+            try
+            {
+                XmlDocument doc = new XmlDocument();
+                doc.Load(configFile);
+
+                // 'authorization' node'u bulun
+                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
+
+                if (authNodes.Count > 0)
+                {
+                    XmlNode authNode = authNodes[0]; // 'authorization' node'unu al
+
+                    // Kullanıcıyı ekle
+                    XmlElement newElement = doc.CreateElement("add");
+                    newElement.SetAttribute("roles", username); // 'roles' attribute'u olarak kullanıcı adı ekle
+                    authNode.AppendChild(newElement); // Yeni kullanıcıyı ekle
+
+                    doc.Save(configFile); // Değişiklikleri kaydet
+                }
+                else
+                {
+                    // Eğer 'authorization' node'u yoksa, yeni bir node ekleyelim
+                    XmlNode systemNode = doc.SelectSingleNode("configuration");
+                    XmlElement authorizationElement = doc.CreateElement("authorization");
+                    XmlElement newElement = doc.CreateElement("add");
+                    newElement.SetAttribute("roles", username);
+                    authorizationElement.AppendChild(newElement);
+                    systemNode.AppendChild(authorizationElement);
+                    doc.Save(configFile);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Kullanıcıyı eklerken hata oluştu: {ex.Message}");
+            }
+        }
+
         // Kullanıcıyı config dosyasından silme
         [System.Web.Services.WebMethod]
         public static void RemoveUserFromConfig(string configFile, string username)
