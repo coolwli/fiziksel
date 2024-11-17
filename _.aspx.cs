@@ -19,6 +19,7 @@ namespace webconfigs
             }
         }
 
+        // Konfigürasyon dosyalarını yükler
         private void LoadConfigFiles()
         {
             string rootPath = @"C:\inetpub\wwwroot"; // wwwroot dizini
@@ -36,19 +37,20 @@ namespace webconfigs
                     }
 
                     ddlConfigFiles.SelectedIndex = 0;
-                    ddlConfigFiles_SelectedIndexChanged(null, null);
+                    ddlConfigFiles_SelectedIndexChanged(null, null); // İlk dosya için otomatik yükleme
                 }
                 else
                 {
-                    DisplayError("No web.config files found.");
+                    DisplayError("Web.config dosyası bulunamadı.");
                 }
             }
             else
             {
-                DisplayError("Root path does not exist.");
+                DisplayError("Kök dizin mevcut değil.");
             }
         }
 
+        // Web.config dosyalarını arar
         private List<string> FindConfigFiles(string rootPath)
         {
             List<string> configFiles = new List<string>();
@@ -59,11 +61,12 @@ namespace webconfigs
             }
             catch (Exception ex)
             {
-                DisplayError("Config dosyaları yüklenirken bir hata oluştu: " + ex.Message);
+                DisplayError($"Config dosyaları yüklenirken hata oluştu: {ex.Message}");
             }
             return configFiles;
         }
 
+        // Config dosyasının üst dizin ismini alır
         private string GetTopLevelDirectory(string configFilePath, string rootPath)
         {
             string relativePath = configFilePath.Replace(rootPath + @"\", "");
@@ -71,21 +74,7 @@ namespace webconfigs
             return pathParts.Length > 0 ? pathParts[0] : string.Empty;
         }
 
-        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            if (File.Exists(selectedConfigFile))
-            {
-                var authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
-                gvAuthorizedUsers.DataSource = authorizedUsers;
-                gvAuthorizedUsers.DataBind();
-            }
-            else
-            {
-                DisplayError("Seçilen config dosyası bulunamadı.");
-            }
-        }
-
+        // Config dosyasındaki yetkili kullanıcıları çeker
         private List<string> GetAuthorizedUsersFromConfig(string configFile)
         {
             List<string> users = new List<string>();
@@ -112,11 +101,12 @@ namespace webconfigs
             }
             catch (Exception ex)
             {
-                DisplayError("Hata: " + ex.Message);
+                DisplayError($"Hata: {ex.Message}");
             }
             return users;
         }
 
+        // Seçilen config dosyasına yeni kullanıcı ekler
         private void AddUserToConfig(string configFile, string username)
         {
             try
@@ -154,10 +144,11 @@ namespace webconfigs
             }
             catch (Exception ex)
             {
-                throw new Exception("Kullanıcıyı eklerken hata oluştu: " + ex.Message);
+                throw new Exception($"Kullanıcıyı eklerken hata oluştu: {ex.Message}");
             }
         }
 
+        // system.webServer node'unu alır veya oluşturur
         private XmlNode GetOrCreateSystemWebServerNode(XmlDocument doc)
         {
             XmlNode configurationNode = doc.SelectSingleNode("//configuration");
@@ -172,12 +163,14 @@ namespace webconfigs
             return systemWebServerNode;
         }
 
+        // Hata mesajını görüntüler
         private void DisplayError(string message)
         {
             errorMessage.InnerText = message;
             errorMessage.Visible = true;
         }
 
+        // Kullanıcı ekleme butonuna tıklandığında
         protected void btnAddUser_Click(object sender, EventArgs e)
         {
             string username = txtUsername.Text.Trim();
@@ -186,12 +179,12 @@ namespace webconfigs
                 try
                 {
                     AddUserToConfig(selectedConfigFile, username);
-                    ddlConfigFiles_SelectedIndexChanged(null, null); // Listeyi yeniden yükle
+                    RefreshAuthorizedUsers(); // Kullanıcı listesine yenilemeyi uygular
                     txtUsername.Text = string.Empty;
                 }
                 catch (Exception ex)
                 {
-                    DisplayError("Hata: " + ex.Message);
+                    DisplayError($"Hata: {ex.Message}");
                 }
             }
             else
@@ -200,6 +193,22 @@ namespace webconfigs
             }
         }
 
+        // Config dosyasındaki yetkili kullanıcıları günceller
+        private void RefreshAuthorizedUsers()
+        {
+            if (File.Exists(selectedConfigFile))
+            {
+                var authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
+                gvAuthorizedUsers.DataSource = authorizedUsers;
+                gvAuthorizedUsers.DataBind();
+            }
+            else
+            {
+                DisplayError("Seçilen config dosyası bulunamadı.");
+            }
+        }
+
+        // Kullanıcıyı kaldırma işlemi
         protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
         {
             if (e.CommandName == "RemoveUser")
@@ -207,10 +216,11 @@ namespace webconfigs
                 int index = Convert.ToInt32(e.CommandArgument);
                 string username = gvAuthorizedUsers.DataKeys[index].Value.ToString();
                 RemoveUserFromConfig(selectedConfigFile, username);
-                ddlConfigFiles_SelectedIndexChanged(null, null); // Listeyi yeniden yükle
+                RefreshAuthorizedUsers(); // Kullanıcıyı kaldırdıktan sonra listeyi yeniler
             }
         }
 
+        // Config dosyasından kullanıcıyı kaldırır
         private void RemoveUserFromConfig(string configFile, string username)
         {
             try
@@ -238,7 +248,7 @@ namespace webconfigs
             }
             catch (Exception ex)
             {
-                DisplayError("Kullanıcıyı kaldırırken hata oluştu: " + ex.Message);
+                DisplayError($"Kullanıcıyı kaldırırken hata oluştu: {ex.Message}");
             }
         }
     }
