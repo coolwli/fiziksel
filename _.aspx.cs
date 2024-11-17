@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Web.Script.Serialization;
 using System.Xml;
 
 namespace authconfiger
@@ -198,13 +200,11 @@ namespace authconfiger
             if (File.Exists(selectedConfigFile))
             {
                 List<string> authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
+                var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+                var json = serializer.Serialize(authorizedUsers);
                 
-                // Kullanıcıları dinamik olarak tabloya ekle
-                foreach (var username in authorizedUsers)
-                {
-                    ScriptManager.RegisterStartupScript(this, this.GetType(), "addUserScript", 
-                        $"addUserToTable('{username}');", true);
-                }
+                ScriptManager.RegisterStartupScript(this, this.GetType(), "addUserScript",
+                    $"addUsersToTable('{json}');", true);
             }
             else
             {
