@@ -5,9 +5,9 @@ using System.Web.UI;
 using System.Web.UI.WebControls;
 using System.Xml;
 
-namespace webconfigs
+namespace authconfiger
 {
-    public partial class config : System.Web.UI.Page
+    public partial class _default : System.Web.UI.Page
     {
         private string selectedConfigFile = string.Empty;
 
@@ -50,6 +50,18 @@ namespace webconfigs
             }
         }
 
+        protected void ddlConfigFiles_SelectedIndexChanged(object sender,EventArgs e)
+        {
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+            if (File.Exists(selectedConfigFile))
+            {
+                RefreshAuthorizedUsers();
+            }
+            else
+            {
+                DisplayError("Config dosyası bulunamadı");
+            }
+        }
         // Web.config dosyalarını arar
         private List<string> FindConfigFiles(string rootPath)
         {
@@ -83,11 +95,12 @@ namespace webconfigs
                 XmlDocument doc = new XmlDocument();
                 doc.Load(configFile);
 
-                XmlNodeList systemWebServerNodes = doc.GetElementsByTagName("system.webServer");
-                foreach (XmlNode systemWebServerNode in systemWebServerNodes)
+                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
+                foreach (XmlNode authNode in authNodes)
                 {
-                    foreach (XmlNode childNode in systemWebServerNode.ChildNodes)
+                    foreach (XmlNode childNode in authNode.ChildNodes)
                     {
+                        Response.Write(childNode.Name);
                         if (childNode.Name == "add")
                         {
                             string username = childNode.Attributes["roles"]?.Value;
@@ -198,7 +211,7 @@ namespace webconfigs
         {
             if (File.Exists(selectedConfigFile))
             {
-                var authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
+                List<string> authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
                 gvAuthorizedUsers.DataSource = authorizedUsers;
                 gvAuthorizedUsers.DataBind();
             }
