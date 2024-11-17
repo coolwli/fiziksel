@@ -1,5 +1,4 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="config.aspx.cs" Inherits="webconfigs.config" %>
-
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="authconfiger._default" %>
 <!DOCTYPE html>
 <html lang="tr">
 <head runat="server">
