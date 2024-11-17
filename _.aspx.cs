@@ -21,7 +21,7 @@ namespace webconfigs
 
         private void LoadConfigFiles()
         {
-            string rootPath = @"C:\inetpub\wwwroot"; // wwwroot dizinini burada belirtiyoruz
+            string rootPath = @"C:\inetpub\wwwroot"; // wwwroot dizini
             if (Directory.Exists(rootPath))
             {
                 var configFiles = FindConfigFiles(rootPath);
@@ -31,10 +31,7 @@ namespace webconfigs
                 {
                     foreach (var configFile in configFiles)
                     {
-                        // web.config dosyasının tam yolunu alıyoruz
                         string topLevelDir = GetTopLevelDirectory(configFile, rootPath);
-
-                        // dropdown'a, wwwroot altındaki en üst klasörü ekliyoruz
                         ddlConfigFiles.Items.Add(new ListItem(topLevelDir, configFile));
                     }
 
@@ -89,28 +86,27 @@ namespace webconfigs
             }
         }
 
-        private List<User> GetAuthorizedUsersFromConfig(string configFile)
+        private List<string> GetAuthorizedUsersFromConfig(string configFile)
         {
-            List<User> users = new List<User>();
+            List<string> users = new List<string>();
             try
             {
                 XmlDocument doc = new XmlDocument();
                 doc.Load(configFile);
 
-                // Authorization node: //configuration/system.webServer/security/authorization
-                XmlNodeList authorizationNodes = doc.SelectNodes("//configuration/system.webServer/security/authorization/add");
-
-                foreach (XmlNode authorizationNode in authorizationNodes)
+                XmlNodeList systemWebServerNodes = doc.GetElementsByTagName("system.webServer");
+                foreach (XmlNode systemWebServerNode in systemWebServerNodes)
                 {
-                    string username = authorizationNode.Attributes["users"]?.Value;
-                    string action = authorizationNode.Attributes["accessType"]?.Value; // "allow" or "deny"
-                    if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(action))
+                    foreach (XmlNode childNode in systemWebServerNode.ChildNodes)
                     {
-                        users.Add(new User
+                        if (childNode.Name == "add")
                         {
-                            Username = username,
-                            Action = action
-                        });
+                            string username = childNode.Attributes["roles"]?.Value;
+                            if (!string.IsNullOrEmpty(username))
+                            {
+                                users.Add(username);
+                            }
+                        }
                     }
                 }
             }
@@ -121,7 +117,7 @@ namespace webconfigs
             return users;
         }
 
-        private void AddUserToConfig(string configFile, string username, string action)
+        private void AddUserToConfig(string configFile, string username)
         {
             try
             {
@@ -130,20 +126,25 @@ namespace webconfigs
                     XmlDocument doc = new XmlDocument();
                     doc.Load(configFile);
 
-                    // Create the authorization node if not exist
-                    XmlNode authorizationNode = GetOrCreateAuthorizationNode(doc);
+                    XmlNode systemWebServerNode = GetOrCreateSystemWebServerNode(doc);
+                    XmlNode addNode = doc.CreateElement("add");
 
-                    // Create new "add" element for the user
-                    XmlNode newUserNode = doc.CreateElement("add");
-                    XmlAttribute usersAttr = doc.CreateAttribute("users");
-                    usersAttr.Value = username;
-                    newUserNode.Attributes.Append(usersAttr);
+                    // Kullanıcı adı ile roles ekleniyor
+                    XmlAttribute rolesAttr = doc.CreateAttribute("roles");
+                    rolesAttr.Value = username;
+                    addNode.Attributes.Append(rolesAttr);
 
+                    // Sabit olarak accessType ve verbs ekleniyor
                     XmlAttribute accessTypeAttr = doc.CreateAttribute("accessType");
-                    accessTypeAttr.Value = action; // "allow" or "deny"
-                    newUserNode.Attributes.Append(accessTypeAttr);
+                    accessTypeAttr.Value = "Allow"; // Sabit olarak "Allow" olacak
+                    addNode.Attributes.Append(accessTypeAttr);
 
-                    authorizationNode.AppendChild(newUserNode);
+                    XmlAttribute verbsAttr = doc.CreateAttribute("verbs");
+                    verbsAttr.Value = "GET, POST"; // Sabit verbs değeri
+                    addNode.Attributes.Append(verbsAttr);
+
+                    systemWebServerNode.AppendChild(addNode);
+
                     doc.Save(configFile);
                 }
                 else
@@ -157,30 +158,57 @@ namespace webconfigs
             }
         }
 
-        private XmlNode GetOrCreateAuthorizationNode(XmlDocument doc)
+        private XmlNode GetOrCreateSystemWebServerNode(XmlDocument doc)
         {
-            XmlNode systemWebServerNode = doc.SelectSingleNode("//configuration/system.webServer");
+            XmlNode configurationNode = doc.SelectSingleNode("//configuration");
+            XmlNode systemWebServerNode = configurationNode.SelectSingleNode("system.webServer");
+
             if (systemWebServerNode == null)
             {
                 systemWebServerNode = doc.CreateElement("system.webServer");
-                doc.SelectSingleNode("//configuration").AppendChild(systemWebServerNode);
+                configurationNode.AppendChild(systemWebServerNode);
             }
 
-            XmlNode securityNode = systemWebServerNode.SelectSingleNode("security");
-            if (securityNode == null)
+            return systemWebServerNode;
+        }
+
+        private void DisplayError(string message)
+        {
+            errorMessage.InnerText = message;
+            errorMessage.Visible = true;
+        }
+
+        protected void btnAddUser_Click(object sender, EventArgs e)
+        {
+            string username = txtUsername.Text.Trim();
+            if (!string.IsNullOrEmpty(username))
             {
-                securityNode = doc.CreateElement("security");
-                systemWebServerNode.AppendChild(securityNode);
+                try
+                {
+                    AddUserToConfig(selectedConfigFile, username);
+                    ddlConfigFiles_SelectedIndexChanged(null, null); // Listeyi yeniden yükle
+                    txtUsername.Text = string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    DisplayError("Hata: " + ex.Message);
+                }
             }
-
-            XmlNode authorizationNode = securityNode.SelectSingleNode("authorization");
-            if (authorizationNode == null)
+            else
             {
-                authorizationNode = doc.CreateElement("authorization");
-                securityNode.AppendChild(authorizationNode);
+                DisplayError("Kullanıcı adı boş olamaz.");
             }
+        }
 
-            return authorizationNode;
+        protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
+        {
+            if (e.CommandName == "RemoveUser")
+            {
+                int index = Convert.ToInt32(e.CommandArgument);
+                string username = gvAuthorizedUsers.DataKeys[index].Value.ToString();
+                RemoveUserFromConfig(selectedConfigFile, username);
+                ddlConfigFiles_SelectedIndexChanged(null, null); // Listeyi yeniden yükle
+            }
         }
 
         private void RemoveUserFromConfig(string configFile, string username)
@@ -192,16 +220,16 @@ namespace webconfigs
                     XmlDocument doc = new XmlDocument();
                     doc.Load(configFile);
 
-                    XmlNodeList authorizationNodes = doc.SelectNodes("//configuration/system.webServer/security/authorization/add");
-                    foreach (XmlNode authorizationNode in authorizationNodes)
+                    XmlNode systemWebServerNode = doc.SelectSingleNode("//configuration/system.webServer");
+                    foreach (XmlNode addNode in systemWebServerNode.ChildNodes)
                     {
-                        if (authorizationNode.Attributes["users"]?.Value == username)
+                        if (addNode.Attributes["roles"]?.Value == username)
                         {
-                            authorizationNode.ParentNode.RemoveChild(authorizationNode); // Remove user node
-                            doc.Save(configFile);
-                            break;
+                            systemWebServerNode.RemoveChild(addNode);
                         }
                     }
+
+                    doc.Save(configFile);
                 }
                 else
                 {
@@ -210,72 +238,8 @@ namespace webconfigs
             }
             catch (Exception ex)
             {
-                throw new Exception("Kullanıcıyı kaldırırken hata oluştu: " + ex.Message);
+                DisplayError("Kullanıcıyı kaldırırken hata oluştu: " + ex.Message);
             }
         }
-
-        protected void btnAddUser_Click(object sender, EventArgs e)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-
-            string usernameToAdd = txtUsername.Text.Trim();
-            string action = ddlAction.SelectedValue; // "allow" or "deny"
-
-            if (string.IsNullOrEmpty(usernameToAdd))
-            {
-                DisplayError("Kullanıcı adı boş olamaz.");
-                return;
-            }
-
-            if (string.IsNullOrEmpty(selectedConfigFile))
-            {
-                DisplayError("Config dosyası seçilmemiş.");
-                return;
-            }
-
-            try
-            {
-                AddUserToConfig(selectedConfigFile, usernameToAdd, action);
-                ddlConfigFiles_SelectedIndexChanged(sender, e);
-                txtUsername.Text = string.Empty;
-            }
-            catch (Exception ex)
-            {
-                DisplayError("Hata: " + ex.Message);
-            }
-        }
-
-        protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
-        {
-            if (e.CommandName == "RemoveUser")
-            {
-                selectedConfigFile = ddlConfigFiles.SelectedValue;
-
-                int index = Convert.ToInt32(e.CommandArgument);
-                string usernameToRemove = gvAuthorizedUsers.Rows[index].Cells[0].Text;
-
-                try
-                {
-                    RemoveUserFromConfig(selectedConfigFile, usernameToRemove);
-                    ddlConfigFiles_SelectedIndexChanged(sender, e);
-                }
-                catch (Exception ex)
-                {
-                    DisplayError("Hata: " + ex.Message);
-                }
-            }
-        }
-
-        private void DisplayError(string message)
-        {
-            errorMessage.InnerText = message;
-            errorMessage.Visible = true;
-        }
-    }
-
-    public class User
-    {
-        public string Username { get; set; }
-        public string Action { get; set; }
     }
 }
