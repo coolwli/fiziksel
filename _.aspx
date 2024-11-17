@@ -8,7 +8,7 @@
         /* Genel Sayfa ve Konteyner Stili */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f1f3f6;
+            background-color: #f4f7fa;
             margin: 0;
             padding: 0;
             color: #333;
@@ -99,43 +99,36 @@
             background-color: #c0392b;
         }
 
-        .table {
+        /* Tablo Stili */
+        table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 30px;
         }
 
-        .table th, .table td {
+        th, td {
             padding: 14px;
             text-align: left;
             font-size: 16px;
             border-bottom: 1px solid #ddd;
+            color: #555;
         }
 
-        .table th {
+        th {
             background-color: #f7f7f7;
             color: #444;
             font-weight: 600;
         }
 
-        .table td {
-            background-color: #fff;
-            color: #555;
-        }
-
-        .table .btn-remove {
-            font-size: 14px;
-            padding: 8px 12px;
-        }
-
-        .table tr:nth-child(even) {
+        tr:nth-child(even) {
             background-color: #f9f9f9;
         }
 
-        .table tr:hover {
+        tr:hover {
             background-color: #f1f1f1;
         }
 
+        /* Hata mesajı */
         .error-message {
             color: #e74c3c;
             background-color: #f8d7da;
@@ -170,17 +163,41 @@
             <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" OnClick="btnAddUser_Click" CssClass="btn" />
 
             <!-- Kullanıcı Listesi -->
-            <div class="table">
-                <asp:GridView ID="gvAuthorizedUsers" runat="server" AutoGenerateColumns="false" CssClass="table" OnRowCommand="gvAuthorizedUsers_RowCommand">
-                    <Columns>
-                        <asp:BoundField DataField="Username" HeaderText="Kullanıcı Adı" SortExpression="Username" />
-                        <asp:ButtonField CommandName="RemoveUser" Text="Kaldır" ButtonType="Button" HeaderText="İşlem" ItemStyle-CssClass="btn-remove"/>
-                    </Columns>
-                </asp:GridView>
+            <div>
+                <table id="authorizedUsersTable">
+                    <thead>
+                        <tr>
+                            <th>Kullanıcı Adı</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Buraya kullanıcılar dinamik olarak eklenecek -->
+                    </tbody>
+                </table>
             </div>
 
             <div id="errorMessage" class="error-message" runat="server" visible="false"></div>
         </div>
     </form>
+
+    <script>
+        // Kullanıcı ekleme işlemi için JavaScript
+        function addUserToTable(username) {
+            var table = document.getElementById("authorizedUsersTable").getElementsByTagName('tbody')[0];
+            var row = table.insertRow();
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+
+            cell1.innerHTML = username; // Kullanıcı adı
+            cell2.innerHTML = '<button class="btn-remove" onclick="removeUserFromTable(this)">Kaldır</button>';
+        }
+
+        // Kullanıcıyı tablodan kaldırma işlemi
+        function removeUserFromTable(button) {
+            var row = button.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+    </script>
 </body>
 </html>
