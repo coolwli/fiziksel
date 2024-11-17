@@ -52,13 +52,11 @@ namespace webconfigs
             }
         }
 
-        // web.config dosyalarını tüm dizinlerde arıyoruz
         private List<string> FindConfigFiles(string rootPath)
         {
             List<string> configFiles = new List<string>();
             try
             {
-                // web.config dosyasını arama
                 string[] files = Directory.GetFiles(rootPath, "web.config", SearchOption.AllDirectories);
                 configFiles.AddRange(files);
             }
@@ -69,16 +67,10 @@ namespace webconfigs
             return configFiles;
         }
 
-        // web.config dosyasının bulunduğu dizinden, wwwroot altında ilk dizini alır
         private string GetTopLevelDirectory(string configFilePath, string rootPath)
         {
-            // config dosyasının bulunduğu dizini alıyoruz
             string relativePath = configFilePath.Replace(rootPath + @"\", "");
-
-            // wwwroot altındaki ilk dizini almak için, ilk dizini ayıklıyoruz
             string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
-
-            // İlk dizini döndürüyoruz
             return pathParts.Length > 0 ? pathParts[0] : string.Empty;
         }
 
@@ -105,23 +97,20 @@ namespace webconfigs
                 XmlDocument doc = new XmlDocument();
                 doc.Load(configFile);
 
-                XmlNodeList authorizationNodes = doc.GetElementsByTagName("authorization");
+                // Authorization node: //configuration/system.webServer/security/authorization
+                XmlNodeList authorizationNodes = doc.SelectNodes("//configuration/system.webServer/security/authorization/add");
+
                 foreach (XmlNode authorizationNode in authorizationNodes)
                 {
-                    foreach (XmlNode childNode in authorizationNode.ChildNodes)
+                    string username = authorizationNode.Attributes["users"]?.Value;
+                    string action = authorizationNode.Attributes["accessType"]?.Value; // "allow" or "deny"
+                    if (!string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(action))
                     {
-                        if (childNode.Name == "allow" || childNode.Name == "deny")
+                        users.Add(new User
                         {
-                            string username = childNode.Attributes["users"]?.Value;
-                            if (!string.IsNullOrEmpty(username))
-                            {
-                                users.Add(new User
-                                {
-                                    Username = username,
-                                    Action = childNode.Name
-                                });
-                            }
-                        }
+                            Username = username,
+                            Action = action
+                        });
                     }
                 }
             }
@@ -141,13 +130,20 @@ namespace webconfigs
                     XmlDocument doc = new XmlDocument();
                     doc.Load(configFile);
 
+                    // Create the authorization node if not exist
                     XmlNode authorizationNode = GetOrCreateAuthorizationNode(doc);
-                    XmlNode newUserNode = doc.CreateElement(action);
+
+                    // Create new "add" element for the user
+                    XmlNode newUserNode = doc.CreateElement("add");
                     XmlAttribute usersAttr = doc.CreateAttribute("users");
                     usersAttr.Value = username;
                     newUserNode.Attributes.Append(usersAttr);
-                    authorizationNode.AppendChild(newUserNode);
 
+                    XmlAttribute accessTypeAttr = doc.CreateAttribute("accessType");
+                    accessTypeAttr.Value = action; // "allow" or "deny"
+                    newUserNode.Attributes.Append(accessTypeAttr);
+
+                    authorizationNode.AppendChild(newUserNode);
                     doc.Save(configFile);
                 }
                 else
@@ -163,18 +159,25 @@ namespace webconfigs
 
         private XmlNode GetOrCreateAuthorizationNode(XmlDocument doc)
         {
-            XmlNode systemWebNode = doc.SelectSingleNode("//configuration/system.web");
-            if (systemWebNode == null)
+            XmlNode systemWebServerNode = doc.SelectSingleNode("//configuration/system.webServer");
+            if (systemWebServerNode == null)
             {
-                systemWebNode = doc.CreateElement("system.web");
-                doc.SelectSingleNode("//configuration").AppendChild(systemWebNode);
+                systemWebServerNode = doc.CreateElement("system.webServer");
+                doc.SelectSingleNode("//configuration").AppendChild(systemWebServerNode);
             }
 
-            XmlNode authorizationNode = systemWebNode.SelectSingleNode("authorization");
+            XmlNode securityNode = systemWebServerNode.SelectSingleNode("security");
+            if (securityNode == null)
+            {
+                securityNode = doc.CreateElement("security");
+                systemWebServerNode.AppendChild(securityNode);
+            }
+
+            XmlNode authorizationNode = securityNode.SelectSingleNode("authorization");
             if (authorizationNode == null)
             {
                 authorizationNode = doc.CreateElement("authorization");
-                systemWebNode.AppendChild(authorizationNode);
+                securityNode.AppendChild(authorizationNode);
             }
 
             return authorizationNode;
@@ -189,18 +192,14 @@ namespace webconfigs
                     XmlDocument doc = new XmlDocument();
                     doc.Load(configFile);
 
-                    XmlNodeList authorizationNodes = doc.GetElementsByTagName("authorization");
+                    XmlNodeList authorizationNodes = doc.SelectNodes("//configuration/system.webServer/security/authorization/add");
                     foreach (XmlNode authorizationNode in authorizationNodes)
                     {
-                        foreach (XmlNode childNode in authorizationNode.ChildNodes)
+                        if (authorizationNode.Attributes["users"]?.Value == username)
                         {
-                            if ((childNode.Name == "allow" || childNode.Name == "deny") &&
-                                childNode.Attributes["users"]?.Value == username)
-                            {
-                                authorizationNode.RemoveChild(childNode); // Kullanıcıyı kaldır
-                                doc.Save(configFile);
-                                break;
-                            }
+                            authorizationNode.ParentNode.RemoveChild(authorizationNode); // Remove user node
+                            doc.Save(configFile);
+                            break;
                         }
                     }
                 }
@@ -220,7 +219,7 @@ namespace webconfigs
             selectedConfigFile = ddlConfigFiles.SelectedValue;
 
             string usernameToAdd = txtUsername.Text.Trim();
-            string action = ddlAction.SelectedValue;
+            string action = ddlAction.SelectedValue; // "allow" or "deny"
 
             if (string.IsNullOrEmpty(usernameToAdd))
             {
