@@ -1,3 +1,4 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="authconfiger._default" %>
 <!DOCTYPE html>
 <html lang="tr">
 <head runat="server">
@@ -7,7 +8,7 @@
         /* Genel Sayfa ve Konteyner Stili */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f1f3f6;
+            background-color: #f4f7fa;
             margin: 0;
             padding: 0;
             color: #333;
@@ -98,43 +99,36 @@
             background-color: #c0392b;
         }
 
-        .table {
+        /* Tablo Stili */
+        table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 30px;
         }
 
-        .table th, .table td {
+        th, td {
             padding: 14px;
             text-align: left;
             font-size: 16px;
             border-bottom: 1px solid #ddd;
+            color: #555;
         }
 
-        .table th {
+        th {
             background-color: #f7f7f7;
             color: #444;
             font-weight: 600;
         }
 
-        .table td {
-            background-color: #fff;
-            color: #555;
-        }
-
-        .table .btn-remove {
-            font-size: 14px;
-            padding: 8px 12px;
-        }
-
-        .table tr:nth-child(even) {
+        tr:nth-child(even) {
             background-color: #f9f9f9;
         }
 
-        .table tr:hover {
+        tr:hover {
             background-color: #f1f1f1;
         }
 
+        /* Hata mesajı */
         .error-message {
             color: #e74c3c;
             background-color: #f8d7da;
@@ -168,8 +162,8 @@
 
             <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" OnClick="btnAddUser_Click" CssClass="btn" />
 
-            <!-- Kullanıcı Listesi (HTML Table) -->
-            <div class="table">
+            <!-- Kullanıcı Listesi -->
+            <div>
                 <table id="authorizedUsersTable">
                     <thead>
                         <tr>
@@ -177,46 +171,35 @@
                             <th>İşlem</th>
                         </tr>
                     </thead>
-                    <tbody id="usersTableBody">
-                        <!-- Kullanıcılar buraya eklenir -->
+                    <tbody>
+                        <!-- Buraya kullanıcılar dinamik olarak eklenecek -->
                     </tbody>
                 </table>
             </div>
 
             <div id="errorMessage" class="error-message" runat="server" visible="false"></div>
         </div>
+
+        <script>
+            // Kullanıcı ekleme işlemi için JavaScript
+            function addUsersToTable(usernames) {
+                var table = document.getElementById("authorizedUsersTable").getElementsByTagName('tbody')[0];
+                usernames.foreach
+                    var row = table.insertRow();
+                    var cell1 = row.insertCell(0);
+                    var cell2 = row.insertCell(1);
+
+                    cell1.innerHTML = username; // Kullanıcı adı
+                    cell2.innerHTML = '<button class="btn-remove" onclick="removeUserFromTable(this)">Kaldır</button>';
+            }
+
+            // Kullanıcıyı tablodan kaldırma işlemi
+            function removeUserFromTable(button) {
+                var row = button.parentNode.parentNode;
+                row.parentNode.removeChild(row);
+            }
+        </script>
     </form>
 
-    <script>
-        function addUserToTable(username) {
-            var tableBody = document.getElementById("usersTableBody");
-
-            var row = document.createElement("tr");
-
-            var usernameCell = document.createElement("td");
-            usernameCell.textContent = username;
-            row.appendChild(usernameCell);
-
-            var actionCell = document.createElement("td");
-            var removeBtn = document.createElement("button");
-            removeBtn.textContent = "Kaldır";
-            removeBtn.className = "btn-remove";
-            removeBtn.onclick = function() { removeUserFromTable(username); };
-            actionCell.appendChild(removeBtn);
-            row.appendChild(actionCell);
-
-            tableBody.appendChild(row);
-        }
-
-        function removeUserFromTable(username) {
-            var tableBody = document.getElementById("usersTableBody");
-            for (var i = 0; i < tableBody.rows.length; i++) {
-                if (tableBody.rows[i].cells[0].textContent === username) {
-                    tableBody.deleteRow(i);
-                    break;
-                }
-            }
-        }
-    </script>
 </body>
 </html>
