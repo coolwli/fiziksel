@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Web.UI;
-using System.Web.UI.WebControls;
 using System.Xml;
 
 namespace authconfiger
@@ -224,50 +223,6 @@ namespace authconfiger
             else
             {
                 DisplayError("Config dosyası bulunamadı");
-            }
-        }
-
-        // Kullanıcıyı kaldırma işlemi
-        protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
-        {
-            if (e.CommandName == "RemoveUser")
-            {
-                int index = Convert.ToInt32(e.CommandArgument);
-                string username = gvAuthorizedUsers.DataKeys[index].Value.ToString();
-                RemoveUserFromConfig(selectedConfigFile, username);
-                RefreshAuthorizedUsers(); // Kullanıcıyı kaldırdıktan sonra listeyi yeniler
-            }
-        }
-
-        // Config dosyasından kullanıcıyı kaldırır
-        private void RemoveUserFromConfig(string configFile, string username)
-        {
-            try
-            {
-                if (File.Exists(configFile))
-                {
-                    XmlDocument doc = new XmlDocument();
-                    doc.Load(configFile);
-
-                    XmlNode systemWebServerNode = doc.SelectSingleNode("//configuration/system.webServer");
-                    foreach (XmlNode addNode in systemWebServerNode.ChildNodes)
-                    {
-                        if (addNode.Attributes["roles"]?.Value == username)
-                        {
-                            systemWebServerNode.RemoveChild(addNode);
-                        }
-                    }
-
-                    doc.Save(configFile);
-                }
-                else
-                {
-                    throw new FileNotFoundException("Config dosyası bulunamadı.");
-                }
-            }
-            catch (Exception ex)
-            {
-                DisplayError($"Kullanıcıyı kaldırırken hata oluştu: {ex.Message}");
             }
         }
     }
