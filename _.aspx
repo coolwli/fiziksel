@@ -1,319 +1,227 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="historicDatas._default" %>
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="config.aspx.cs" Inherits="webconfigs.config" %>
+
 <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fiziksel Historic Data</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Web Config Yetkili Kişiler</title>
     <style>
-        .panel-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            justify-content: space-between;
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background-color: #f7f9fb;
+            margin: 0;
+            padding: 0;
         }
 
-        .chart-table-wrapper {
-            display: flex;
-            width: 100%;
-        }
-
-        .panel {
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            width: 80%;
-            min-width: 300px;
-        }
-
-        .table-container {
-            width: 20%;
-            padding-left: 20px;
-            max-height: 570px;
-            overflow: auto;
-        }
-
-        canvas {
-            width: 100%;
-            height: 250px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        .table-container table {
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-
-        table th,
-        table td {
-            padding: 12px;
-            border: none;
-            text-align: center;
-            transition: background-color 0.3s;
-        }
-
-        table th {
-            background-color: #6c757d;
-            color: white;
-            font-weight: bold;
-        }
-
-        table tr:nth-child(even) {
-            background-color: #f8f9fa;
-        }
-
-        table tr:hover {
-            background-color: #e9ecef;
-        }
-
-        .chart-container {
+        h2 {
+            font-size: 26px;
+            font-weight: 500;
+            color: #333;
             margin-bottom: 20px;
         }
 
-        .date-picker {
-            margin: 10px;
+        .container {
+            width: 80%;
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 30px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
             display: flex;
-            gap: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #ced4da;
+            flex-direction: column;
+            gap: 20px;
         }
 
-        .date-picker label {
-            font-weight: bold;
-            align-self: center;
-            color: #495057;
+        /* Config Dosyası Seçimi için Satır Düzeni */
+        .form-row-config {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
         }
 
-        .date-picker input {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #ced4da;
-            width: 150px;
-            transition: border-color 0.3s;
-            background-color: #ffffff;
+        .form-row-config label {
+            font-size: 16px;
+            color: #666;
+            margin-right: 10px;
         }
 
-        .date-picker input:focus {
-            border-color: #007bff;
+        .form-row-config select {
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f5f5f5;
+            transition: all 0.3s ease;
+        }
+
+        .form-row-config select:focus {
+            border-color: #007BFF;
             outline: none;
+            background-color: #eaf5ff;
         }
 
-        .date-picker button {
-            padding: 8px 12px;
-            border-radius: 4px;
-            border: none;
-            background-color: #007bff;
+        /* Yeni Form Kontrolleri için Satır Düzeni */
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .form-row input,
+        .form-row select {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f5f5f5;
+            transition: all 0.3s ease;
+        }
+
+        .form-row input:focus,
+        .form-row select:focus {
+            border-color: #007BFF;
+            outline: none;
+            background-color: #eaf5ff;
+        }
+
+        .form-row label {
+            font-size: 16px;
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 20px;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .form-actions .btn {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: 600;
             color: white;
+            background-color: #007BFF;
+            border: none;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s ease;
+            width: 100%;
         }
 
-        .date-picker button:hover {
+        .form-actions .btn:hover {
             background-color: #0056b3;
         }
+
+        .grid-container {
+            margin-top: 30px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .table th, .table td {
+            padding: 12px;
+            text-align: left;
+            font-size: 16px;
+            border: 1px solid #ddd;
+        }
+
+        .table th {
+            background-color: #f7f7f7;
+            font-weight: 600;
+        }
+
+        .table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* Kaldır Butonu Tasarımı */
+        .table .btn-remove {
+            background-color: #e74c3c;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .table .btn-remove:hover {
+            background-color: #c0392b;
+        }
+
+        .table .btn-remove i {
+            font-size: 16px; /* İkon boyutunu ayarlıyoruz */
+        }
+
+        .error-message {
+            color: #e74c3c;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+
     </style>
 </head>
-
 <body>
-    <div class="header">
-        <div id="logo"></div>
-        <div>
-            <h1 class="baslik" id="baslik" runat="server">Fiziksel Historic</h1>
+    <form id="form1" runat="server">
+        <div class="container">
+            <h2>Web Config Dosyalarındaki Yetkili Kişiler</h2>
+
+            <!-- Config Dosyası Seçimi Satırı -->
+            <div class="form-row-config">
+                <label for="ddlConfigFiles">Config Dosyasını Seçin:</label>
+                <asp:DropDownList ID="ddlConfigFiles" runat="server" AutoPostBack="true" OnSelectedIndexChanged="ddlConfigFiles_SelectedIndexChanged">
+                    <asp:ListItem Text="Bir config dosyası seçin" Value="" />
+                </asp:DropDownList>
+            </div>
+
+            <!-- Diğer Kontrollerin Yer Aldığı Satır -->
+            <div class="form-row">
+                <label for="txtUsername">Yeni Kullanıcı Adı:</label>
+                <asp:TextBox ID="txtUsername" runat="server" Placeholder="Kullanıcı adı girin..." />
+
+                <label for="ddlAction">İşlem Seçin:</label>
+                <asp:DropDownList ID="ddlAction" runat="server">
+                    <asp:ListItem Text="Allow" Value="allow" />
+                    <asp:ListItem Text="Deny" Value="deny" />
+                </asp:DropDownList>
+
+                <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" OnClick="btnAddUser_Click" CssClass="btn" />
+            </div>
+
+            <!-- Kullanıcı Listesi Tablosu -->
+            <div class="grid-container">
+                <asp:GridView ID="gvAuthorizedUsers" runat="server" AutoGenerateColumns="false" CssClass="table" OnRowCommand="gvAuthorizedUsers_RowCommand">
+                    <Columns>
+                        <asp:BoundField DataField="Username" HeaderText="Kullanıcı Adı" SortExpression="Username" />
+                        <asp:BoundField DataField="Action" HeaderText="Aksiyon" SortExpression="Action" />
+                        <asp:ButtonField CommandName="RemoveUser" Text="Kaldır" ButtonType="Button" HeaderText="İşlem" ItemStyle-CssClass="btn-remove"/>
+                    </Columns>
+                </asp:GridView>
+            </div>
+
+            <div id="errorMessage" class="error-message" runat="server" visible="false"></div>
         </div>
-    </div>
-    <div class="date-picker">
-        <label for="startDate">Start Date:</label>
-        <input type="date" id="startDate">
-        <label for="endDate">End Date:</label>
-        <input type="date" id="endDate">
-        <button id="updateButton">Update</button>
-    </div>
-    <div id="chart-tables" class="panel-container"></div>
-
-    <script>
-        let allDatasetGroups;
-        let allAvailableDates;
-
-        const generateDateList = (start, length) => {
-            return Array.from({ length }, (_, i) => {
-                const date = new Date(start);
-                date.setDate(start.getDate() - i);
-                return date.toISOString().split('T')[0];
-            }).reverse();
-        };
-
-        const generateRandomColor = () => {
-            const r = Math.floor(Math.random() * 255);
-            const g = Math.floor(Math.random() * 255);
-            const b = Math.floor(Math.random() * 255);
-            return {
-                borderColor: `rgba(${r}, ${g}, ${b}, 1)`,
-                backgroundColor: `rgba(${r}, ${g}, ${b}, 0.2)`
-            };
-        };
-
-        const createChartInstance = (ctx, datasets, dates, chartTitle) => {
-            const chartData = {
-                labels: dates,
-                datasets: datasets.map(({ label, data }) => {
-                    const colors = generateRandomColor();
-                    return {
-                        label,
-                        data: data.map((y, i) => ({ x: dates[i], y })),
-                        borderColor: colors.borderColor,
-                        backgroundColor: colors.backgroundColor,
-                        borderWidth: 2,
-                        tension: 0.1,
-                        pointRadius: 3,
-                        fill: false
-                    };
-                })
-            };
-
-            const chartOptions = {
-                responsive: true,
-                plugins: {
-                    title: { display: true, text: chartTitle },
-                    tooltip: { mode: 'index', intersect: false }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: { unit: 'day' },
-                        title: { display: true, text: 'Date' }
-                    },
-                    y: {
-                        title: { display: true, text: 'Value' }
-                    }
-                }
-            };
-
-            return new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
-        };
-
-        const createDatasetTable = (datasets) => {
-            const rows = datasets.map(({ label, data }) => `
-                <tr>
-                    <td>${label}</td>
-                    <td>${data[0]}</td>
-                    <td>${data[data.length - 1]}</td>
-                </tr>`).join('');
-
-            return `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>First Day</th>
-                            <th>Last Day</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>`;
-        };
-
-        const initializeChartsAndTables = (datasetGroups, dates) => {
-            const chartTablesContainer = document.getElementById('chart-tables');
-            chartTablesContainer.innerHTML = '';
-
-            datasetGroups.forEach((datasetGroup, index) => {
-                const wrapper = document.createElement('div');
-                wrapper.classList.add('chart-table-wrapper');
-
-                const panel = document.createElement('div');
-                panel.classList.add('panel');
-
-                const chartContainer = document.createElement('div');
-                chartContainer.classList.add('chart-container');
-                const tableContainer = document.createElement('div');
-                tableContainer.classList.add('table-container');
-
-                chartContainer.innerHTML = `<canvas id="chart${index}"></canvas>`;
-                tableContainer.innerHTML = createDatasetTable(datasetGroup.datasets);
-
-                panel.appendChild(chartContainer);
-                wrapper.appendChild(panel);
-                wrapper.appendChild(tableContainer);
-                chartTablesContainer.appendChild(wrapper);
-
-                const ctx = document.getElementById(`chart${index}`).getContext('2d');
-                createChartInstance(ctx, datasetGroup.datasets, dates, datasetGroup.title);
-            });
-        };
-
-        const formatDate = (date) => {
-            const yyyy = date.getFullYear();
-            const mm = String(date.getMonth() + 1).padStart(2, '0');
-            const dd = String(date.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        };
-
-        const fetchInitialData = () => {
-            allDatasetGroups = Object.entries(datasets).map(([title, dataset]) => ({
-                title,
-                datasets: Object.entries(dataset).map(([label, data]) => ({ label, data }))
-            }));
-
-            allAvailableDates = dates.map(date => new Date(date));
-            allDatasetGroups = allDatasetGroups.map(group => ({
-                ...group,
-                datasets: group.datasets.sort((a, b) => {
-                    const sumA = a.data.reduce((acc, val) => acc + val, 0);
-                    const sumB = b.data.reduce((acc, val) => acc + val, 0);
-                    return sumB - sumA;
-                })
-            }));
-            initializeChartsAndTables(allDatasetGroups, allAvailableDates);
-
-            document.getElementById('startDate').value = formatDate(allAvailableDates[0]);
-            document.getElementById('endDate').value = formatDate(allAvailableDates[allAvailableDates.length - 1]);
-        };
-
-        document.getElementById('updateButton').addEventListener('click', () => {
-            const startDate = new Date(document.getElementById('startDate').value);
-            const endDate = new Date(document.getElementById('endDate').value);
-
-            if (startDate && endDate && startDate <= endDate) {
-                const filteredDates = allAvailableDates.filter(date => {
-                    const currentDate = new Date(date);
-                    return currentDate >= startDate && currentDate <= endDate;
-                });
-
-                const filteredDatasetGroups = allDatasetGroups.map(group => ({
-                    title: group.title,
-                    datasets: group.datasets.map(dataset => {
-                        const startIndex = allAvailableDates.indexOf(filteredDates[0]);
-                        const endIndex = allAvailableDates.indexOf(filteredDates[filteredDates.length - 1]);
-                        return {
-                            label: dataset.label,
-                            data: dataset.data.slice(startIndex, endIndex + 1)
-                        };
-                    })
-                }));
-
-                initializeChartsAndTables(filteredDatasetGroups, filteredDates);
-            } else {
-                alert("Please select a valid date range.");
-            }
-        });
-
-        fetchInitialData();
-    </script>
+    </form>
 </body>
-
-</html>
-
-
-</body>
-
 </html>
