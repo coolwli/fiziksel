@@ -107,68 +107,48 @@ namespace authconfiger
             return users;
         }
 
-        // Seçilen config dosyasına yeni kullanıcı ekler
-        private void AddUserToConfig(string configFile, string username)
+        // Kullanıcıyı config dosyasından silme
+        [System.Web.Services.WebMethod]
+        public static void RemoveUserFromConfig(string configFile, string username)
         {
             try
             {
-                if (File.Exists(configFile))
+                XmlDocument doc = new XmlDocument();
+                doc.Load(configFile);
+
+                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
+                foreach (XmlNode authNode in authNodes)
                 {
-                    XmlDocument doc = new XmlDocument();
-                    doc.Load(configFile);
-
-                    XmlNode systemWebServerNode = GetOrCreateSystemWebServerNode(doc);
-                    XmlNode addNode = doc.CreateElement("add");
-
-                    // Kullanıcı adı ile roles ekleniyor
-                    XmlAttribute rolesAttr = doc.CreateAttribute("roles");
-                    rolesAttr.Value = username;
-                    addNode.Attributes.Append(rolesAttr);
-
-                    // Sabit olarak accessType ve verbs ekleniyor
-                    XmlAttribute accessTypeAttr = doc.CreateAttribute("accessType");
-                    accessTypeAttr.Value = "Allow"; // Sabit olarak "Allow" olacak
-                    addNode.Attributes.Append(accessTypeAttr);
-
-                    XmlAttribute verbsAttr = doc.CreateAttribute("verbs");
-                    verbsAttr.Value = "GET, POST"; // Sabit verbs değeri
-                    addNode.Attributes.Append(verbsAttr);
-
-                    systemWebServerNode.AppendChild(addNode);
-
-                    doc.Save(configFile);
+                    foreach (XmlNode childNode in authNode.ChildNodes)
+                    {
+                        if (childNode.Name == "add" && childNode.Attributes["roles"]?.Value == username)
+                        {
+                            authNode.RemoveChild(childNode); // Kullanıcıyı kaldır
+                            break;
+                        }
+                    }
                 }
-                else
-                {
-                    throw new FileNotFoundException("Config dosyası bulunamadı.");
-                }
+
+                doc.Save(configFile); // Değişiklikleri kaydet
             }
             catch (Exception ex)
             {
-                throw new Exception($"Kullanıcıyı eklerken hata oluştu: {ex.Message}");
+                throw new Exception($"Kullanıcıyı silerken hata oluştu: {ex.Message}");
             }
         }
 
-        // system.webServer node'unu alır veya oluşturur
-        private XmlNode GetOrCreateSystemWebServerNode(XmlDocument doc)
+        // Config dosyasını seçtiğinde yetkili kullanıcıları yükler
+        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
         {
-            XmlNode configurationNode = doc.SelectSingleNode("//configuration");
-            XmlNode systemWebServerNode = configurationNode.SelectSingleNode("system.webServer");
-
-            if (systemWebServerNode == null)
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+            if (File.Exists(selectedConfigFile))
             {
-                systemWebServerNode = doc.CreateElement("system.webServer");
-                configurationNode.AppendChild(systemWebServerNode);
+                RefreshAuthorizedUsers();
             }
-
-            return systemWebServerNode;
-        }
-
-        // Hata mesajını görüntüler
-        private void DisplayError(string message)
-        {
-            errorMessage.InnerText = message;
-            errorMessage.Visible = true;
+            else
+            {
+                DisplayError("Config dosyası bulunamadı");
+            }
         }
 
         // Kullanıcı ekleme butonuna tıklandığında
@@ -202,9 +182,9 @@ namespace authconfiger
                 List<string> authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
                 var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
                 var json = serializer.Serialize(authorizedUsers);
-                
+
                 ScriptManager.RegisterStartupScript(this, this.GetType(), "addUserScript",
-                    $"addUsersToTable('{json}');", true);
+                    $"addUsersToTable({json});", true);
             }
             else
             {
@@ -212,18 +192,11 @@ namespace authconfiger
             }
         }
 
-        // Config dosyasını seçtiğinde yetkili kullanıcıları yükler
-        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
+        // Hata mesajı görüntüler
+        private void DisplayError(string message)
         {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            if (File.Exists(selectedConfigFile))
-            {
-                RefreshAuthorizedUsers();
-            }
-            else
-            {
-                DisplayError("Config dosyası bulunamadı");
-            }
+            errorMessage.InnerText = message;
+            errorMessage.Visible = true;
         }
     }
 }
