@@ -50,19 +50,15 @@ namespace authconfiger
             }
         }
 
-        protected void ddlConfigFiles_SelectedIndexChanged(object sender,EventArgs e)
+        // Config dosyasının üst dizin ismini alır
+        private string GetTopLevelDirectory(string configFilePath, string rootPath)
         {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            if (File.Exists(selectedConfigFile))
-            {
-                RefreshAuthorizedUsers();
-            }
-            else
-            {
-                DisplayError("Config dosyası bulunamadı");
-            }
+            string relativePath = configFilePath.Replace(rootPath + @"\", "");
+            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
+            return pathParts.Length > 0 ? pathParts[0] : string.Empty;
         }
-        // Web.config dosyalarını arar
+
+        // Konfigürasyon dosyalarını arar
         private List<string> FindConfigFiles(string rootPath)
         {
             List<string> configFiles = new List<string>();
@@ -76,14 +72,6 @@ namespace authconfiger
                 DisplayError($"Config dosyaları yüklenirken hata oluştu: {ex.Message}");
             }
             return configFiles;
-        }
-
-        // Config dosyasının üst dizin ismini alır
-        private string GetTopLevelDirectory(string configFilePath, string rootPath)
-        {
-            string relativePath = configFilePath.Replace(rootPath + @"\", "");
-            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
-            return pathParts.Length > 0 ? pathParts[0] : string.Empty;
         }
 
         // Config dosyasındaki yetkili kullanıcıları çeker
@@ -100,7 +88,6 @@ namespace authconfiger
                 {
                     foreach (XmlNode childNode in authNode.ChildNodes)
                     {
-                        Response.Write(childNode.Name);
                         if (childNode.Name == "add")
                         {
                             string username = childNode.Attributes["roles"]?.Value;
@@ -206,18 +193,37 @@ namespace authconfiger
             }
         }
 
-        // Config dosyasındaki yetkili kullanıcıları günceller
+        // Seçilen config dosyasındaki yetkili kullanıcıları günceller
         private void RefreshAuthorizedUsers()
         {
             if (File.Exists(selectedConfigFile))
             {
                 List<string> authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
-                gvAuthorizedUsers.DataSource = authorizedUsers;
-                gvAuthorizedUsers.DataBind();
+                
+                // Kullanıcıları dinamik olarak tabloya ekle
+                foreach (var username in authorizedUsers)
+                {
+                    ScriptManager.RegisterStartupScript(this, this.GetType(), "addUserScript", 
+                        $"addUserToTable('{username}');", true);
+                }
             }
             else
             {
                 DisplayError("Seçilen config dosyası bulunamadı.");
+            }
+        }
+
+        // Config dosyasını seçtiğinde yetkili kullanıcıları yükler
+        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+            if (File.Exists(selectedConfigFile))
+            {
+                RefreshAuthorizedUsers();
+            }
+            else
+            {
+                DisplayError("Config dosyası bulunamadı");
             }
         }
 
