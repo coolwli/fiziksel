@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Web.UI;
 using System.Web.UI.WebControls;
-using System.Web.Script.Serialization;
 using System.Xml;
+using System.IO;
 
-namespace authconfiger
+namespace webconfigs
 {
     public partial class _default : System.Web.UI.Page
     {
@@ -16,53 +15,27 @@ namespace authconfiger
         {
             if (!IsPostBack)
             {
-                LoadConfigFiles();
+                LoadConfigFiles();  // İlk defa yüklendiğinde config dosyalarını yükler
             }
         }
 
-        // Konfigürasyon dosyalarını yükler
         private void LoadConfigFiles()
         {
-            string rootPath = @"C:\inetpub\wwwroot"; // wwwroot dizini
+            string rootPath = @"C:\inetpub\wwwroot";  // Web uygulamanızın kök dizini
             if (Directory.Exists(rootPath))
             {
-                var configFiles = FindConfigFiles(rootPath);
-                ddlConfigFiles.Items.Clear();
-
-                if (configFiles.Count > 0)
-                {
-                    foreach (var configFile in configFiles)
-                    {
-                        string topLevelDir = GetTopLevelDirectory(configFile, rootPath);
-                        ddlConfigFiles.Items.Add(new ListItem(topLevelDir, configFile));
-                    }
-
-                    ddlConfigFiles.SelectedIndex = 0;
-                    ddlConfigFiles_SelectedIndexChanged(null, null); // İlk dosya için otomatik yükleme
-                }
-                else
-                {
-                    DisplayError("Web.config dosyası bulunamadı.");
-                }
+                var configFiles = GetConfigFiles(rootPath);  // Config dosyalarını al
+                PopulateConfigFileDropdown(configFiles);  // Dropdown'ı doldur
             }
             else
             {
-                DisplayError("Kök dizin mevcut değil.");
+                DisplayError("Kök dizin bulunamadı.");
             }
         }
 
-        // Config dosyasının üst dizin ismini alır
-        private string GetTopLevelDirectory(string configFilePath, string rootPath)
+        private List<string> GetConfigFiles(string rootPath)
         {
-            string relativePath = configFilePath.Replace(rootPath + @"\", "");
-            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
-            return pathParts.Length > 0 ? pathParts[0] : string.Empty;
-        }
-
-        // Konfigürasyon dosyalarını arar
-        private List<string> FindConfigFiles(string rootPath)
-        {
-            List<string> configFiles = new List<string>();
+            var configFiles = new List<string>();
             try
             {
                 string[] files = Directory.GetFiles(rootPath, "web.config", SearchOption.AllDirectories);
@@ -72,159 +45,76 @@ namespace authconfiger
             {
                 DisplayError($"Config dosyaları yüklenirken hata oluştu: {ex.Message}");
             }
+
             return configFiles;
         }
 
-        // Config dosyasındaki yetkili kullanıcıları çeker
-        private List<string> GetAuthorizedUsersFromConfig(string configFile)
+        private void PopulateConfigFileDropdown(List<string> configFiles)
         {
-            List<string> users = new List<string>();
+            ddlConfigFiles.Items.Clear();
+            if (configFiles.Count > 0)
+            {
+                foreach (var configFile in configFiles)
+                {
+                    string topLevelDir = GetTopLevelDirectory(configFile);
+                    ddlConfigFiles.Items.Add(new ListItem(topLevelDir, configFile));
+                }
+                ddlConfigFiles.SelectedIndex = 0;
+                ddlConfigFiles_SelectedIndexChanged(null, null);  // İlk config dosyasını yükle
+            }
+            else
+            {
+                DisplayError("Hiçbir config dosyası bulunamadı.");
+            }
+        }
+
+        private string GetTopLevelDirectory(string configFilePath)
+        {
+            string relativePath = configFilePath.Substring(@"C:\inetpub\wwwroot".Length).TrimStart(Path.DirectorySeparatorChar);
+            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
+            return pathParts[0];
+        }
+
+        private List<User> GetAuthorizedUsersFromConfig()
+        {
+            var users = new List<User>();
             try
             {
                 XmlDocument doc = new XmlDocument();
-                doc.Load(configFile);
+                doc.Load(selectedConfigFile);
 
-                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
-                foreach (XmlNode authNode in authNodes)
+                XmlNodeList addNodes = doc.SelectNodes("//system.webServer/security/authorization/add");
+                foreach (XmlNode addNode in addNodes)
                 {
-                    foreach (XmlNode childNode in authNode.ChildNodes)
+                    string roles = addNode.Attributes["roles"]?.Value;
+                    if (!string.IsNullOrEmpty(roles))
                     {
-                        if (childNode.Name == "add")
-                        {
-                            string username = childNode.Attributes["roles"]?.Value;
-                            if (!string.IsNullOrEmpty(username))
-                            {
-                                users.Add(username);
-                            }
-                        }
+                        users.Add(new User { UserName = roles });
                     }
                 }
             }
             catch (Exception ex)
             {
-                DisplayError($"Hata: {ex.Message}");
+                DisplayError($"Config dosyası okunurken hata oluştu: {ex.Message}");
             }
+
             return users;
         }
 
-        // Kullanıcıyı config dosyasına ekler
-        private void AddUserToConfig(string configFile, string username)
-        {
-            try
-            {
-                XmlDocument doc = new XmlDocument();
-                doc.Load(configFile);
-
-                // 'authorization' node'u bulun
-                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
-
-                if (authNodes.Count > 0)
-                {
-                    XmlNode authNode = authNodes[0]; // 'authorization' node'unu al
-
-                    // Kullanıcıyı ekle
-                    XmlElement newElement = doc.CreateElement("add");
-                    newElement.SetAttribute("roles", username); // 'roles' attribute'u olarak kullanıcı adı ekle
-                    authNode.AppendChild(newElement); // Yeni kullanıcıyı ekle
-
-                    doc.Save(configFile); // Değişiklikleri kaydet
-                }
-                else
-                {
-                    // Eğer 'authorization' node'u yoksa, yeni bir node ekleyelim
-                    XmlNode systemNode = doc.SelectSingleNode("configuration");
-                    XmlElement authorizationElement = doc.CreateElement("authorization");
-                    XmlElement newElement = doc.CreateElement("add");
-                    newElement.SetAttribute("roles", username);
-                    authorizationElement.AppendChild(newElement);
-                    systemNode.AppendChild(authorizationElement);
-                    doc.Save(configFile);
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Kullanıcıyı eklerken hata oluştu: {ex.Message}");
-            }
-        }
-
-        // Kullanıcıyı config dosyasından silme
-        [System.Web.Services.WebMethod]
-        public static void RemoveUserFromConfig(string configFile, string username)
-        {
-            try
-            {
-                XmlDocument doc = new XmlDocument();
-                doc.Load(configFile);
-
-                XmlNodeList authNodes = doc.GetElementsByTagName("authorization");
-                foreach (XmlNode authNode in authNodes)
-                {
-                    foreach (XmlNode childNode in authNode.ChildNodes)
-                    {
-                        if (childNode.Name == "add" && childNode.Attributes["roles"]?.Value == username)
-                        {
-                            authNode.RemoveChild(childNode); // Kullanıcıyı kaldır
-                            break;
-                        }
-                    }
-                }
-
-                doc.Save(configFile); // Değişiklikleri kaydet
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Kullanıcıyı silerken hata oluştu: {ex.Message}");
-            }
-        }
-
-        // Config dosyasını seçtiğinde yetkili kullanıcıları yükler
-        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            if (File.Exists(selectedConfigFile))
-            {
-                RefreshAuthorizedUsers();
-            }
-            else
-            {
-                DisplayError("Config dosyası bulunamadı");
-            }
-        }
-
-        // Kullanıcı ekleme butonuna tıklandığında
-        protected void btnAddUser_Click(object sender, EventArgs e)
-        {
-            string username = txtUsername.Text.Trim();
-            if (!string.IsNullOrEmpty(username))
-            {
-                try
-                {
-                    AddUserToConfig(selectedConfigFile, username);
-                    RefreshAuthorizedUsers(); // Kullanıcı listesine yenilemeyi uygular
-                    txtUsername.Text = string.Empty;
-                }
-                catch (Exception ex)
-                {
-                    DisplayError($"Hata: {ex.Message}");
-                }
-            }
-            else
-            {
-                DisplayError("Kullanıcı adı boş olamaz.");
-            }
-        }
-
-        // Seçilen config dosyasındaki yetkili kullanıcıları günceller
         private void RefreshAuthorizedUsers()
         {
             if (File.Exists(selectedConfigFile))
             {
-                List<string> authorizedUsers = GetAuthorizedUsersFromConfig(selectedConfigFile);
-                var serializer = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
-                var json = serializer.Serialize(authorizedUsers);
-
-                ScriptManager.RegisterStartupScript(this, this.GetType(), "addUserScript",
-                    $"addUsersToTable({json});", true);
+                var authorizedUsers = GetAuthorizedUsersFromConfig();
+                if (authorizedUsers.Count > 0)
+                {
+                    gvAuthorizedUsers.DataSource = authorizedUsers;
+                    gvAuthorizedUsers.DataBind();
+                }
+                else
+                {
+                    DisplayError("Config dosyasından yetkili kullanıcılar alınamadı.");
+                }
             }
             else
             {
@@ -232,11 +122,93 @@ namespace authconfiger
             }
         }
 
-        // Hata mesajı görüntüler
+        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+            RefreshAuthorizedUsers();
+        }
+
+        protected void btnAddUser_Click(object sender, EventArgs e)
+        {
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+
+            string newUser = txtUserName.Text.Trim();
+            if (!string.IsNullOrEmpty(newUser))
+            {
+                try
+                {
+                    XmlDocument doc = new XmlDocument();
+                    doc.Load(selectedConfigFile);
+
+                    XmlNode authorizationNode = doc.SelectSingleNode("//system.webServer/security/authorization");
+                    if (authorizationNode != null)
+                    {
+                        XmlElement newUserElement = doc.CreateElement("add");
+                        newUserElement.SetAttribute("roles", newUser);
+                        newUserElement.SetAttribute("accessType", "Allow");
+                        authorizationNode.AppendChild(newUserElement);
+                    }
+
+                    doc.Save(selectedConfigFile);
+                    RefreshAuthorizedUsers();
+                    txtUserName.Text = "";  // Textbox'ı temizle
+                }
+                catch (Exception ex)
+                {
+                    DisplayError($"Kullanıcı eklenirken hata oluştu: {ex.Message}");
+                }
+            }
+            else
+            {
+                DisplayError("Geçersiz kullanıcı adı.");
+            }
+        }
+
+        protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
+        {
+            if (e.CommandName == "Remove")
+            {
+                string userNameToRemove = e.CommandArgument.ToString();
+                RemoveUserFromConfig(userNameToRemove);
+            }
+        }
+
+        private void RemoveUserFromConfig(string userName)
+        {
+            selectedConfigFile = ddlConfigFiles.SelectedValue;
+            try
+            {
+                XmlDocument doc = new XmlDocument();
+                doc.Load(selectedConfigFile);
+
+                XmlNodeList addNodes = doc.SelectNodes("//system.webServer/security/authorization/add");
+                foreach (XmlNode addNode in addNodes)
+                {
+                    string roles = addNode.Attributes["roles"]?.Value;
+                    if (roles == userName)
+                    {
+                        addNode.ParentNode.RemoveChild(addNode);
+                        break;
+                    }
+                }
+
+                doc.Save(selectedConfigFile);
+                RefreshAuthorizedUsers();
+            }
+            catch (Exception ex)
+            {
+                DisplayError($"Kullanıcı kaldırılırken hata oluştu: {ex.Message}");
+            }
+        }
+
         private void DisplayError(string message)
         {
             errorMessage.InnerText = message;
-            errorMessage.Visible = true;
+            errorMessage.Style["display"] = "block";
         }
     }
+}
+public class User
+{
+    public string UserName { get; set; }
 }
