@@ -1,114 +1,77 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="authconfiger._default" %>
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="webconfigs._default" %>
+
 <!DOCTYPE html>
 <html lang="tr">
 <head runat="server">
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Config Yetkili Kişiler</title>
     <style>
-        /* Sayfa ve Konteyner Stili */
+        /* Genel stil ayarları */
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7fa;
+            font-family: 'Poppins', sans-serif;
+            background-color: #f4f7fc;
             margin: 0;
             padding: 0;
             color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
         }
+
         .container {
-            width: 80%;
-            max-width: 1000px;
-            margin: 50px auto;
-            background-color: #fff;
+            width: 100%;
+            max-width: 900px;
+            background-color: #ffffff;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+            margin: 20px;
+            overflow: hidden;
         }
+
         h2 {
             text-align: center;
-            font-size: 28px;
+            font-size: 32px;
+            color: #4f4f4f;
+            margin-bottom: 40px;
             font-weight: 600;
-            color: #444;
-            margin-bottom: 30px;
         }
+
+        /* Form alanları */
         .form-row {
             display: flex;
             justify-content: space-between;
             margin-bottom: 20px;
         }
+
         .form-row label {
-            font-weight: 600;
-            color: #555;
-            width: 25%;
+            font-weight: 500;
+            color: #5a5a5a;
+            width: 35%;
             font-size: 16px;
             line-height: 36px;
         }
+
         .form-row input, .form-row select {
-            width: 70%;
-            padding: 12px 18px;
+            width: 60%;
+            padding: 14px 20px;
             font-size: 16px;
-            border: 1px solid #ccc;
+            border: 1px solid #d3d9e1;
             border-radius: 8px;
-            background-color: #f9f9f9;
-            box-sizing: border-box;
+            background-color: #fafbff;
+            color: #4f4f4f;
             transition: all 0.3s ease;
         }
+
         .form-row input:focus, .form-row select:focus {
-            border-color: #007bff;
+            border-color: #5c6bc0;
+            box-shadow: 0 0 5px rgba(92, 107, 192, 0.5);
             outline: none;
-            background-color: #eaf3ff;
         }
-        .btn {
-            background-color: #007bff;
-            color: white;
-            padding: 14px 28px;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-            width: 100%;
-            margin-top: 20px;
-        }
-        .btn:hover {
-            background-color: #0056b3;
-        }
-        .btn-remove {
-            background-color: #e74c3c;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            border: none;
-            margin-left: 10px;
-            transition: background-color 0.3s ease;
-        }
-        .btn-remove:hover {
-            background-color: #c0392b;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 30px;
-        }
-        th, td {
-            padding: 14px;
-            text-align: left;
-            font-size: 16px;
-            border-bottom: 1px solid #ddd;
-            color: #555;
-        }
-        th {
-            background-color: #f7f7f7;
-            color: #444;
-            font-weight: 600;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr:hover {
-            background-color: #f1f1f1;
-        }
+
         .error-message {
             color: #e74c3c;
             background-color: #f8d7da;
@@ -116,8 +79,78 @@
             border-radius: 8px;
             margin-top: 20px;
             font-weight: 600;
-            display: none;
             text-align: center;
+            display: none;
+        }
+
+        /* Tablo (GridView) */
+        .table-container {
+            margin-top: 30px;
+            padding-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px;
+            text-align: left;
+            font-size: 16px;
+            border-bottom: 1px solid #e4e8f1;
+        }
+
+        th {
+            background-color: #f7f7f9;
+            color: #5a5a5a;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9fb;
+        }
+
+        tr:hover {
+            background-color: #f2f3f7;
+        }
+
+        /* Button styles */
+        .btn-remove {
+            background-color: #ff6f61;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            border: none;
+            transition: background-color 0.3s;
+        }
+
+        .btn-remove:hover {
+            background-color: #e5554e;
+        }
+
+        .btn {
+            background-color: #6a60f1;
+            color: white;
+            padding: 16px 24px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 30px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #5a50e3;
+        }
+
+        .btn:active {
+            background-color: #4c44c6;
         }
     </style>
 </head>
@@ -126,7 +159,7 @@
         <div class="container">
             <h2>Web Config Dosyasındaki Yetkili Kişiler</h2>
 
-            <!-- Config Dosyası Seçimi -->
+            <!-- Config Dosyasını Seçme -->
             <div class="form-row">
                 <label for="ddlConfigFiles">Config Dosyasını Seçin:</label>
                 <asp:DropDownList ID="ddlConfigFiles" runat="server" AutoPostBack="true" OnSelectedIndexChanged="ddlConfigFiles_SelectedIndexChanged">
@@ -134,67 +167,35 @@
                 </asp:DropDownList>
             </div>
 
+            <!-- Kullanıcı Listesi (GridView ile) -->
+            <div class="table-container">
+                <asp:GridView ID="gvAuthorizedUsers" runat="server" AutoGenerateColumns="False" 
+                    OnRowCommand="gvAuthorizedUsers_RowCommand" CssClass="table" EmptyDataText="Hiç kullanıcı yok">
+                    <Columns>
+                        <asp:BoundField DataField="UserName" HeaderText="Kullanıcı Adı" SortExpression="UserName" />
+                        <asp:TemplateField HeaderText="İşlem">
+                            <ItemTemplate>
+                                <asp:Button ID="btnRemove" runat="server" Text="Kaldır" CommandName="Remove" 
+                                    CommandArgument='<%# Eval("UserName") %>' CssClass="btn-remove" />
+                            </ItemTemplate>
+                        </asp:TemplateField>
+                    </Columns>
+                </asp:GridView>
+            </div>
+
             <!-- Kullanıcı Adı Ekleme -->
             <div class="form-row">
-                <label for="txtUsername">Yeni Kullanıcı Adı:</label>
-                <asp:TextBox ID="txtUsername" runat="server" Placeholder="Kullanıcı adı girin..." />
+                <label for="txtUserName">Kullanıcı Adı:</label>
+                <asp:TextBox ID="txtUserName" runat="server" placeholder="Kullanıcı Adı Girin" />
+            </div>
+            <div class="form-row">
+                <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" CssClass="btn" OnClick="btnAddUser_Click" />
             </div>
 
-            <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" OnClick="btnAddUser_Click" CssClass="btn" />
-
-            <!-- Kullanıcı Listesi -->
-            <div>
-                <table id="authorizedUsersTable">
-                    <thead>
-                        <tr>
-                            <th>Kullanıcı Adı</th>
-                            <th>İşlem</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Buraya kullanıcılar dinamik olarak eklenecek -->
-                    </tbody>
-                </table>
-            </div>
-
-            <div id="errorMessage" class="error-message" runat="server" visible="false"></div>
+            <!-- Hata Mesajı -->
+            <div id="errorMessage" class="error-message" runat="server"></div>
         </div>
-
-        <script>
-            // Kullanıcı ekleme işlemi için JavaScript
-            function addUsersToTable(usernames) {
-                var table = document.getElementById("authorizedUsersTable").getElementsByTagName('tbody')[0];
-                usernames.forEach(function(username) {
-                    var row = table.insertRow();
-                    var cell1 = row.insertCell(0);
-                    var cell2 = row.insertCell(1);
-
-                    cell1.innerHTML = username; // Kullanıcı adı
-                    cell2.innerHTML = '<button class="btn-remove" onclick="removeUserFromTable(this, \'' + username + '\')">Kaldır</button>';
-                });
-            }
-
-            // Kullanıcıyı tablodan kaldırma işlemi
-            function removeUserFromTable(button, username) {
-                var row = button.parentNode.parentNode;
-                row.parentNode.removeChild(row);
-
-                // Config dosyasının yolunu alın
-                var configFilePath = document.getElementById("ddlConfigFiles").value;
-
-                // Kullanıcıyı Web.config'ten silme işlemi için server tarafına bir istek gönderelim
-                PageMethods.RemoveUserFromConfig(configFilePath, username, onSuccess, onError);
-            }
-
-            function onSuccess(result) {
-                // Silme işlemi başarılı olduğunda yapılacak işlemler
-                console.log("Kullanıcı başarıyla silindi.");
-            }
-
-            function onError(error) {
-                alert("Kullanıcı silinirken bir hata oluştu: " + error.get_message());
-            }
-        </script>
     </form>
+
 </body>
 </html>
