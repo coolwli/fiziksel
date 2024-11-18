@@ -5,7 +5,7 @@ using System.Web.UI.WebControls;
 using System.Xml;
 using System.IO;
 
-namespace webconfigs
+namespace authconfiger
 {
     public partial class _default : System.Web.UI.Page
     {
@@ -15,7 +15,7 @@ namespace webconfigs
         {
             if (!IsPostBack)
             {
-                LoadConfigFiles();  // İlk defa yüklendiğinde config dosyalarını yükler
+                LoadConfigFiles();  
             }
         }
 
@@ -60,7 +60,7 @@ namespace webconfigs
                     ddlConfigFiles.Items.Add(new ListItem(topLevelDir, configFile));
                 }
                 ddlConfigFiles.SelectedIndex = 0;
-                ddlConfigFiles_SelectedIndexChanged(null, null);  // İlk config dosyasını yükle
+                ddlConfigFiles_SelectedIndexChanged(null, null);  
             }
             else
             {
@@ -113,7 +113,8 @@ namespace webconfigs
                 }
                 else
                 {
-                    DisplayError("Config dosyasından yetkili kullanıcılar alınamadı.");
+                    gvAuthorizedUsers.DataSource = null;
+                    gvAuthorizedUsers.DataBind();
                 }
             }
             else
