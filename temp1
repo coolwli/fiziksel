@@ -1,22 +1,45 @@
+# SQL Server bağlantısı
 $conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 
-$excelObj= New-Object -ComObject Excel.Application
-$workbook=$excelObj.Workbooks.Open("F:\Ali\exports\vmsExtras2.xlsx")
-$ws=$workbook.Worksheets.Item(1)
-$conn.Open()
-$row=2
-while($ws.Cells.Item($row,1).Text -ne ""){
-    $columns=1..$ws.UsedRange.Columns.Count |ForEach-Object {$ws.Cells.Item(1,$_).Text}
-    $values=1..$ws.UsedRange.Columns.Count |ForEach-Object {$ws.Cells.Item($row,$_).Text}
-    $sql="INSERT INTO VMsExtras ($($columns -join ', ')) VALUES ('$($values -join "', '")')"
-    
+# Excel açma ve dosyayı okuma
+$excelObj = New-Object -ComObject Excel.Application
+$workbook = $excelObj.Workbooks.Open("F:\Ali\exports\vmsExtras2.xlsx")
+$ws = $workbook.Worksheets.Item(1)
 
-    $command = $conn.CreateCommand()
-    $command.CommandText = $sql
-    $a=$command.ExecuteNonQuery()
-    $row++ 
-    $row  
+# SQL bağlantısını aç
+$conn.Open()
+
+# Excel satır ve sütun sayısını al
+$columnsCount = $ws.UsedRange.Columns.Count
+$columnNames = 1..$columnsCount | ForEach-Object { $ws.Cells.Item(1, $_).Text }
+
+# Parametreli SQL sorgusu hazırlama
+$sql = "INSERT INTO VMsExtras ($($columnNames -join ', ')) VALUES ($($columnNames | ForEach-Object {"@" + $_} -join ", "))"
+$command = $conn.CreateCommand()
+$command.CommandText = $sql
+
+# Excel verilerini işleme
+$row = 2
+while ($ws.Cells.Item($row, 1).Text -ne "") {
+    # Sütunları ve satırı al
+    $values = 1..$columnsCount | ForEach-Object { $ws.Cells.Item($row, $_).Text }
+
+    # Parametreleri ekle
+    $columnNames | ForEach-Object { 
+        $param = $command.Parameters.Add("@" + $_, [System.Data.SqlDbType]::VarChar)
+        $param.Value = $values[$_ - 1]  # Excel'den alınan verileri parametreye aktar
+    }
+
+    # Sorguyu çalıştır
+    $command.ExecuteNonQuery()
+    $row++
 }
+
+# Excel dosyasını kapat
 $workbook.Close()
 $excelObj.Quit()
+
+# SQL bağlantısını kapat
 $conn.Close()
+
+Write-Host "Veri aktarımı tamamlandı."
