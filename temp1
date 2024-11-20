@@ -1,3 +1,22 @@
-        <remove users="*"/>
-        <add accessType="Allow" roles="GT-Agile CloudUnited" verbs="GET, POST" />
-        <add accessType="Allow" users="AliCanda" verbs="GET, POST" />
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+
+$excelObj= New-Object -ComObject Excel.Application
+$workbook=$excelObj.Workbooks.Open("F:\Ali\exports\vmsExtras2.xlsx")
+$ws=$workbook.Worksheets.Item(1)
+$conn.Open()
+$row=2
+while($ws.Cells.Item($row,1).Text -ne ""){
+    $columns=1..$ws.UsedRange.Columns.Count |ForEach-Object {$ws.Cells.Item(1,$_).Text}
+    $values=1..$ws.UsedRange.Columns.Count |ForEach-Object {$ws.Cells.Item($row,$_).Text}
+    $sql="INSERT INTO VMsExtras ($($columns -join ', ')) VALUES ('$($values -join "', '")')"
+    
+
+    $command = $conn.CreateCommand()
+    $command.CommandText = $sql
+    $a=$command.ExecuteNonQuery()
+    $row++ 
+    $row  
+}
+$workbook.Close()
+$excelObj.Quit()
+$conn.Close()
