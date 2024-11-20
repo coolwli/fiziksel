@@ -1,9 +1,6 @@
-$sql = "INSERT INTO fiziksel ($($columnNames -join ', ')) VALUES ($($columnNames | ForEach-Object {"@" + $_} -join ", "))"
-ForEach-Object : Cannot bind parameter 'RemainingScripts'. Cannot convert the "-join" value of type "System.String" to type 
-"System.Management.Automation.ScriptBlock".
-At line:1 char:84
-+ ...  ')) VALUES ($($columnNames | ForEach-Object {"@" + $_} -join ", "))"
-+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidArgument: (:) [ForEach-Object], ParameterBindingException
-    + FullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.ForEachObjectCommand
- 
+Cannot convert value "Adı" to type "System.Int32". Error: "Input string was not in a correct format."
+At line:6 char:9
++         $param.Value = $values[$_ - 1]  # Excel'den alınan verileri p ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [], RuntimeException
+    + FullyQualifiedErrorId : InvalidCastFromStringToInteger
