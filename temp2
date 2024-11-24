@@ -1,6 +1,12 @@
-Cannot convert value "Adı" to type "System.Int32". Error: "Input string was not in a correct format."
-At line:6 char:9
-+         $param.Value = $values[$_ - 1]  # Excel'den alınan verileri p ...
-+         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidArgument: (:) [], RuntimeException
-    + FullyQualifiedErrorId : InvalidCastFromStringToInteger
+foreach($row in $rows){
+    $datastores=$row.cells.7
+    $irregularRows = @()
+    foreach($ds in $datastores -split ','){
+        if($ds -notcontains "repzl"){
+            $irregularRows +=@($ds.objId,$ds.1,$ds.5,$ds.7)
+            break
+        }
+    }
+}
+
+$irregularRows |select *
