@@ -1,217 +1,197 @@
 # Konfigürasyon ve Sabitler
-$TokenLifetime = [TimeSpan]::FromHours(3)
-$vrops_server = "ptekvrops01.fw.garanti.com.tr"
-$vrops_server1 = "apgaravrops801.fw.garanti.com.tr"
-$vrops_username = "admin"
-$vrops_password = "VMware123!"
-
+$TokenLifetime = [TimeSpan]::FromHours(3)  # Token süresi
+$vropsServer = "ptekvrops01.fw.garanti.com.tr"
+$vropsUsername = "admin"
+$vropsPassword = "VMware123!"  # Şifreyi güvenli bir yerde saklamak daha iyi olacaktır
 $tokenType = "pendik"
 $connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
 
-## Create JSON for Authentication
-$json_authentication =
-"{
-  ""username"": ""$vrops_username"",
-  ""password"": ""$vrops_password""
-}"
-
-
+# SMTP Ayarları
 $SMTPHost = "smtpappv1.fw.garanti.com.tr"
-$SMTPPort = "25"
-$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost,$SMTPPort)
-
-
+$SMTPPort = 25
 $from = "CloudUnited <noreply@garantibbva.com.tr>"
 $subject = "Irregular VMs"
+$cc = "AliCanda@garantibbva.com.tr"
 
-## Ignore SSL Certificates
-add-type @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-    public class TrustAllCertsPolicy : ICertificatePolicy {
-        public bool CheckValidationResult(
-            ServicePoint srvPoint, X509Certificate certificate,
-            WebRequest request, int certificateProblem) {
-            return true;
-        }
+# SQL Veri Tabanı Bağlantısı
+function Get-Token {
+    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+    $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
+    $command = $connection.CreateCommand()
+    $command.CommandText = $query
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+
+    # Veritabanı bağlantısını açıyoruz ve token bilgilerini alıyoruz
+    $connection.Open()
+    $reader = $command.ExecuteReader()
+
+    if ($reader.Read()) {
+        $token = $reader["Token"]
+        $tokenExpiryDate = $reader["ExpiryDate"]
     }
-"@
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-$tokenInfo = @{}
+    $connection.Close()
 
-$connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-$connection.Open()
-
-
-$query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
-$command = $connection.CreateCommand()
-$command.CommandText = $query
-$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-
-
-$reader = $command.ExecuteReader()
-
-if ($reader.Read()) {
-    $token  = $reader["Token"]
-    $tokenExpiryDate = $reader["ExpiryDate"]
+    return @{ token = $token; expiryDate = $tokenExpiryDate }
 }
 
-$connection.Close()
+# Token bilgisini güncelleme
+function Update-Token($token, $expiryDate) {
+    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+    $query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType"
+    $command = $connection.CreateCommand()
+    $command.CommandText = $query
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
 
-if ($tokenExpiryDate -le (Get-Date)) {
+    # Veritabanını güncelliyoruz
+    $connection.Open()
+    $command.ExecuteNonQuery()
+    $connection.Close()
+}
+
+# Yeni bir token almak için fonksiyon
+function Get-NewToken {
+    $jsonAuthentication = @{
+        username = $vropsUsername
+        password = $vropsPassword
+    } | ConvertTo-Json
+
+    $restUrlAuthenticate = "https://$($vropsServer)/suite-api/api/auth/token/acquire?_no_links=true"
+    $restAuthenticate = Invoke-RestMethod -Method POST -Uri $restUrlAuthenticate -Body $jsonAuthentication -ContentType "application/json"
+    
+    return $restAuthenticate.'auth-token'.token
+}
+
+# Veritabanındaki token'ı al
+$tokenInfo = Get-Token
+
+# Eğer token süresi dolmuşsa, yeni token al
+if ($tokenInfo.expiryDate -le (Get-Date)) {
     Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
-    
-    $rest_url_authenticate = "https://$($vrops_server)/suite-api/api/auth/token/acquire?_no_links=true"
-    $rest_authenticate = Invoke-RestMethod -Method POST -Uri $rest_url_authenticate -Body $json_authentication -ContentType "application/json"
-    
-    $token = $rest_authenticate.'auth-token'.token
-
-
-}
-else{
+    $token = Get-NewToken
+} else {
     Write-Host "Token geçerli. Süresi uzatılıyor..."
+    $token = $tokenInfo.token
 }
 
-$query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType2"
-$command.CommandText = $query
+# Yeni token bilgilerini veritabanına kaydet
+Update-Token -token $token -expiryDate ((Get-Date).Add($TokenLifetime))
 
-$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType2",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
-$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
-
-$connection.Open()
-$command.ExecuteNonQuery()    
-$connection.Close()
-
+# API için gerekli başlıkları ayarla
 $headers = @{
-    "Content-Type" = "application/json"
-    "Authorization" = "vRealizeOpsToken $newToken"
+    "Content-Type"  = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
 }
 
-$reportsUrl = "https://$($vrops_server)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+# Rapor URL'si ve API çağrısı
+$reportsUrl = "https://$($vropsServer)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
 
 $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
 
-$rows=$reportsResponse.viewsData.rows
-
-# Her satır için işlemi başlatıyoruz
+# Satırlardaki düzensiz VM'leri filtrele
 $irregularRows = @()
-
-foreach ($row in $rows) {
+foreach ($row in $reportsResponse.viewsData.rows) {
     $datastores = $row.cells.7
-
     foreach ($ds in $datastores -split ',') {
         if ($ds -inotlike "*repl*") {
             $irregularRows += [PSCustomObject]@{
-                Name   = $row.cells.objId
+                Name         = $row.cells.objId
                 Power_State  = $row.cells.1
-                vCenter  = $row.cells.5
-                DS_Cluster  = $row.cells.7
+                vCenter      = $row.cells.5
+                DS_Cluster   = $row.cells.7
             }
-
             break
         }
     }
 }
 
-$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost,$SMTPPort)
+# Email gönderme fonksiyonu
+function Send-Email($subject, $body, $to) {
+    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
+    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+    $message.IsBodyHtml = $true
+    $message.CC.Add($cc)
 
-if($irregularRows.length -eq 0){
-    $to = "AliCanda@garantibbva.com.tr"
-    $cc="AliCanda@garantibbva.com.tr"
-
-    $body="<html><head><style>
-            body {
-                font-family: Verdana;
-                margin: 0;
-                padding: 0;
-                background-color: #fff;
-                align-items: center;
-            }
-
-            h4 {
-                color: black;
-                text-align: left;
-            }
-            
-            </style>
-            </head>
-            <body>
-            <h4>Bu haftaki Replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
-            </body></html>" 
-}
-else{
-    $htmlTable=$irregularRows |Select-Object Name,Power_State,vCenter,DS_Cluster | ConvertTo-Html
-    
-    $to = "AliCanda@garantibbva.com.tr"
-    $cc="AliCanda@garantibbva.com.tr"
-
-
-    $body="<html><head><style>
-            body {
-                font-family: Verdana;
-                margin: 0;
-                padding: 0;
-                background-color: #fff;
-                align-items: center;
-            }
-
-            .container {
-                width: 90%;
-                max-width: 600px;
-                margin: 20px auto;
-                background-color: #ffffff;
-                border-radius: 10px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                padding: 20px;
-            }
-
-            h4 {
-                color: black;
-                text-align: left;
-            }
-
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
-
-            table,
-            th,
-            td {
-                border: 1px solid #dddddd;
-            }
-
-            th,
-            td {
-                padding: 10px;
-                text-align: left;
-            }
-
-            th {
-                background-color: #f4f4f4;
-                color: #333;
-            }
-
-            tr:nth-child(even) {
-                background-color: #f9f9f9;
-            }
-        </style>
-        </head>
-        <body>
-        <h4>ODM Replike olan DataStore'ları Düzensiz VMler bulunmuştur</h4>
-        <div>$htmlTable</div>
-        </body>
-        </html>"
+    # Email gönderimi
+    $SMTPClient.Send($message)
+    $message.Dispose()
+    $SMTPClient.Dispose()
 }
 
-$Message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
-$Message.IsBodyHtml=$true
-$Message.CC.Add($cc)
+# Email içeriğini oluştur
+if ($irregularRows.Count -eq 0) {
+    # Düzensiz VM yoksa, farklı bir alıcıya gönder
+    $to = "AliCanda@garantibbva.com.tr"
+    $body = @"
+<html>
+<head>
+    <style>
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h4 {
+            color: #333;
+            text-align: left;
+        }
+        p {
+            color: #555;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h4>Bu haftaki replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
+</body>
+</html>
+"@
+} else {
+    # Düzensiz VM'ler varsa, farklı bir alıcıya gönder
+    $to = "IrregularVMs@garantibbva.com.tr"
+    $htmlTable = $irregularRows | Select-Object Name, Power_State, vCenter, DS_Cluster | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
+    $body = @"
+<html>
+<head>
+    <style>
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h4 {
+            color: #333;
+            text-align: left;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    $htmlTable
+</body>
+</html>
+"@
+}
 
-$SMTPClient.Send($Message)
-
-$Message.Dispose()
-$SMTPClient.Dispose()
+# Email gönder
+Send-Email -subject $subject -body $body -to $to
