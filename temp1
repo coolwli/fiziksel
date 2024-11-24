@@ -1,170 +1,217 @@
 # Konfigürasyon ve Sabitler
 $TokenLifetime = [TimeSpan]::FromHours(3)
-$VropsServer = "https://ptekvrops01.fw.garanti.com.tr"
-$TokenType = "pendik"
-$OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/"
-$ConnectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
+$vrops_server = "ptekvrops01.fw.garanti.com.tr"
+$vrops_server1 = "apgaravrops801.fw.garanti.com.tr"
+$vrops_username = "admin"
+$vrops_password = "VMware123!"
 
-# Kullanıcı Bilgileri
-$Username = "yourUsername"
-$Password = "yourPassword"
+$tokenType = "pendik"
+$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
 
-# Genel Hata Yönetimi İçin Basit Yardımcı Fonksiyon
-function Handle-Error {
-    param([string]$message)
-    Write-Error "Hata: $message"
-    exit 1
-}
+## Create JSON for Authentication
+$json_authentication =
+"{
+  ""username"": ""$vrops_username"",
+  ""password"": ""$vrops_password""
+}"
 
-# Token alma fonksiyonu
-function Acquire-Token {
-    try {
-        $requestUri = "$VropsServer/suite-api/api/auth/token/acquire?_no_links=true"
-        $requestBody = @{
-            username = $Username
-            password = $Password
-        } | ConvertTo-Json
 
-        $response = Invoke-RestMethod -Uri $requestUri -Method Post -Body $requestBody -ContentType "application/json"
-        
-        if ($response.token) {
-            return $response.token
-        } else {
-            Handle-Error "Token alınamadı. Lütfen kullanıcı adı ve şifreyi kontrol edin."
+$SMTPHost = "smtpappv1.fw.garanti.com.tr"
+$SMTPPort = "25"
+$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost,$SMTPPort)
+
+
+$from = "CloudUnited <noreply@garantibbva.com.tr>"
+$subject = "Irregular VMs"
+
+## Ignore SSL Certificates
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
         }
-    } catch {
-        Handle-Error "Token alınırken bir hata oluştu: $_"
     }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+
+$tokenInfo = @{}
+
+$connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+$connection.Open()
+
+
+$query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
+$command = $connection.CreateCommand()
+$command.CommandText = $query
+$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+
+
+$reader = $command.ExecuteReader()
+
+if ($reader.Read()) {
+    $token  = $reader["Token"]
+    $tokenExpiryDate = $reader["ExpiryDate"]
 }
 
-# Token'ı XML'den çıkarmak için fonksiyon
-function Extract-TokenFromXml {
-    param([string]$xmlData)
-    try {
-        $xml = [xml]$xmlData
-        $tokenElement = $xml.SelectSingleNode("//token")
-        return $tokenElement?.InnerText
-    } catch {
-        Handle-Error "Token XML'den çıkarılamadı: $_"
-    }
-}
+$connection.Close()
 
-# Veriyi almak için API çağrısı yapan fonksiyon
-function Get-Data {
-    param([string]$token)
+if ($tokenExpiryDate -le (Get-Date)) {
+    Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
     
-    try {
-        $getIdUrl = "$VropsServer/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-        
-        $headers = @{
-            "Authorization" = "vRealizeOpsToken $token"
-        }
-
-        $response = Invoke-RestMethod -Uri $getIdUrl -Headers $headers -Method Get
-        
-        if ($response) {
-            return $response
-        } else {
-            Handle-Error "Veri alınamadı."
-        }
-    } catch {
-        Handle-Error "Veri alınırken bir hata oluştu: $_"
-    }
-}
-
-# Veritabanından Token bilgisini okuma fonksiyonu
-function Read-TokenInfo {
-    param([string]$tokenType)
+    $rest_url_authenticate = "https://$($vrops_server)/suite-api/api/auth/token/acquire?_no_links=true"
+    $rest_authenticate = Invoke-RestMethod -Method POST -Uri $rest_url_authenticate -Body $json_authentication -ContentType "application/json"
     
-    try {
-        $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
-        $connection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
-        $command = $connection.CreateCommand()
-        $command.CommandText = $query
-        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+    $token = $rest_authenticate.'auth-token'.token
 
-        $connection.Open()
 
-        $reader = $command.ExecuteReader()
-        $tokenInfo = @{}
-
-        if ($reader.Read()) {
-            $tokenInfo["Token"] = $reader["Token"]
-            $tokenInfo["ExpiryDate"] = $reader["ExpiryDate"]
-        }
-
-        $connection.Close()
-        return $tokenInfo
-    } catch {
-        Handle-Error "Veritabanından token bilgisi okunurken bir hata oluştu: $_"
-    }
 }
-
-# Token bilgisini veritabanına kaydetme fonksiyonu
-function Store-TokenInfo {
-    param([string]$tokenType, [string]$token, [datetime]$expiryDate)
-
-    try {
-        $query = @"
-        IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
-        BEGIN
-            UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
-        END
-        ELSE
-        BEGIN
-            INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
-        END
-    "@
-        $connection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
-        $command = $connection.CreateCommand()
-        $command.CommandText = $query
-
-        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
-        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = $expiryDate
-
-        $connection.Open()
-        $command.ExecuteNonQuery()
-        $connection.Close()
-    } catch {
-        Handle-Error "Token bilgisi veritabanına kaydedilirken bir hata oluştu: $_"
-    }
-}
-
-# Token'ın geçerliliğini kontrol etme ve veri çekme fonksiyonu
-function Check-TokenAndFetchData {
-    param([string]$tokenType)
-
-    # Mevcut Token'ı veritabanından okuma
-    $tokenInfo = Read-TokenInfo -tokenType $tokenType
-
-    # Token süresi dolmuşsa, yeni token al
-    if ($tokenInfo["ExpiryDate"] -le (Get-Date)) {
-        Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
-        $newToken = Acquire-Token
-        if ($newToken) {
-            Store-TokenInfo -tokenType $tokenType -token $newToken -expiryDate (Get-Date).Add($TokenLifetime)
-            return Get-Data -token $newToken
-        }
-        return "Token alınamadı."
-    }
-
-    # Token geçerli ise süresini uzat ve veri al
+else{
     Write-Host "Token geçerli. Süresi uzatılıyor..."
-    Store-TokenInfo -tokenType $tokenType -token $tokenInfo["Token"] -expiryDate (Get-Date).Add($TokenLifetime)
-    return Get-Data -token $tokenInfo["Token"]
 }
 
-# Main fonksiyonu çağırma
-try {
-    $data = Check-TokenAndFetchData -tokenType $TokenType
+$query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType2"
+$command.CommandText = $query
 
-    if ($data) {
-        Write-Host "Veri başarıyla alındı."
-        # Burada veriyi işleyebilirsiniz
-    } else {
-        Handle-Error "Veri alınamadı."
+$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType2",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
+$command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
+
+$connection.Open()
+$command.ExecuteNonQuery()    
+$connection.Close()
+
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $newToken"
+}
+
+$reportsUrl = "https://$($vrops_server)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+
+$rows=$reportsResponse.viewsData.rows
+
+# Her satır için işlemi başlatıyoruz
+$irregularRows = @()
+
+foreach ($row in $rows) {
+    $datastores = $row.cells.7
+
+    foreach ($ds in $datastores -split ',') {
+        if ($ds -inotlike "*repl*") {
+            $irregularRows += [PSCustomObject]@{
+                Name   = $row.cells.objId
+                Power_State  = $row.cells.1
+                vCenter  = $row.cells.5
+                DS_Cluster  = $row.cells.7
+            }
+
+            break
+        }
     }
-} catch {
-    Handle-Error "Ana işlem sırasında bir hata oluştu: $_"
 }
+
+$SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost,$SMTPPort)
+
+if($irregularRows.length -eq 0){
+    $to = "AliCanda@garantibbva.com.tr"
+    $cc="AliCanda@garantibbva.com.tr"
+
+    $body="<html><head><style>
+            body {
+                font-family: Verdana;
+                margin: 0;
+                padding: 0;
+                background-color: #fff;
+                align-items: center;
+            }
+
+            h4 {
+                color: black;
+                text-align: left;
+            }
+            
+            </style>
+            </head>
+            <body>
+            <h4>Bu haftaki Replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
+            </body></html>" 
+}
+else{
+    $htmlTable=$irregularRows |Select-Object Name,Power_State,vCenter,DS_Cluster | ConvertTo-Html
+    
+    $to = "AliCanda@garantibbva.com.tr"
+    $cc="AliCanda@garantibbva.com.tr"
+
+
+    $body="<html><head><style>
+            body {
+                font-family: Verdana;
+                margin: 0;
+                padding: 0;
+                background-color: #fff;
+                align-items: center;
+            }
+
+            .container {
+                width: 90%;
+                max-width: 600px;
+                margin: 20px auto;
+                background-color: #ffffff;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                padding: 20px;
+            }
+
+            h4 {
+                color: black;
+                text-align: left;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+            }
+
+            table,
+            th,
+            td {
+                border: 1px solid #dddddd;
+            }
+
+            th,
+            td {
+                padding: 10px;
+                text-align: left;
+            }
+
+            th {
+                background-color: #f4f4f4;
+                color: #333;
+            }
+
+            tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+        </style>
+        </head>
+        <body>
+        <h4>ODM Replike olan DataStore'ları Düzensiz VMler bulunmuştur</h4>
+        <div>$htmlTable</div>
+        </body>
+        </html>"
+}
+
+$Message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+$Message.IsBodyHtml=$true
+$Message.CC.Add($cc)
+
+$SMTPClient.Send($Message)
+
+$Message.Dispose()
+$SMTPClient.Dispose()
