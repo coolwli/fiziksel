@@ -1,227 +1,170 @@
-using System;
-using System.Net;
-using System.Web;
-using System.Text;
-using System.Linq;
-using System.Web.UI;
-using System.Xml.Linq;
-using System.Net.Http;
-using System.Data.SqlClient;
-using System.Threading.Tasks;
-using System.Web.Configuration;
-using System.Collections.Generic;
-using System.Web.Script.Serialization;
+# Konfigürasyon ve Sabitler
+$TokenLifetime = [TimeSpan]::FromHours(3)
+$VropsServer = "https://ptekvrops01.fw.garanti.com.tr"
+$TokenType = "pendik"
+$OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/"
+$ConnectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
 
-namespace odmvms
-{
-    public partial class _default : Page
-    {
-        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
-        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+# Kullanıcı Bilgileri
+$Username = "yourUsername"
+$Password = "yourPassword"
 
-        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _username;
-        private string _password;
+# Genel Hata Yönetimi İçin Basit Yardımcı Fonksiyon
+function Handle-Error {
+    param([string]$message)
+    Write-Error "Hata: $message"
+    exit 1
+}
 
-        static _default()
-        {
-            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
+# Token alma fonksiyonu
+function Acquire-Token {
+    try {
+        $requestUri = "$VropsServer/suite-api/api/auth/token/acquire?_no_links=true"
+        $requestBody = @{
+            username = $Username
+            password = $Password
+        } | ConvertTo-Json
+
+        $response = Invoke-RestMethod -Uri $requestUri -Method Post -Body $requestBody -ContentType "application/json"
+        
+        if ($response.token) {
+            return $response.token
+        } else {
+            Handle-Error "Token alınamadı. Lütfen kullanıcı adı ve şifreyi kontrol edin."
+        }
+    } catch {
+        Handle-Error "Token alınırken bir hata oluştu: $_"
+    }
+}
+
+# Token'ı XML'den çıkarmak için fonksiyon
+function Extract-TokenFromXml {
+    param([string]$xmlData)
+    try {
+        $xml = [xml]$xmlData
+        $tokenElement = $xml.SelectSingleNode("//token")
+        return $tokenElement?.InnerText
+    } catch {
+        Handle-Error "Token XML'den çıkarılamadı: $_"
+    }
+}
+
+# Veriyi almak için API çağrısı yapan fonksiyon
+function Get-Data {
+    param([string]$token)
+    
+    try {
+        $getIdUrl = "$VropsServer/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+        
+        $headers = @{
+            "Authorization" = "vRealizeOpsToken $token"
         }
 
-        protected async void Page_Load(object sender, EventArgs e)
-        {
-            _username = WebConfigurationManager.AppSettings["VropsUsername"];
-            _password = WebConfigurationManager.AppSettings["VropsPassword"];
+        $response = Invoke-RestMethod -Uri $getIdUrl -Headers $headers -Method Get
+        
+        if ($response) {
+            return $response
+        } else {
+            Handle-Error "Veri alınamadı."
+        }
+    } catch {
+        Handle-Error "Veri alınırken bir hata oluştu: $_"
+    }
+}
 
-            var data = await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
-            if (data == null)
-            {
-                form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
-            }
-            
+# Veritabanından Token bilgisini okuma fonksiyonu
+function Read-TokenInfo {
+    param([string]$tokenType)
+    
+    try {
+        $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
+        $connection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+
+        $connection.Open()
+
+        $reader = $command.ExecuteReader()
+        $tokenInfo = @{}
+
+        if ($reader.Read()) {
+            $tokenInfo["Token"] = $reader["Token"]
+            $tokenInfo["ExpiryDate"] = $reader["ExpiryDate"]
         }
 
-        private async Task<string> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
-        {
-            var tokenInfo = await ReadTokenInfoAsync(tokenType);
+        $connection.Close()
+        return $tokenInfo
+    } catch {
+        Handle-Error "Veritabanından token bilgisi okunurken bir hata oluştu: $_"
+    }
+}
 
-            if (tokenInfo.ExpiryDate <= DateTime.Now)
-            {
-                var newToken = await AcquireTokenAsync(vropsServer);
-                if (newToken != null)
-                {
-                    await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
-                    return await GetDataAsync(vropsServer, newToken);
-                }
-                return null;
-            }
+# Token bilgisini veritabanına kaydetme fonksiyonu
+function Store-TokenInfo {
+    param([string]$tokenType, [string]$token, [datetime]$expiryDate)
 
-            var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
-            await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
-            return await GetDataAsync(vropsServer, tokenInfo.Token);
+    try {
+        $query = @"
+        IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+        BEGIN
+            UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
+        END
+        ELSE
+        BEGIN
+            INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
+        END
+    "@
+        $connection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
+        $command = $connection.CreateCommand()
+        $command.CommandText = $query
+
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
+        $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = $expiryDate
+
+        $connection.Open()
+        $command.ExecuteNonQuery()
+        $connection.Close()
+    } catch {
+        Handle-Error "Token bilgisi veritabanına kaydedilirken bir hata oluştu: $_"
+    }
+}
+
+# Token'ın geçerliliğini kontrol etme ve veri çekme fonksiyonu
+function Check-TokenAndFetchData {
+    param([string]$tokenType)
+
+    # Mevcut Token'ı veritabanından okuma
+    $tokenInfo = Read-TokenInfo -tokenType $tokenType
+
+    # Token süresi dolmuşsa, yeni token al
+    if ($tokenInfo["ExpiryDate"] -le (Get-Date)) {
+        Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
+        $newToken = Acquire-Token
+        if ($newToken) {
+            Store-TokenInfo -tokenType $tokenType -token $newToken -expiryDate (Get-Date).Add($TokenLifetime)
+            return Get-Data -token $newToken
         }
-
-        private async Task<string> AcquireTokenAsync(string vropsServer)
-        {
-            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new { username = _username, password = _password };
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync(requestUri, content);
-            if (response.IsSuccessStatusCode)
-            {
-                var tokenXml = await response.Content.ReadAsStringAsync();
-                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
-            }
-            return null;
-        }
-
-        private static string ExtractTokenFromXml(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
-        }
-
-        private async Task<string> GetDataAsync(string vropsServer, string token)
-        {
-            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
-
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
-
-            using (var response = await _httpClient.SendAsync(request))
-            {
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonData = await response.Content.ReadAsStringAsync();
-                    return ParseDashboardData(jsonData);
-                }
-            }
-            return null;
-        }
-
-        private string ParseDashboardData(string jsonData)
-        {
-            var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
-            dynamic data = js.Deserialize<dynamic>(jsonData);
-            var tableRows = new List<Dictionary<string, object>>();
-
-            foreach (var view in data)
-            {
-                foreach (var elements in view.Value)
-                {
-                    foreach (var rows in elements["rows"])
-                    {
-                        var tableRow = new Dictionary<string, object>();
-                        foreach (var row in rows)
-                        {
-                            tableRow["name"] = row.Value["objId"];
-                            tableRow["ps"] = row.Value["1"];
-                            tableRow["ip"] = row.Value["2"];
-                            tableRow["os"] = row.Value["3"];
-                            tableRow["cl"] = row.Value["4"];
-                            tableRow["vc"] = row.Value["5"];
-                            tableRow["ds"] = row.Value["7"];
-                        }
-                        tableRows.Add(tableRow);
-                    }
-                }
-            }
-            var json = js.Serialize(tableRows);
-            var script = $"<script>data = {json}; initializeTable(); </script>";
-            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
-
-            return "1";
-        }
-
-        private async Task<TokenInfo> ReadTokenInfoAsync(string tokenType)
-        {
-            var tokenInfo = new TokenInfo();
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-
-                await connection.OpenAsync();
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    if (await reader.ReadAsync())
-                    {
-                        tokenInfo.Token = reader["Token"] as string;
-                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
-                    }
-                }
-            }
-            return tokenInfo;
-        }
-
-        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
-        {
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                var query = @"
-                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
-                    BEGIN
-                        UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
-                    END";
-
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
-
-                await connection.OpenAsync();
-                await command.ExecuteNonQueryAsync();
-            }
-        }
-
-        protected void hiddenButton_Click(object sender, EventArgs e)
-        {
-            string jsonData = hiddenField.Value;
-
-            if (!string.IsNullOrEmpty(jsonData))
-            {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<Dictionary<string,object>>>(jsonData);
-
-                if (tableData.Count == 0)
-                {
-                    Response.Write("No data available.");
-                    return;
-                }
-
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Name;Power State;IPv4;OS;Cluster;VCenter;Datastore Cluster");
-
-                foreach (var row in tableData)
-                {
-                    csv.AppendLine($"{row["name"]};{row["ps"]};{row["ip"]};{row["os"]};{row["cl"]};{row["vc"]};{row["ds"]}");
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=Replicated VMs.csv");
-                Response.Write(csv.ToString());
-                HttpContext.Current.ApplicationInstance.CompleteRequest();
-            }
-        }
+        return "Token alınamadı."
     }
 
-    public class TokenInfo
-    {
-        public string Token { get; set; }
-        public DateTime ExpiryDate { get; set; }
+    # Token geçerli ise süresini uzat ve veri al
+    Write-Host "Token geçerli. Süresi uzatılıyor..."
+    Store-TokenInfo -tokenType $tokenType -token $tokenInfo["Token"] -expiryDate (Get-Date).Add($TokenLifetime)
+    return Get-Data -token $tokenInfo["Token"]
+}
+
+# Main fonksiyonu çağırma
+try {
+    $data = Check-TokenAndFetchData -tokenType $TokenType
+
+    if ($data) {
+        Write-Host "Veri başarıyla alındı."
+        # Burada veriyi işleyebilirsiniz
+    } else {
+        Handle-Error "Veri alınamadı."
     }
+} catch {
+    Handle-Error "Ana işlem sırasında bir hata oluştu: $_"
 }
