@@ -1,201 +1,359 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="webconfigs._default" %>
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="hwpedia._default" %>
+
 
 <!DOCTYPE html>
 <html lang="tr">
-<head runat="server">
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Config Yetkili Kişiler</title>
+
+<head>
+    <meta charset="UTF-8">
+    <title>HWPEDIA</title>
+    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
+
     <style>
-        /* Genel stil ayarları */
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f4f7fc;
+        .panel-container {
+            display: grid;
+            padding: 5px;
+            margin: auto;
+            width: 100%;
+            height: 400px;
+            grid-template-columns: 5fr 2fr 1fr 1fr;
+            font-size: 8px;
+            gap: 5px;
+            overflow-y:auto;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .right-panel {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 0 5px 0 0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 200px;
+            height: 350px;
+            margin-right: 15px;
+        }
+
+        .panel {
+            border: 1px solid #ddd;
+            padding: 1px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 150px;
+            height: 140px;
+            margin: 5px 0px 0px 5px;
+        }
+
+        .checkbox-panel {
+            max-height: 85px;
+            overflow-y: auto;
+        }
+
+        .right-panel .checkbox-panel {
+            max-height: 250px;
+            margin-left: 10px;
+        }
+
+        .search-input {
+            width: 90%;
+            padding: 5px;
             margin: 0;
-            padding: 0;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
+            margin-bottom: 2px;
+            font-size: 10px;
+            box-sizing: border-box;
         }
 
-        .container {
-            width: 100%;
-            max-width: 900px;
-            background-color: #ffffff;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
-            margin: 20px;
-            overflow: hidden;
+        .right-panel .search-input {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            margin-left: 10px;
         }
 
-        h2 {
-            text-align: center;
-            font-size: 32px;
-            color: #4f4f4f;
-            margin-bottom: 40px;
-            font-weight: 600;
+        .dropdown {
+            width: 90%;
+            padding: 5px;
+            margin-top: 10px;
+            margin-left: 10px;
+            box-sizing: border-box;
         }
 
-        /* Form alanları */
-        .form-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
+        .checkbox-content {
+            margin: 0;
         }
 
-        .form-row label {
-            font-weight: 500;
-            color: #5a5a5a;
-            width: 35%;
-            font-size: 16px;
-            line-height: 36px;
-        }
-
-        .form-row input, .form-row select {
-            width: 60%;
-            padding: 14px 20px;
-            font-size: 16px;
-            border: 1px solid #d3d9e1;
-            border-radius: 8px;
-            background-color: #fafbff;
-            color: #4f4f4f;
-            transition: all 0.3s ease;
-        }
-
-        .form-row input:focus, .form-row select:focus {
-            border-color: #5c6bc0;
-            box-shadow: 0 0 5px rgba(92, 107, 192, 0.5);
-            outline: none;
-        }
-
-        .error-message {
-            color: #e74c3c;
-            background-color: #f8d7da;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            font-weight: 600;
-            text-align: center;
-            display: none;
-        }
-
-        /* Tablo (GridView) */
-        .table-container {
-            margin-top: 30px;
-            padding-bottom: 20px;
-        }
-
-        table {
-            width: 100%;
+        #score-table {
+            border: none;
             border-collapse: collapse;
+            margin-top: 5px;
+            font-size:10px;
+            width: 100%;
         }
 
-        th, td {
-            padding: 16px;
+        #score-table td {
+            font-weight: bold;
+            border: none;
+        }
+
+        .table-container {
+            width: 90%;
+            overflow-y: auto;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
+            font-size: 10px;
+        }
+
+        .content-table {
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
             text-align: left;
-            font-size: 16px;
-            border-bottom: 1px solid #e4e8f1;
         }
 
         th {
-            background-color: #f7f7f9;
-            color: #5a5a5a;
-            font-weight: 600;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9fb;
-        }
-
-        tr:hover {
-            background-color: #f2f3f7;
-        }
-
-        /* Button styles */
-        .btn-remove {
-            background-color: #ff6f61;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
+            background-color: #f2f2f2;
+        }
+
+        th:not(:first-child) {
+            width: auto;
+            min-width: 170px;
+        }
+
+        .buttons-panel {
+            background-color: transparent;
             border: none;
-            transition: background-color 0.3s;
+            box-shadow: none;
+            align-items: center;
+            display: flex;
+            flex-direction: column;
         }
 
-        .btn-remove:hover {
-            background-color: #e5554e;
+        .button-container {
+            display: flex;
+            justify-content: center;
         }
 
-        .btn {
-            background-color: #6a60f1;
+        .button-container .button {
+            background-color: #ccc;
+            color: black;
+        }
+
+        .button-container .active {
+            background-color: var(--primary-color);
             color: white;
-            padding: 16px 24px;
-            font-size: 18px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
+        }
+
+        .panel-button {
+            margin-top: 5px;
+            padding: 10px 0px;
+            width: 150px;
+            border-radius: 3px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .page-link {
+            background-color: white;
+            display: inline-block;
+            padding: 8px;
+            margin: 0 4px;
+            text-decoration: none;
             cursor: pointer;
-            width: 100%;
-            margin-top: 30px;
-            transition: background-color 0.3s;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
 
-        .btn:hover {
-            background-color: #5a50e3;
+        .page-link:hover{
+            color:white;
         }
 
-        .btn:active {
-            background-color: #4c44c6;
+        .page-link.active {
+            background-color: var(--primary-color);
+            color: white;
         }
+
+        h5 {
+            margin: 5px;
+            font-size: 10px;
+        }
+
     </style>
 </head>
+
 <body>
     <form id="form1" runat="server">
-        <div class="container">
-            <h2>Web Config Dosyasındaki Yetkili Kişiler</h2>
-
-            <!-- Config Dosyasını Seçme -->
-            <div class="form-row">
-                <label for="ddlConfigFiles">Config Dosyasını Seçin:</label>
-                <asp:DropDownList ID="ddlConfigFiles" runat="server" AutoPostBack="true" OnSelectedIndexChanged="ddlConfigFiles_SelectedIndexChanged">
-                    <asp:ListItem Text="Bir config dosyası seçin" Value="" />
-                </asp:DropDownList>
+        <div class="header">
+            <div id="logo"></div>
+            <div>
+                <h1 class="baslik" id="baslik" runat="server">HWPEDIA</h1>
             </div>
 
-            <!-- Kullanıcı Listesi (GridView ile) -->
-            <div class="table-container">
-                <asp:GridView ID="gvAuthorizedUsers" runat="server" AutoGenerateColumns="False" 
-                    OnRowCommand="gvAuthorizedUsers_RowCommand" CssClass="table" EmptyDataText="Hiç kullanıcı yok">
-                    <Columns>
-                        <asp:BoundField DataField="UserName" HeaderText="Kullanıcı Adı" SortExpression="UserName" />
-                        <asp:TemplateField HeaderText="İşlem">
-                            <ItemTemplate>
-                                <asp:Button ID="btnRemove" runat="server" Text="Kaldır" CommandName="Remove" 
-                                    CommandArgument='<%# Eval("UserName") %>' CssClass="btn-remove" />
-                            </ItemTemplate>
-                        </asp:TemplateField>
-                    </Columns>
-                </asp:GridView>
-            </div>
-
-            <!-- Kullanıcı Adı Ekleme -->
-            <div class="form-row">
-                <label for="txtUserName">Kullanıcı Adı:</label>
-                <asp:TextBox ID="txtUserName" runat="server" placeholder="Kullanıcı Adı Girin" />
-            </div>
-            <div class="form-row">
-                <asp:Button ID="btnAddUser" runat="server" Text="Kullanıcı Ekle" CssClass="btn" OnClick="btnAddUser_Click" />
-            </div>
-
-            <!-- Hata Mesajı -->
-            <div id="errorMessage" class="error-message" runat="server"></div>
         </div>
-    </form>
+        <div id="panel-container" class="panel-container">
+            <div class="left-panel">
+                <div class="panel filter-panel">
+                    <h5>Server</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Vendor</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Model</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Kapsam-BBVA Metrics</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Enviroment</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>OS</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>HWType</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Company</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>DC Location</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Responsible Group</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+            </div>
 
-</body>
-</html>
+            <div class="left-panel">
+
+                <div class="panel">
+                    
+                </div>
+                <div class="panel">
+                    <table id="score-table">
+                        <tr>
+                            <td>Total Cpu Socket</td>
+                            <td id="soket-count">0</td>
+                        </tr>
+
+                        <tr>
+                            <td>Total Core</td>
+                            <td id="core-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Total CPU</td>
+                            <td id="cpu-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Total Memory</td>
+                            <td id="memory-count">0</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="panel" style="text-align: center;">
+                    <div>
+                        <h2>Rows per Page</h2>
+                        <div class="button-container">
+                            <div class="button active" onclick="setRowsPerPage(this)">10</div>
+                            <div class="button" onclick="setRowsPerPage(this)">20</div>
+                            <div class="button" onclick="setRowsPerPage(this)">50</div>
+                        </div>
+                    </div>
+                    <h2>Row Count</h2>
+                    <h2 id="row-count">0</h2>
+                </div>
+                <div class="panel buttons-panel">
+                    <button id="reset-button" class="panel-button" type="button">Reset Filters</button>
+                    <button id="export-button" class="panel-button" type="button">Export Data</button>
+                    <button id="chart-button" class="panel-button" type="button">Show as Pie Chart</button>
+                </div>
+            </div>
+
+            <div class="right-panel filter-panel">
+                <h5 style="display:none;">Select Extra Column</h5>
+                <select id="column-dropdown" class="dropdown">
+                    <option>Select Extra Column</option>
+                </select>
+                <input style="display:none;" type="text" placeholder="Search for Filtering" class="search-input">
+
+                <div class="checkbox-panel"></div>
+            </div>
+            <div class="right-panel filter-panel">
+                <h5>Inventory Date</h5>
+                <input type="text" placeholder="Search for Filtering" class="search-input">
+                <div class="checkbox-panel"></div>
+            </div>
+
+        </div>
+        <div class="table-container">
+            <table id="contentTable" class="content-table" >
+                <thead>
+                    <tr>
+                        <th>Server</th>
+                        <th>IPv4</th>
+                        <th>Description</th>
+                        <th>Vendor</th>
+                        <th>Model</th>
+                        <th>Serial No</th>
+                        <th>CPU Soket</th>
+                        <th>CPU Core</th>
+                        <th>Toplam Core</th>
+                        <th>Memory</th>
+                        <th>OS</th>
+                        <th>Firmware</th>
+                        <th>HWType</th>
+                        <th>DC Location</th>
+                        <th>Domain</th>
+                        <th>Enviroment</th>
+                        <th>Location</th>
+                        <th>Company</th>
+                        <th>Kapsam-BBVA Metrics</th>
+                        <th>Responsible Group</th>
+                        <th>Maint Start Date</th>
+                        <th>Maint Finish Date</th>
+                        <th>Inventory Date</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" runat="server">
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+
+        <footer>
+            <p class="footer">© 2024 - Cloud United Team</p>
+        </footer>
