@@ -1,15 +1,7 @@
-$Assembly = [System.Reflection.Assembly]::LoadWithPartialName("System.Data.OracleClient")
-
-if ( $Assembly ) {
-    Write-Host "System.Data.OracleClient Loaded!"
-}
-System.Data.OracleClient Loaded!
-
-PS C:\WINDOWS\system32> ### connection string ###
-$OracleConnectionString = "SERVER=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=hostip)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=$servicename)));uid=user;pwd=password;"
-
-### open up oracle connection to database ###
-$OracleConnection = New-Object System.Data.OracleClient.OracleConnection($OracleConnectionString);
-$OracleConnection.Open()
-
-Exception calling "Open" with "0" argument(s): "System.Data.OracleClient requires Oracle client software version 8.1.7 or greater."
+Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.ManagedDataAccess.dll"
+Add-Type : Unable to load one or more of the requested types. Retrieve the LoaderExceptions property for more information.
+At line:1 char:1
++ Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.Manage ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Add-Type], ReflectionTypeLoadException
+    + FullyQualifiedErrorId : System.Reflection.ReflectionTypeLoadException,Microsoft.PowerShell.Commands.AddTypeCommand
