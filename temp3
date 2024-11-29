@@ -1,7 +1,8 @@
-Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.ManagedDataAccess.dll"
-Add-Type : Unable to load one or more of the requested types. Retrieve the LoaderExceptions property for more information.
-At line:1 char:1
-+ Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.Manage ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (:) [Add-Type], ReflectionTypeLoadException
-    + FullyQualifiedErrorId : System.Reflection.ReflectionTypeLoadException,Microsoft.PowerShell.Commands.AddTypeCommand
+try {
+    Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.ManagedDataAccess.dll"
+}
+catch {
+    Write-Host "Error loading the assembly:"
+    Write-Host $_.Exception.Message
+    $_.Exception.LoaderExceptions | ForEach-Object { Write-Host $_.Message }
+}
