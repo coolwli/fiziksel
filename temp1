@@ -1,197 +1,352 @@
-# Konfigürasyon ve Sabitler
-$TokenLifetime = [TimeSpan]::FromHours(3)  # Token süresi
-$vropsServer = "ptekvrops01.fw.garanti.com.tr"
-$vropsUsername = "admin"
-$vropsPassword = "VMware123!"  # Şifreyi güvenli bir yerde saklamak daha iyi olacaktır
-$tokenType = "pendik"
-$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
+<!DOCTYPE html>
+<html lang="tr">
 
-# SMTP Ayarları
-$SMTPHost = "smtpappv1.fw.garanti.com.tr"
-$SMTPPort = 25
-$from = "CloudUnited <noreply@garantibbva.com.tr>"
-$subject = "Irregular VMs"
-$cc = "AliCanda@garantibbva.com.tr"
-
-# SQL Veri Tabanı Bağlantısı
-function Get-Token {
-    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-    $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
-    $command = $connection.CreateCommand()
-    $command.CommandText = $query
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-
-    # Veritabanı bağlantısını açıyoruz ve token bilgilerini alıyoruz
-    $connection.Open()
-    $reader = $command.ExecuteReader()
-
-    if ($reader.Read()) {
-        $token = $reader["Token"]
-        $tokenExpiryDate = $reader["ExpiryDate"]
-    }
-
-    $connection.Close()
-
-    return @{ token = $token; expiryDate = $tokenExpiryDate }
-}
-
-# Token bilgisini güncelleme
-function Update-Token($token, $expiryDate) {
-    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-    $query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType"
-    $command = $connection.CreateCommand()
-    $command.CommandText = $query
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
-
-    # Veritabanını güncelliyoruz
-    $connection.Open()
-    $command.ExecuteNonQuery()
-    $connection.Close()
-}
-
-# Yeni bir token almak için fonksiyon
-function Get-NewToken {
-    $jsonAuthentication = @{
-        username = $vropsUsername
-        password = $vropsPassword
-    } | ConvertTo-Json
-
-    $restUrlAuthenticate = "https://$($vropsServer)/suite-api/api/auth/token/acquire?_no_links=true"
-    $restAuthenticate = Invoke-RestMethod -Method POST -Uri $restUrlAuthenticate -Body $jsonAuthentication -ContentType "application/json"
-    
-    return $restAuthenticate.'auth-token'.token
-}
-
-# Veritabanındaki token'ı al
-$tokenInfo = Get-Token
-
-# Eğer token süresi dolmuşsa, yeni token al
-if ($tokenInfo.expiryDate -le (Get-Date)) {
-    Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
-    $token = Get-NewToken
-} else {
-    Write-Host "Token geçerli. Süresi uzatılıyor..."
-    $token = $tokenInfo.token
-}
-
-# Yeni token bilgilerini veritabanına kaydet
-Update-Token -token $token -expiryDate ((Get-Date).Add($TokenLifetime))
-
-# API için gerekli başlıkları ayarla
-$headers = @{
-    "Content-Type"  = "application/json"
-    "Authorization" = "vRealizeOpsToken $token"
-}
-
-# Rapor URL'si ve API çağrısı
-$reportsUrl = "https://$($vropsServer)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
-
-# Satırlardaki düzensiz VM'leri filtrele
-$irregularRows = @()
-foreach ($row in $reportsResponse.viewsData.rows) {
-    $datastores = $row.cells.7
-    foreach ($ds in $datastores -split ',') {
-        if ($ds -inotlike "*repl*") {
-            $irregularRows += [PSCustomObject]@{
-                Name         = $row.cells.objId
-                Power_State  = $row.cells.1
-                vCenter      = $row.cells.5
-                DS_Cluster   = $row.cells.7
-            }
-            break
-        }
-    }
-}
-
-# Email gönderme fonksiyonu
-function Send-Email($subject, $body, $to) {
-    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
-    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
-    $message.IsBodyHtml = $true
-    $message.CC.Add($cc)
-
-    # Email gönderimi
-    $SMTPClient.Send($message)
-    $message.Dispose()
-    $SMTPClient.Dispose()
-}
-
-# Email içeriğini oluştur
-if ($irregularRows.Count -eq 0) {
-    # Düzensiz VM yoksa, farklı bir alıcıya gönder
-    $to = "AliCanda@garantibbva.com.tr"
-    $body = @"
-<html>
 <head>
+    <meta charset="UTF-8">
+    <title>HWPEDIA</title>
+
     <style>
-        body {
-            font-family: Verdana, Geneva, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h4 {
-            color: #333;
-            text-align: left;
-        }
-        p {
-            color: #555;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <h4>Bu haftaki replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
-</body>
-</html>
-"@
-} else {
-    # Düzensiz VM'ler varsa, farklı bir alıcıya gönder
-    $to = "IrregularVMs@garantibbva.com.tr"
-    $htmlTable = $irregularRows | Select-Object Name, Power_State, vCenter, DS_Cluster | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
-    $body = @"
-<html>
-<head>
-    <style>
-        body {
-            font-family: Verdana, Geneva, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h4 {
-            color: #333;
-            text-align: left;
-        }
-        table {
+        .panel-container {
+            display: flex;
+            width: 400px;
+            padding: 5px;
+            margin: auto;
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+            font-size: 8px;
         }
-        th, td {
-            padding: 10px;
-            text-align: left;
+
+        .left-panel {
+            height: 100%;
+            display: grid;
+            width: 75%;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            grid-template-rows: repeat(2, auto);
+        }
+
+        .panel {
             border: 1px solid #ddd;
+            padding: 1px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            height: 140px;
+            margin: 5px;
         }
+
+        .large-panel {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 0 5px 0 0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            width: 15%;
+            margin: 0px 10px 0px 10px;
+        }
+
+        .checkbox-panel {
+            max-height: 85px;
+            overflow-y: auto;
+        }
+
+        .large-panel .checkbox-panel {
+            max-height: 250px;
+            margin-left: 10px;
+        }
+
+        .search-input {
+            width: 90%;
+            padding: 5px;
+            margin: 0;
+            margin-bottom: 2px;
+            font-size: 10px;
+            box-sizing: border-box;
+        }
+
+        .large-panel .search-input {
+            margin-top: 5px;
+            margin-bottom: 5px;
+            margin-left: 10px;
+        }
+
+        .dropdown {
+            width: 90%;
+            padding: 5px;
+            margin-top: 10px;
+            margin-left: 10px;
+            box-sizing: border-box;
+        }
+
+        .checkbox-content {
+            margin: 0;
+        }
+
+        #score-table {
+            border: none;
+            border-collapse: collapse;
+            margin-top: 5px;
+            font-size: 10px;
+            width: 100%;
+        }
+
+        #score-table td {
+            font-weight: bold;
+            border: none;
+        }
+
+        .table-container {
+            width: 90%;
+            overflow-y: auto;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
+            font-size: 10px;
+        }
+
+        .content-table {
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
         th {
-            background-color: #f4f4f4;
-            color: #333;
+            cursor: pointer;
+            background-color: #f2f2f2;
         }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
+
+        th:not(:first-child) {
+            width: auto;
+            min-width: 170px;
+        }
+
+        .buttons-panel {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+        }
+
+        .button-container .button {
+            background-color: #ccc;
+            color: black;
+        }
+
+        .button-container .active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .panel-button {
+            margin-top: 5px;
+            padding: 10px 0px;
+            width: 150px;
+            border-radius: 3px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .page-link {
+            background-color: white;
+            display: inline-block;
+            padding: 8px;
+            margin: 0 4px;
+            text-decoration: none;
+            cursor: pointer;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .page-link:hover {
+            color: white;
+        }
+
+        .page-link.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        h5 {
+            margin: 5px;
+            font-size: 10px;
         }
     </style>
 </head>
-<body>
-    $htmlTable
-</body>
-</html>
-"@
-}
 
-# Email gönder
-Send-Email -subject $subject -body $body -to $to
+<body>
+    <form id="form1" runat="server">
+        <div class="header">
+            <div id="logo"></div>
+            <div>
+                <h1 class="baslik" id="baslik" runat="server">HWPEDIA</h1>
+            </div>
+
+        </div>
+        <div id="panel-container" class="panel-container">
+            <div class="left-panel">
+                <div class="panel filter-panel">
+                    <h5>Server</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Vendor</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Model</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Kapsam-BBVA Metrics</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Enviroment</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>OS</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>HWType</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Company</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>DC Location</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel filter-panel">
+                    <h5>Responsible Group</h5>
+                    <input type="text" placeholder="Search for Filtering" class="search-input">
+                    <div class="checkbox-panel"></div>
+                </div>
+                <div class="panel">
+                </div>
+                <div class="panel">
+                    <table id="score-table">
+                        <tr>
+                            <td>Total Cpu Socket</td>
+                            <td id="soket-count">0</td>
+                        </tr>
+
+                        <tr>
+                            <td>Total Core</td>
+                            <td id="core-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Total CPU</td>
+                            <td id="cpu-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Total Memory</td>
+                            <td id="memory-count">0</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="panel" style="text-align: center;">
+                    <div>
+                        <h2>Rows per Page</h2>
+                        <div class="button-container">
+                            <div class="button active" onclick="setRowsPerPage(this)">10</div>
+                            <div class="button" onclick="setRowsPerPage(this)">20</div>
+                            <div class="button" onclick="setRowsPerPage(this)">50</div>
+                        </div>
+                    </div>
+                    <h2>Row Count</h2>
+                    <h2 id="row-count">0</h2>
+                </div>
+                <div class="panel buttons-panel">
+                    <button id="reset-button" class="panel-button" type="button">Reset Filters</button>
+                    <button id="export-button" class="panel-button" type="button">Export Data</button>
+                    <button id="chart-button" class="panel-button" type="button">Show as Pie Chart</button>
+                </div>
+            </div>
+            <div class="large-panel filter-panel">
+                <h5 style="display:none;">Select Extra Column</h5>
+                <select id="column-dropdown" class="dropdown">
+                    <option>Select Extra Column</option>
+                </select>
+                <input style="display:none;" type="text" placeholder="Search for Filtering" class="search-input">
+
+                <div class="checkbox-panel"></div>
+            </div>
+            <div class="large-panel filter-panel">
+                <h5>Inventory Date</h5>
+                <input type="text" placeholder="Search for Filtering" class="search-input">
+                <div class="checkbox-panel"></div>
+            </div>
+
+        </div>
+        <div class="table-container">
+            <table id="contentTable" class="content-table">
+                <thead>
+                    <tr>
+                        <th>Server</th>
+                        <th>IPv4</th>
+                        <th>Description</th>
+                        <th>Vendor</th>
+                        <th>Model</th>
+                        <th>Serial No</th>
+                        <th>CPU Soket</th>
+                        <th>CPU Core</th>
+                        <th>Toplam Core</th>
+                        <th>Memory</th>
+                        <th>OS</th>
+                        <th>Firmware</th>
+                        <th>HWType</th>
+                        <th>DC Location</th>
+                        <th>Domain</th>
+                        <th>Enviroment</th>
+                        <th>Location</th>
+                        <th>Company</th>
+                        <th>Kapsam-BBVA Metrics</th>
+                        <th>Responsible Group</th>
+                        <th>Maint Start Date</th>
+                        <th>Maint Finish Date</th>
+                        <th>Inventory Date</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" runat="server">
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+
+        <footer>
+            <p class="footer">© 2024 - Cloud United Team</p>
+        </footer>
+    </form>
+</body>
+
+</html>
