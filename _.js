@@ -546,8 +546,28 @@
             }
 
             function setCounters() {
-
-
+                const osCount = {};
+                filteredData.forEach(row => {
+                    const osCell=row[Object.keys(row)[10]];
+                    const osValue = osCell.trim();
+        
+                    if (osCount[osValue]) {
+                        osCount[osValue]++;
+                    } else {
+                        osCount[osValue] = 1;
+                    }
+                });
+        
+                const table = document.getElementById("os-table");
+                for (const os in osCount) {
+                    if (osCount.hasOwnProperty(os)) {
+                        const row = table.insertRow();
+                        const osCell = row.insertCell(0);
+                        const countCell = row.insertCell(1);
+                        osCell.textContent = os;
+                        countCell.textContent = osCount[os];
+                    }
+                }
                 document.getElementById('row-count').textContent = filteredData.length;
                 document.getElementById('soket-count').textContent = calculateTotalValues(6);
                 document.getElementById('core-count').textContent = calculateTotalValues(7);
@@ -558,9 +578,9 @@
 
             function handleDropdownChange() {
                 const selectedColumn = document.getElementById('column-dropdown').value;
-                document.querySelector('.large-panel h5').textContent = selectedColumn;
-                const input = document.querySelector('.large-panel input[type="text"]');
-                const checkboxesDiv = document.querySelector('.large-panel .checkbox-panel');
+                document.querySelector('.large-panel h5')[1].textContent = selectedColumn;
+                const input = document.querySelector('.large-panel input[type="text"]')[1];
+                const checkboxesDiv = document.querySelector('.large-panel .checkbox-panel')[1];
                 checkboxesDiv.innerHTML = '';
                 input.style.display = selectedColumn === "Select Extra Column" ? "none" : "block";
                 filterTable();
