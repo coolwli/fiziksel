@@ -1,20 +1,16 @@
-        const osCount = {}; // "Os" değerlerini ve bunların sayısını tutmak için bir nesne
+                const osCount = {}; 
+                filteredData.forEach(row => {
+                    const osCell=row[Object.keys(row)[10]];
+                    const osValue = osCell.trim(); 
 
-        // Tablo satırlarını döngüye sokuyoruz
-        rows.forEach(row => {
-            const osCell = row.cells[osColumnIndex]; // "Os" hücresini alıyoruz
-            const osValue = osCell.textContent.trim(); // Hücre içeriğini alıp boşlukları temizliyoruz
+                    if (osCount[osValue]) {
+                        osCount[osValue]++;
+                    } else {
+                        osCount[osValue] = 1;
+                    }
+                });
+                const table = document.getElementById("os-table");
+                osCount.forEach(os => {
+                    add to table os name and count 
 
-            // "Os" değeri varsa, sayısını artırıyoruz; yoksa 1 olarak başlatıyoruz
-            if (osCount[osValue]) {
-                osCount[osValue]++;
-            } else {
-                osCount[osValue] = 1;
-            }
-        });
-
-        // Benzersiz "Os" değerlerinin sayısını ve her birinin kaç kez tekrar ettiğini konsola yazdırıyoruz
-        console.log('İşletim sistemlerinin sayısı ve adetleri:');
-        for (const os in osCount) {
-            console.log(`${os}: ${osCount[os]}`);
-        }
+                });
