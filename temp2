@@ -1,16 +1,82 @@
-                const osCount = {}; 
-                filteredData.forEach(row => {
-                    const osCell=row[Object.keys(row)[10]];
-                    const osValue = osCell.trim(); 
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 
-                    if (osCount[osValue]) {
-                        osCount[osValue]++;
-                    } else {
-                        osCount[osValue] = 1;
-                    }
-                });
-                const table = document.getElementById("os-table");
-                osCount.forEach(os => {
-                    add to table os name and count 
+$encrypted = Get-Content F:\Serhat\servicejobs_password.txt | ConvertTo-SecureString
+$servicejobscred = New-Object System.Management.Automation.PsCredential("GARANTI\servicejobs", $encrypted)
 
-                });
+
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+
+
+foreach ($vcenter in $vcenters) {
+    Connect-VIServer -Server $vcenter -Credential $servicejobscred
+    $hostDataList = @()
+    
+    $VMHosts = Get-VMHost
+    foreach ($VMHost in $VMHosts) {
+        $hostName = $VMHost.Name
+        $hostCluster = $VMHost.Parent.Name -replace '#', ''
+        $hostDataCenter = $VMHost.Parent.ParentFolder.Parent.Name
+        $hostModel = $VMHost.Model
+        $hostManufacturer = $VMHost.Manufacturer
+        $lastWriteTime = Get-Date -Format "yyyy-MM-dd HH:mm"
+
+        $hostTotalMemory = "{0:F2}" -f [decimal]($VMHost.MemoryTotalGB)
+        $hostMemoryUsage = "{0:F2}" -f [decimal]($VMHost.MemoryUsageGB)
+        $hostTotalCpu = "{0:F2}" -f [decimal]($VMHost.CpuTotalMhz / 1000)
+        $hostCpuUsage = "{0:F2}" -f [decimal]($VMHost.CpuUsageMhz / 1000)
+        $hostNumNics = $VMHost.ExtensionData.Summary.Hardware.NumNics
+        $version = $VMHost.Version
+
+        $NumCpuThreads = $VMHost.ExtensionData.summary.hardware.NumCpuThreads
+        $cpuModel = $VMHost.ExtensionData.summary.hardware.CpuModel
+
+        # Gather datastore information
+        $datastores = $VMHost | Get-Datastore
+        $dsData = $datastores | ForEach-Object {
+            [PSCustomObject]@{
+                Name        = $_.Name
+                CapacityGB  = $_.CapacityGB
+                FreeSpaceGB = $_.FreeSpaceGB
+                PercentUsed = [math]::Round(($_.CapacityGB - $_.FreeSpaceGB) / $_.CapacityGB * 100, 2)
+            }
+        }
+
+        $dsNames = ($dsData | Select-Object -ExpandProperty Name) -join '~'
+        $dsCapacity = ($dsData | ForEach-Object { "{0:F2}" -f $_.CapacityGB }) -join '~'
+        $dsFree = ($dsData | ForEach-Object { "{0:F2}" -f $_.FreeSpaceGB }) -join '~'
+        $dsPercentUsing = ($dsData | ForEach-Object { $_.PercentUsed }) -join '~'
+        $storageCapacity = ($dsData | Measure-Object -Property CapacityGB -Sum).Sum
+        $freeStorage = ($dsData | Measure-Object -Property FreeSpaceGB -Sum).Sum
+
+        $uptimeDays = ((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
+
+        $hostDataList += @"
+        ('$hostName', '$hostModel', '$vcenter', '$hostManufacturer', '$hostCluster', '$hostDataCenter', '$lastWriteTime',
+         $hostTotalMemory, $hostMemoryUsage, $hostTotalCpu, $hostCpuUsage, $hostNumNics, '$version',
+         $NumCpuThreads, '$cpuModel', '$dsNames', '$dsCapacity', '$dsFree', '$dsPercentUsing',
+         $("{0:F2}" -f [decimal]($storageCapacity)), $("{0:F2}" -f [decimal]($freeStorage)),$uptimeDays)
+"@
+    }
+    
+    if ($hostDataList.Count -gt 0) {
+        $values = $hostDataList -join ","
+        $sql = @"
+            INSERT INTO vminfoHosts (
+                HostName, HostModel, vCenter, HostManufacturer, HostCluster, HostDataCenter, LastWriteTime, 
+                HostTotalMemory, HostMemoryUsage, HostTotalCPU, HostCPUUsage, HostNumNics, esxiVersion,
+                NumCpuThreads, CPUModel, DSName, DSCapacity, DSFree, DSPercentUsing, 
+                HostStorageCapacity, HostFreeStorage, UptimeDay) 
+            VALUES $values
+"@
+
+        $command = $conn.CreateCommand()
+        $command.CommandText = $sql
+        $command.ExecuteNonQuery()
+    }
+
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+}
+
+
+$conn.Close()
