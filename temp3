@@ -1,8 +1,22 @@
-try {
-    Add-Type -Path "F:/Ali/ODAC/odpm/odp.net/managed/common/Oracle.ManagedDataAccess.dll"
-}
-catch {
-    Write-Host "Error loading the assembly:"
-    Write-Host $_.Exception.Message
-    $_.Exception.LoaderExceptions | ForEach-Object { Write-Host $_.Message }
+$conn = New-Object System.Data.SqlClient.SqlConnection "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+$conn.Open()
+$command = $conn.CreateCommand()
+
+$queries = @(
+    "DELETE FROM vminfoVMs",
+    "DELETE FROM vminfoHosts",
+    "DELETE FROM vminfoClusters"
+)
+
+$command.CommandText = $queries
+$command.ExecuteNonQuery()
+
+$conn.Close()
+
+Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vmpedia\vmpediaHosts.ps1" -WindowStyle Hidden
+
+Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vmpedia\vmpediaClusters.ps1" -WindowStyle Hidden
+
+for ($i = 0; $i -lt 10; $i++) {
+    Start-Process powershell.exe -ArgumentList "-File F:\Ali\powershell\vmpedia\vmpediaVMs.ps1 -start $($i)" -WindowStyle Hidden
 }
