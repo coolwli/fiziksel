@@ -19,7 +19,7 @@ foreach ($vcenter in $vcenters) {
         $hostDataCenter = $VMHost.Parent.ParentFolder.Parent.Name
         $hostModel = $VMHost.Model
         $hostManufacturer = $VMHost.Manufacturer
-        $lastWriteTime = Get-Date -Format "yyyy-MM-dd HH:mm"
+        $lastWriteTime = Get-Date -Format "yyyy-MM-dd"
 
         $hostTotalMemory = "{0:F2}" -f [decimal]($VMHost.MemoryTotalGB)
         $hostMemoryUsage = "{0:F2}" -f [decimal]($VMHost.MemoryUsageGB)
@@ -30,6 +30,7 @@ foreach ($vcenter in $vcenters) {
 
         $NumCpuThreads = $VMHost.ExtensionData.summary.hardware.NumCpuThreads
         $cpuModel = $VMHost.ExtensionData.summary.hardware.CpuModel
+        $hall=$VMHost.CustomFields["hall"]
 
         # Gather datastore information
         $datastores = $VMHost | Get-Datastore
@@ -63,8 +64,8 @@ foreach ($vcenter in $vcenters) {
         $values = $hostDataList -join ","
         $sql = @"
             INSERT INTO vminfoHosts (
-                HostName, HostModel, vCenter, HostManufacturer, HostCluster, HostDataCenter, LastWriteTime, 
-                HostTotalMemory, HostMemoryUsage, HostTotalCPU, HostCPUUsage, HostNumNics, esxiVersion,
+                HostName, HostModel, vCenter, HostManufacturer, HostCluster, HostDataCenter, LastUpdate, 
+                HostTotalMemory, HostMemoryUsage, HostTotalCPU, HostCPUUsage,, esxiVersion,
                 NumCpuThreads, CPUModel, DSName, DSCapacity, DSFree, DSPercentUsing, 
                 HostStorageCapacity, HostFreeStorage, UptimeDay) 
             VALUES $values
