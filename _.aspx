@@ -1,359 +1,177 @@
-<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="hwpedia._default" %>
-
-
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
-    <title>HWPEDIA</title>
-    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Slider</title>
     <style>
-        .panel-container {
-            display: grid;
-            padding: 5px;
-            margin: auto;
-            width: 100%;
-            height: 400px;
-            grid-template-columns: 5fr 2fr 1fr 1fr;
-            font-size: 8px;
-            gap: 5px;
-            overflow-y:auto;
-        }
-
-        .left-panel {
+        body {
+            font-family: Arial, sans-serif;
             display: flex;
-            flex-wrap: wrap;
-        }
-
-        .right-panel {
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 0 5px 0 0;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 200px;
-            height: 350px;
-            margin-right: 15px;
-        }
-
-        .panel {
-            border: 1px solid #ddd;
-            padding: 1px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 150px;
-            height: 140px;
-            margin: 5px 0px 0px 5px;
-        }
-
-        .checkbox-panel {
-            max-height: 85px;
-            overflow-y: auto;
-        }
-
-        .right-panel .checkbox-panel {
-            max-height: 250px;
-            margin-left: 10px;
-        }
-
-        .search-input {
-            width: 90%;
-            padding: 5px;
-            margin: 0;
-            margin-bottom: 2px;
-            font-size: 10px;
-            box-sizing: border-box;
-        }
-
-        .right-panel .search-input {
-            margin-top: 5px;
-            margin-bottom: 5px;
-            margin-left: 10px;
-        }
-
-        .dropdown {
-            width: 90%;
-            padding: 5px;
-            margin-top: 10px;
-            margin-left: 10px;
-            box-sizing: border-box;
-        }
-
-        .checkbox-content {
-            margin: 0;
-        }
-
-        #score-table {
-            border: none;
-            border-collapse: collapse;
-            margin-top: 5px;
-            font-size:10px;
-            width: 100%;
-        }
-
-        #score-table td {
-            font-weight: bold;
-            border: none;
-        }
-
-        .table-container {
-            width: 90%;
-            overflow-y: auto;
-            align-items: center;
             justify-content: center;
-            margin: auto;
-            font-size: 10px;
-        }
-
-        .content-table {
-            border-collapse: collapse;
-            font-size: 10px;
-        }
-
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-
-        th {
-            cursor: pointer;
-            background-color: #f2f2f2;
-        }
-
-        th:not(:first-child) {
-            width: auto;
-            min-width: 170px;
-        }
-
-        .buttons-panel {
-            background-color: transparent;
-            border: none;
-            box-shadow: none;
             align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        .container {
             display: flex;
+            justify-content: center;
+            align-items: center;
             flex-direction: column;
         }
 
-        .button-container {
-            display: flex;
-            justify-content: center;
+        .panel {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            text-align: center;
         }
 
-        .button-container .button {
-            background-color: #ccc;
-            color: black;
-        }
-
-        .button-container .active {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .panel-button {
-            margin-top: 5px;
-            padding: 10px 0px;
-            width: 150px;
-            border-radius: 3px;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
+        h1 {
+            font-size: 24px;
             margin-bottom: 20px;
         }
 
-        .page-link {
-            background-color: white;
-            display: inline-block;
-            padding: 8px;
-            margin: 0 4px;
-            text-decoration: none;
+        .content {
+            display: none;
+            font-size: 18px;
+            padding: 20px;
+            background-color: #e6e6e6;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+
+        .nav-btn {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 50%;
+            padding: 10px;
             cursor: pointer;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            transition: background-color 0.3s;
         }
 
-        .page-link:hover{
-            color:white;
+        .nav-btn:hover {
+            background-color: #f5f5f5;
         }
 
-        .page-link.active {
-            background-color: var(--primary-color);
-            color: white;
+        .dots {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
         }
 
-        h5 {
-            margin: 5px;
-            font-size: 10px;
+        .dot {
+            height: 10px;
+            width: 10px;
+            margin: 0 5px;
+            background-color: #bbb;
+            border-radius: 50%;
+            display: inline-block;
+            transition: background-color 0.3s;
+            cursor: pointer;
         }
 
+        .active-dot {
+            background-color: #4CAF50;
+        }
+
+        .active {
+            background-color: #717171;
+        }
     </style>
 </head>
 
 <body>
-    <form id="form1" runat="server">
-        <div class="header">
-            <div id="logo"></div>
-            <div>
-                <h1 class="baslik" id="baslik" runat="server">HWPEDIA</h1>
+    <div class="container">
+        <div class="panel">
+            <h1>Content Slider</h1>
+            <div class="content-box" id="contentBox"></div>
+            <div class="controls">
+                <button class="nav-btn" id="prevBtn">&#8592;</button>
+                <button class="nav-btn" id="nextBtn">&#8594;</button>
             </div>
-
+            <div class="dots" id="dots"></div>
         </div>
-        <div id="panel-container" class="panel-container">
-            <div class="left-panel">
-                <div class="panel filter-panel">
-                    <h5>Server</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Vendor</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Model</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Kapsam-BBVA Metrics</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Enviroment</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>OS</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>HWType</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Company</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>DC Location</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-                <div class="panel filter-panel">
-                    <h5>Responsible Group</h5>
-                    <input type="text" placeholder="Search for Filtering" class="search-input">
-                    <div class="checkbox-panel"></div>
-                </div>
-            </div>
+    </div>
 
-            <div class="left-panel">
+    <script>
+        // İçerik verisi
+        const contentData = [
+            "Content 1: This is the first content.",
+            "Content 2: This is the second content.",
+            "Content 3: This is the third content.",
+            "Content 4: This is the fourth content."
+        ];
 
-                <div class="panel">
-                    
-                </div>
-                <div class="panel">
-                    <table id="score-table">
-                        <tr>
-                            <td>Total Cpu Socket</td>
-                            <td id="soket-count">0</td>
-                        </tr>
+        let currentIndex = 0;
 
-                        <tr>
-                            <td>Total Core</td>
-                            <td id="core-count">0</td>
-                        </tr>
-                        <tr>
-                            <td>Total CPU</td>
-                            <td id="cpu-count">0</td>
-                        </tr>
-                        <tr>
-                            <td>Total Memory</td>
-                            <td id="memory-count">0</td>
-                        </tr>
-                    </table>
-                </div>
-                <div class="panel" style="text-align: center;">
-                    <div>
-                        <h2>Rows per Page</h2>
-                        <div class="button-container">
-                            <div class="button active" onclick="setRowsPerPage(this)">10</div>
-                            <div class="button" onclick="setRowsPerPage(this)">20</div>
-                            <div class="button" onclick="setRowsPerPage(this)">50</div>
-                        </div>
-                    </div>
-                    <h2>Row Count</h2>
-                    <h2 id="row-count">0</h2>
-                </div>
-                <div class="panel buttons-panel">
-                    <button id="reset-button" class="panel-button" type="button">Reset Filters</button>
-                    <button id="export-button" class="panel-button" type="button">Export Data</button>
-                    <button id="chart-button" class="panel-button" type="button">Show as Pie Chart</button>
-                </div>
-            </div>
+        // İçerik ve noktaların dinamik olarak eklenmesi
+        const contentBox = document.getElementById('contentBox');
+        const dotsContainer = document.getElementById('dots');
 
-            <div class="right-panel filter-panel">
-                <h5 style="display:none;">Select Extra Column</h5>
-                <select id="column-dropdown" class="dropdown">
-                    <option>Select Extra Column</option>
-                </select>
-                <input style="display:none;" type="text" placeholder="Search for Filtering" class="search-input">
+        contentData.forEach((content, index) => {
+            // İçerik ekle
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('content');
+            contentDiv.id = `content-${index}`;
+            contentDiv.innerText = content;
+            contentBox.appendChild(contentDiv);
 
-                <div class="checkbox-panel"></div>
-            </div>
-            <div class="right-panel filter-panel">
-                <h5>Inventory Date</h5>
-                <input type="text" placeholder="Search for Filtering" class="search-input">
-                <div class="checkbox-panel"></div>
-            </div>
+            // Nokta ekle
+            const dot = document.createElement('span');
+            dot.classList.add('dot');
+            dot.setAttribute('data-index', index);
+            dotsContainer.appendChild(dot);
+        });
 
-        </div>
-        <div class="table-container">
-            <table id="contentTable" class="content-table" >
-                <thead>
-                    <tr>
-                        <th>Server</th>
-                        <th>IPv4</th>
-                        <th>Description</th>
-                        <th>Vendor</th>
-                        <th>Model</th>
-                        <th>Serial No</th>
-                        <th>CPU Soket</th>
-                        <th>CPU Core</th>
-                        <th>Toplam Core</th>
-                        <th>Memory</th>
-                        <th>OS</th>
-                        <th>Firmware</th>
-                        <th>HWType</th>
-                        <th>DC Location</th>
-                        <th>Domain</th>
-                        <th>Enviroment</th>
-                        <th>Location</th>
-                        <th>Company</th>
-                        <th>Kapsam-BBVA Metrics</th>
-                        <th>Responsible Group</th>
-                        <th>Maint Start Date</th>
-                        <th>Maint Finish Date</th>
-                        <th>Inventory Date</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody" runat="server">
-                </tbody>
-            </table>
-        </div>
-        <div class="pagination" id="pagination"></div>
+        const contents = document.querySelectorAll('.content');
+        const dots = document.querySelectorAll('.dot');
 
-        <footer>
-            <p class="footer">© 2024 - Cloud United Team</p>
-        </footer>
+        // İçeriği gösterme fonksiyonu
+        function showContent(index) {
+            // Tüm içerikleri gizle
+            contents.forEach(content => content.style.display = 'none');
+            dots.forEach(dot => dot.classList.remove('active-dot'));
+
+            // Şu anki içeriği göster ve aktif noktayı güncelle
+            contents[index].style.display = 'block';
+            dots[index].classList.add('active-dot');
+        }
+
+        // Sağ ve Sol ok butonları
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % contents.length;
+            showContent(currentIndex);
+        });
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + contents.length) % contents.length;
+            showContent(currentIndex);
+        });
+
+        // Noktalara tıklama olayları
+        dots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                const index = parseInt(dot.getAttribute('data-index'));
+                currentIndex = index;
+                showContent(currentIndex);
+            });
+        });
+
+        // İlk içeriği göster
+        showContent(currentIndex);
+    </script>
+</body>
+
+</html>
