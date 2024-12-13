@@ -1,215 +1,227 @@
 using System;
-using System.Collections.Generic;
+using System.Net;
+using System.Web;
+using System.Text;
+using System.Linq;
 using System.Web.UI;
-using System.Web.UI.WebControls;
-using System.Xml;
-using System.IO;
+using System.Xml.Linq;
+using System.Net.Http;
+using System.Data.SqlClient;
+using System.Threading.Tasks;
+using System.Web.Configuration;
+using System.Collections.Generic;
+using System.Web.Script.Serialization;
 
-namespace authconfiger
+namespace odmvms
 {
-    public partial class _default : System.Web.UI.Page
+    public partial class _default : Page
     {
-        private string selectedConfigFile = string.Empty;
+        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
-        protected void Page_Load(object sender, EventArgs e)
+        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
+        private string _username;
+        private string _password;
+
+        static _default()
         {
-            if (!IsPostBack)
-            {
-                LoadConfigFiles();  
-            }
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
 
-        private void LoadConfigFiles()
+        protected async void Page_Load(object sender, EventArgs e)
         {
-            string rootPath = @"C:\inetpub\wwwroot";  // Web uygulamanızın kök dizini
-            if (Directory.Exists(rootPath))
+            _username = WebConfigurationManager.AppSettings["VropsUsername"];
+            _password = WebConfigurationManager.AppSettings["VropsPassword"];
+
+            var data = await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
+            if (data == null)
             {
-                var configFiles = GetConfigFiles(rootPath);  // Config dosyalarını al
-                PopulateConfigFileDropdown(configFiles);  // Dropdown'ı doldur
+                form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
             }
-            else
-            {
-                DisplayError("Kök dizin bulunamadı.");
-            }
+            
         }
 
-        private List<string> GetConfigFiles(string rootPath)
+        private async Task<string> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
         {
-            var configFiles = new List<string>();
-            try
-            {
-                string[] files = Directory.GetFiles(rootPath, "web.config", SearchOption.AllDirectories);
-                configFiles.AddRange(files);
-            }
-            catch (Exception ex)
-            {
-                DisplayError($"Config dosyaları yüklenirken hata oluştu: {ex.Message}");
-            }
+            var tokenInfo = await ReadTokenInfoAsync(tokenType);
 
-            return configFiles;
-        }
-
-        private void PopulateConfigFileDropdown(List<string> configFiles)
-        {
-            ddlConfigFiles.Items.Clear();
-            if (configFiles.Count > 0)
+            if (tokenInfo.ExpiryDate <= DateTime.Now)
             {
-                foreach (var configFile in configFiles)
+                var newToken = await AcquireTokenAsync(vropsServer);
+                if (newToken != null)
                 {
-                    string topLevelDir = GetTopLevelDirectory(configFile);
-                    ddlConfigFiles.Items.Add(new ListItem(topLevelDir, configFile));
+                    await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
+                    return await GetDataAsync(vropsServer, newToken);
                 }
-                ddlConfigFiles.SelectedIndex = 0;
-                ddlConfigFiles_SelectedIndexChanged(null, null);  
+                return null;
             }
-            else
-            {
-                DisplayError("Hiçbir config dosyası bulunamadı.");
-            }
+
+            var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
+            await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
+            return await GetDataAsync(vropsServer, tokenInfo.Token);
         }
 
-        private string GetTopLevelDirectory(string configFilePath)
+        private async Task<string> AcquireTokenAsync(string vropsServer)
         {
-            string relativePath = configFilePath.Substring(@"C:\inetpub\wwwroot".Length).TrimStart(Path.DirectorySeparatorChar);
-            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
-            return pathParts[0];
+            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
+            var requestBody = new { username = _username, password = _password };
+            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
+            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(requestUri, content);
+            if (response.IsSuccessStatusCode)
+            {
+                var tokenXml = await response.Content.ReadAsStringAsync();
+                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
+            }
+            return null;
         }
 
-        private List<User> GetAuthorizedUsersFromConfig()
+        private static string ExtractTokenFromXml(string xmlData)
         {
-            var users = new List<User>();
-            try
-            {
-                XmlDocument doc = new XmlDocument();
-                doc.Load(selectedConfigFile);
+            var xdoc = XDocument.Parse(xmlData);
+            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
+            return tokenElement?.Value;
+        }
 
-                XmlNodeList addNodes = doc.SelectNodes("//system.webServer/security/authorization/add");
-                foreach (XmlNode addNode in addNodes)
+        private async Task<string> GetDataAsync(string vropsServer, string token)
+        {
+            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
+            request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
+
+            using (var response = await _httpClient.SendAsync(request))
+            {
+                if (response.IsSuccessStatusCode)
                 {
-                    string roles = addNode.Attributes["roles"]?.Value;
-                    if (!string.IsNullOrEmpty(roles))
+                    var jsonData = await response.Content.ReadAsStringAsync();
+                    return ParseDashboardData(jsonData);
+                }
+            }
+            return null;
+        }
+
+        private string ParseDashboardData(string jsonData)
+        {
+            var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            dynamic data = js.Deserialize<dynamic>(jsonData);
+            var tableRows = new List<Dictionary<string, object>>();
+
+            foreach (var view in data)
+            {
+                foreach (var elements in view.Value)
+                {
+                    foreach (var rows in elements["rows"])
                     {
-                        users.Add(new User { UserName = roles });
+                        var tableRow = new Dictionary<string, object>();
+                        foreach (var row in rows)
+                        {
+                            tableRow["name"] = row.Value["objId"];
+                            tableRow["ps"] = row.Value["1"];
+                            tableRow["ip"] = row.Value["2"];
+                            tableRow["os"] = row.Value["3"];
+                            tableRow["cl"] = row.Value["4"];
+                            tableRow["vc"] = row.Value["5"];
+                            tableRow["ds"] = row.Value["7"];
+                        }
+                        tableRows.Add(tableRow);
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                DisplayError($"Config dosyası okunurken hata oluştu: {ex.Message}");
-            }
+            var json = js.Serialize(tableRows);
+            var script = $"<script>data = {json}; initializeTable(); </script>";
+            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
 
-            return users;
+            return "1";
         }
 
-        private void RefreshAuthorizedUsers()
+        private async Task<TokenInfo> ReadTokenInfoAsync(string tokenType)
         {
-            if (File.Exists(selectedConfigFile))
+            var tokenInfo = new TokenInfo();
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
             {
-                var authorizedUsers = GetAuthorizedUsersFromConfig();
-                if (authorizedUsers.Count > 0)
+                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+
+                await connection.OpenAsync();
+                using (var reader = await command.ExecuteReaderAsync())
                 {
-                    gvAuthorizedUsers.DataSource = authorizedUsers;
-                    gvAuthorizedUsers.DataBind();
-                }
-                else
-                {
-                    gvAuthorizedUsers.DataSource = null;
-                    gvAuthorizedUsers.DataBind();
-                }
-            }
-            else
-            {
-                DisplayError("Seçilen config dosyası bulunamadı.");
-            }
-        }
-
-        protected void ddlConfigFiles_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            RefreshAuthorizedUsers();
-        }
-
-        protected void btnAddUser_Click(object sender, EventArgs e)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-
-            string newUser = txtUserName.Text.Trim();
-            if (!string.IsNullOrEmpty(newUser))
-            {
-                try
-                {
-                    XmlDocument doc = new XmlDocument();
-                    doc.Load(selectedConfigFile);
-
-                    XmlNode authorizationNode = doc.SelectSingleNode("//system.webServer/security/authorization");
-                    if (authorizationNode != null)
+                    if (await reader.ReadAsync())
                     {
-                        XmlElement newUserElement = doc.CreateElement("add");
-                        newUserElement.SetAttribute("roles", newUser);
-                        newUserElement.SetAttribute("accessType", "Allow");
-                        authorizationNode.AppendChild(newUserElement);
-                    }
-
-                    doc.Save(selectedConfigFile);
-                    RefreshAuthorizedUsers();
-                    txtUserName.Text = "";  // Textbox'ı temizle
-                }
-                catch (Exception ex)
-                {
-                    DisplayError($"Kullanıcı eklenirken hata oluştu: {ex.Message}");
-                }
-            }
-            else
-            {
-                DisplayError("Geçersiz kullanıcı adı.");
-            }
-        }
-
-        protected void gvAuthorizedUsers_RowCommand(object sender, GridViewCommandEventArgs e)
-        {
-            if (e.CommandName == "Remove")
-            {
-                string userNameToRemove = e.CommandArgument.ToString();
-                RemoveUserFromConfig(userNameToRemove);
-            }
-        }
-
-        private void RemoveUserFromConfig(string userName)
-        {
-            selectedConfigFile = ddlConfigFiles.SelectedValue;
-            try
-            {
-                XmlDocument doc = new XmlDocument();
-                doc.Load(selectedConfigFile);
-
-                XmlNodeList addNodes = doc.SelectNodes("//system.webServer/security/authorization/add");
-                foreach (XmlNode addNode in addNodes)
-                {
-                    string roles = addNode.Attributes["roles"]?.Value;
-                    if (roles == userName)
-                    {
-                        addNode.ParentNode.RemoveChild(addNode);
-                        break;
+                        tokenInfo.Token = reader["Token"] as string;
+                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
                     }
                 }
-
-                doc.Save(selectedConfigFile);
-                RefreshAuthorizedUsers();
             }
-            catch (Exception ex)
+            return tokenInfo;
+        }
+
+        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
+        {
+            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
+
+            using (var connection = new SqlConnection(connectionString))
             {
-                DisplayError($"Kullanıcı kaldırılırken hata oluştu: {ex.Message}");
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
+                    BEGIN
+                        UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
+                    END";
+
+                var command = new SqlCommand(query, connection);
+                command.Parameters.AddWithValue("@TokenType", tokenType);
+                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
+                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
+
+                await connection.OpenAsync();
+                await command.ExecuteNonQueryAsync();
             }
         }
 
-        private void DisplayError(string message)
+        protected void hiddenButton_Click(object sender, EventArgs e)
         {
-            errorMessage.InnerText = message;
-            errorMessage.Style["display"] = "block";
+            string jsonData = hiddenField.Value;
+
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue;
+                var tableData = js.Deserialize<List<Dictionary<string,object>>>(jsonData);
+
+                if (tableData.Count == 0)
+                {
+                    Response.Write("No data available.");
+                    return;
+                }
+
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Name;Power State;IPv4;OS;Cluster;VCenter;Datastore Cluster");
+
+                foreach (var row in tableData)
+                {
+                    csv.AppendLine($"{row["name"]};{row["ps"]};{row["ip"]};{row["os"]};{row["cl"]};{row["vc"]};{row["ds"]}");
+                }
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=Replicated VMs.csv");
+                Response.Write(csv.ToString());
+                HttpContext.Current.ApplicationInstance.CompleteRequest();
+            }
         }
     }
-}
-public class User
-{
-    public string UserName { get; set; }
+
+    public class TokenInfo
+    {
+        public string Token { get; set; }
+        public DateTime ExpiryDate { get; set; }
+    }
 }
