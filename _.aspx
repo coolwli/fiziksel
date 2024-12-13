@@ -1,177 +1,151 @@
+<%@ Page Language="C#" AutoEventWireup="true" CodeBehind="default.aspx.cs" Inherits="odmvms._default" Async="true" %>
+
 <!DOCTYPE html>
-<html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Content Slider</title>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>ODM Replicated VMs</title>
+    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/default-style.css" />
+    <link rel="stylesheet" type="text/css" href="https://cloudunited/Styles/table-style.css" />
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-
-        .container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-
-        .panel {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 300px;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-
-        .content {
-            display: none;
-            font-size: 18px;
-            padding: 20px;
-            background-color: #e6e6e6;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-        }
-
-        .nav-btn {
-            background-color: #fff;
-            border: 1px solid #ccc;
-            border-radius: 50%;
-            padding: 10px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .nav-btn:hover {
-            background-color: #f5f5f5;
-        }
-
-        .dots {
-            display: flex;
-            justify-content: center;
-            margin-top: 10px;
-        }
-
-        .dot {
-            height: 10px;
-            width: 10px;
-            margin: 0 5px;
-            background-color: #bbb;
-            border-radius: 50%;
-            display: inline-block;
-            transition: background-color 0.3s;
-            cursor: pointer;
-        }
-
-        .active-dot {
-            background-color: #4CAF50;
-        }
-
-        .active {
-            background-color: #717171;
+        #admin-button{
+            margin-left: 10px;
+            background-color: #ea4242;
         }
     </style>
 </head>
-
 <body>
-    <div class="container">
-        <div class="panel">
-            <h1>Content Slider</h1>
-            <div class="content-box" id="contentBox"></div>
-            <div class="controls">
-                <button class="nav-btn" id="prevBtn">&#8592;</button>
-                <button class="nav-btn" id="nextBtn">&#8594;</button>
+    <form id="form1" runat="server">
+        <div class="header">
+            <div id="logo"></div>
+
+            <div>
+                <h1 class="baslik" id="baslik" runat="server">Pendik Production & Test Replicated VMs</h1>
             </div>
-            <div class="dots" id="dots"></div>
+
         </div>
-    </div>
+        <div class="table-container">
+            <div class="table-top">
+                <h2 id="rowCounter"></h2>
+                <div class="button-container">
+                    <div class="button active" onclick="setRowsPerPage(this)">20</div>
+                    <div class="button" onclick="setRowsPerPage(this)">50</div>
+                    <div class="button" onclick="setRowsPerPage(this)">100</div>
+                </div>
+                <button id="reset-button">Reset</button>
+                <button id="export-button">Export</button>
+                <% if(User.IsInRole("GT-Agile CloudUnited")){  %>
+                <button id="admin-button">CloudUnited Admin Control !</button>
+                <% } %>
+                <asp:HiddenField ID="hiddenField" runat="server" />
+                <asp:Button ID="hiddenButton" runat="server" OnClick="hiddenButton_Click" Style="display:none;" />
+            </div>
+            <div class="tabs"></div>
+            <table id="contentTable">
+                <thead>
+                    <tr>
+                        <th class="dropdown">
+                            Name<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="nameDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Power State<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="psDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            IPv4<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="ipDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            OS<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="osDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            Cluster<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="clDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            VCenter<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="vcDropdown">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                        <th class="dropdown">
+                            DataStore<span class="dropdown-arrow">&#9660;</span>
+                            <div class="dropdown-content" id="datastore">
+                                <input type="text" placeholder="Search" onkeyup="searchCheckboxes(this)" />
+                                <div class="select-all-div">
+                                    <input type="checkbox">
+                                    <label>Select All</label>
+                                    <br>
+                                </div>
+                                <div class="checkboxes"></div>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" runat="server">
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+        <footer>
+            <p class="footer">© 2024 - Agile CloudUnited Team</p>
+        </footer>
 
-    <script>
-        // İçerik verisi
-        const contentData = [
-            "Content 1: This is the first content.",
-            "Content 2: This is the second content.",
-            "Content 3: This is the third content.",
-            "Content 4: This is the fourth content."
-        ];
-
-        let currentIndex = 0;
-
-        // İçerik ve noktaların dinamik olarak eklenmesi
-        const contentBox = document.getElementById('contentBox');
-        const dotsContainer = document.getElementById('dots');
-
-        contentData.forEach((content, index) => {
-            // İçerik ekle
-            const contentDiv = document.createElement('div');
-            contentDiv.classList.add('content');
-            contentDiv.id = `content-${index}`;
-            contentDiv.innerText = content;
-            contentBox.appendChild(contentDiv);
-
-            // Nokta ekle
-            const dot = document.createElement('span');
-            dot.classList.add('dot');
-            dot.setAttribute('data-index', index);
-            dotsContainer.appendChild(dot);
-        });
-
-        const contents = document.querySelectorAll('.content');
-        const dots = document.querySelectorAll('.dot');
-
-        // İçeriği gösterme fonksiyonu
-        function showContent(index) {
-            // Tüm içerikleri gizle
-            contents.forEach(content => content.style.display = 'none');
-            dots.forEach(dot => dot.classList.remove('active-dot'));
-
-            // Şu anki içeriği göster ve aktif noktayı güncelle
-            contents[index].style.display = 'block';
-            dots[index].classList.add('active-dot');
-        }
-
-        // Sağ ve Sol ok butonları
-        document.getElementById('nextBtn').addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % contents.length;
-            showContent(currentIndex);
-        });
-
-        document.getElementById('prevBtn').addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + contents.length) % contents.length;
-            showContent(currentIndex);
-        });
-
-        // Noktalara tıklama olayları
-        dots.forEach(dot => {
-            dot.addEventListener('click', () => {
-                const index = parseInt(dot.getAttribute('data-index'));
-                currentIndex = index;
-                showContent(currentIndex);
+        <script src="table_organizer.js?v=1.0.0"></script>
+        <script>
+            document.getElementById('logo').addEventListener('click', function () {
+                window.location.href='/';
             });
-        });
-
-        // İlk içeriği göster
-        showContent(currentIndex);
-    </script>
+        </script>
+    </form>
 </body>
 
 </html>
