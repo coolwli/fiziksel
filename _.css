@@ -1,30 +1,30 @@
-function showContentTable(index) {
-    const columnIndex = getColumnIndex(scoreContents[index]);
-    const dots = document.querySelectorAll('.dot');
-    const table = document.getElementById("all-table");
-    
-    // Update header text
-    document.getElementById("score-head").innerText = `${scoreContents[index]} Scores`;
+# vCenter Sunucuları
+$counter=0
+$vcenters = ("apgaraavcs801", "ptekvcs01", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
+foreach ($vcenter in $vcenters) {
+    Connect-VIServer -Server $vcenter
+    $vms= Get-VM
+    foreach($vm in $vms){
+        if($vm.Guest.OSFullName -like "*Microsoft Windows Server 2016*"){
+            $vm.Name
+            $vm.Guest.OSFullName
+            $disks = $vm.Guest.Disks
 
-    // Activate the selected dot
-    dots.forEach((dot, i) => dot.classList.toggle('active-dot', i === index));
+            foreach($disk in $disks){
+                if($disk.Path -eq "C:\"){
+                    $disk.Path
+                    "{0:F2}" -f [decimal]$disk.CapacityGB
+                    "{0:F2}" -f [decimal]$disk.FreeSpaceGB
+                    "{0:F2}" -f [decimal]($disk.FreeSpaceGB/$disk.CapacityGB*100)
+                }
 
-    // Clear previous table content
-    table.innerHTML = "";
+            }
+            $vcenter
+            Write-Host "-------------------------------------------------"
+        }
+        
+    }
 
-    // Count occurrences of each value
-    const dataCounts = filteredData.reduce((counts, row) => {
-        const cell = row[Object.keys(row)[columnIndex]].trim();
-        counts[cell] = (counts[cell] || 0) + 1;
-        return counts;
-    }, {});
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
 
-    // Populate the table with counts
-    Object.entries(dataCounts).forEach(([data, count]) => {
-        const row = table.insertRow();
-        const cell = row.insertCell(0);
-        const countCell = row.insertCell(1);
-        cell.textContent = data;
-        countCell.textContent = count;
-    });
 }
