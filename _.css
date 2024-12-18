@@ -1,30 +1,44 @@
-# vCenter Sunucuları
-$counter=0
+$counter = 0
 $vcenters = ("apgaraavcs801", "ptekvcs01", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
+# Sonuçları tutacağımız bir liste oluşturuyoruz
+$results = @()
+
 foreach ($vcenter in $vcenters) {
     Connect-VIServer -Server $vcenter
-    $vms= Get-VM
-    foreach($vm in $vms){
-        if($vm.Guest.OSFullName -like "*Microsoft Windows Server 2016*"){
-            $vm.Name
-            $vm.Guest.OSFullName
+    $vms = Get-VM
+    foreach ($vm in $vms) {
+        if ($vm.Guest.OSFullName -like "*Microsoft Windows Server 2016*") {
+            $vmName = $vm.Name
+            $osFullName = $vm.Guest.OSFullName
             $disks = $vm.Guest.Disks
 
-            foreach($disk in $disks){
-                if($disk.Path -eq "C:\"){
-                    $disk.Path
-                    "{0:F2}" -f [decimal]$disk.CapacityGB
-                    "{0:F2}" -f [decimal]$disk.FreeSpaceGB
-                    "{0:F2}" -f [decimal]($disk.FreeSpaceGB/$disk.CapacityGB*100)
-                }
+            foreach ($disk in $disks) {
+                if ($disk.Path -eq "C:\") {
+                    $diskPath = $disk.Path
+                    $diskCapacityGB = "{0:F2}" -f [decimal]$disk.CapacityGB
+                    $diskFreeSpaceGB = "{0:F2}" -f [decimal]$disk.FreeSpaceGB
+                    $diskFreeSpacePercentage = "{0:F2}" -f [decimal]($disk.FreeSpaceGB / $disk.CapacityGB * 100)
 
+                    # Sonuçları dizimize ekliyoruz
+                    $results += New-Object PSObject -property @{
+                        VCenter = $vcenter
+                        VMName = $vmName
+                        OSFullName = $osFullName
+                        DiskPath = $diskPath
+                        DiskCapacityGB = $diskCapacityGB
+                        DiskFreeSpaceGB = $diskFreeSpaceGB
+                        DiskFreeSpacePercentage = $diskFreeSpacePercentage
+                    }
+                }
             }
-            $vcenter
             Write-Host "-------------------------------------------------"
         }
-        
     }
 
     Disconnect-VIServer -Server $vcenter -Confirm:$false
-
 }
+
+# Excel dosyasına yazdırma
+$excelFile = "C:\path\to\output.xlsx"  # Çıktının kaydedileceği dosya yolu
+$results | Export-Excel -Path $excelFile -AutoSize -Force
+Write-Host "Veriler Excel dosyasına başarıyla kaydedildi: $excelFile"
