@@ -2,8 +2,8 @@
 $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 
 # Read and decrypt service job credentials
-$encrypted = Get-Content F:\Serhat\servicejobs_password.txt | ConvertTo-SecureString
-$servicejobscred = New-Object System.Management.Automation.PsCredential("GARANTI\servicejobs", $encrypted)
+#$encrypted = Get-Content F:\Serhat\servicejobs_password.txt | ConvertTo-SecureString
+#$servicejobscred = New-Object System.Management.Automation.PsCredential("GARANTI\servicejobs", $encrypted)
 
 # Establish SQL connection
 $conn = New-Object System.Data.SqlClient.SqlConnection("Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True")
@@ -12,7 +12,6 @@ $conn.Open()
 # Function to gather and insert host data
 function Insert-HostData {
     param (
-        [string]$vcenter,
         [array]$hostDataList
     )
     
@@ -26,83 +25,74 @@ function Insert-HostData {
                 HostStorageCapacity, HostFreeStorage, UptimeDay) 
             VALUES $values
 "@
-        
-        try {
-            $command = $conn.CreateCommand()
-            $command.CommandText = $sql
-            $command.ExecuteNonQuery()  # Execute the SQL insert statement
-        } catch {
-            Write-Error "Failed to insert data for $vcenter: $_"
-        }
+        $command = $conn.CreateCommand()
+        $command.CommandText = $sql
+        $command.ExecuteNonQuery()  # Execute the SQL insert statement
+
     }
 }
 
 # Iterate over each vCenter server
 foreach ($vcenter in $vcenters) {
-    try {
-        Connect-VIServer -Server $vcenter -Credential $servicejobscred
-        $hostDataList = @()
+    Connect-VIServer -Server $vcenter #-Credential $servicejobscred
+    $hostDataList = @()
 
-        $VMHosts = Get-VMHost
-        foreach ($VMHost in $VMHosts) {
-            # Extract host information
-            $hostName = $VMHost.Name
-            $hostCluster = $VMHost.Parent.Name -replace '#', ''
-            $hostDataCenter = $VMHost.Parent.ParentFolder.Parent.Name
-            $hostModel = $VMHost.Model
-            $hostManufacturer = $VMHost.Manufacturer
-            $lastWriteTime = Get-Date -Format "yyyy-MM-dd"
+    $VMHosts = Get-VMHost
+    foreach ($VMHost in $VMHosts) {
+        # Extract host information
+        $hostName = $VMHost.Name
+        $hostCluster = $VMHost.Parent.Name -replace '#', ''
+        $hostDataCenter = $VMHost.Parent.ParentFolder.Parent.Name
+        $hostModel = $VMHost.Model
+        $hostManufacturer = $VMHost.Manufacturer
+        $lastWriteTime = Get-Date -Format "yyyy-MM-dd"
 
-            $hostTotalMemory = [decimal]$VMHost.MemoryTotalGB
-            $hostMemoryUsage = [decimal]$VMHost.MemoryUsageGB
-            $hostTotalCpu = [decimal]($VMHost.CpuTotalMhz / 1000)
-            $hostCpuUsage = [decimal]($VMHost.CpuUsageMhz / 1000)
-            $hostNumNics = $VMHost.ExtensionData.Summary.Hardware.NumNics
-            $version = $VMHost.Version
+        $hostTotalMemory = [decimal]$VMHost.MemoryTotalGB
+        $hostMemoryUsage = [decimal]$VMHost.MemoryUsageGB
+        $hostTotalCpu = [decimal]($VMHost.CpuTotalMhz / 1000)
+        $hostCpuUsage = [decimal]($VMHost.CpuUsageMhz / 1000)
+        $hostNumNics = $VMHost.ExtensionData.Summary.Hardware.NumNics
+        $version = $VMHost.Version
 
-            $NumCpuThreads = $VMHost.ExtensionData.summary.hardware.NumCpuThreads
-            $cpuModel = $VMHost.ExtensionData.summary.hardware.CpuModel
-            $hall = $VMHost.CustomFields["hall"]
+        $NumCpuThreads = $VMHost.ExtensionData.summary.hardware.NumCpuThreads
+        $cpuModel = $VMHost.ExtensionData.summary.hardware.CpuModel
+        $hall = $VMHost.CustomFields["hall"]
 
-            # Gather datastore information
-            $datastores = $VMHost | Get-Datastore
-            $dsData = $datastores | ForEach-Object {
-                [PSCustomObject]@{
-                    Name        = $_.Name
-                    CapacityGB  = $_.CapacityGB
-                    FreeSpaceGB = $_.FreeSpaceGB
-                    PercentUsed = [math]::Round(($_.CapacityGB - $_.FreeSpaceGB) / $_.CapacityGB * 100, 2)
-                }
+        # Gather datastore information
+        $datastores = $VMHost | Get-Datastore
+        $dsData = $datastores | ForEach-Object {
+            [PSCustomObject]@{
+                Name        = $_.Name
+                CapacityGB  = $_.CapacityGB
+                FreeSpaceGB = $_.FreeSpaceGB
+                PercentUsed = [math]::Round(($_.CapacityGB - $_.FreeSpaceGB) / $_.CapacityGB * 100, 2)
             }
-
-            # Join datastore properties into strings
-            $dsNames = ($dsData | Select-Object -ExpandProperty Name) -join '~'
-            $dsCapacity = ($dsData | ForEach-Object { "{0:F2}" -f $_.CapacityGB }) -join '~'
-            $dsFree = ($dsData | ForEach-Object { "{0:F2}" -f $_.FreeSpaceGB }) -join '~'
-            $dsPercentUsing = ($dsData | ForEach-Object { $_.PercentUsed }) -join '~'
-            $storageCapacity = ($dsData | Measure-Object -Property CapacityGB -Sum).Sum
-            $freeStorage = ($dsData | Measure-Object -Property FreeSpaceGB -Sum).Sum
-
-            $uptimeDays = ((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
-
-            # Add collected data to host data list
-            $hostDataList += @"
-            ('$hostName', '$hostModel', '$vcenter', '$hostManufacturer', '$hostCluster', '$hostDataCenter', '$lastWriteTime',
-             $hostTotalMemory, $hostMemoryUsage, $hostTotalCpu, $hostCpuUsage, '$version', '$hall',
-             $NumCpuThreads, '$cpuModel', '$dsNames', '$dsCapacity', '$dsFree', '$dsPercentUsing',
-             $("{0:F2}" -f [decimal]$storageCapacity), $("{0:F2}" -f [decimal]$freeStorage),$uptimeDays)
-"@
         }
 
-        # Insert data into SQL
-        Insert-HostData -vcenter $vcenter -hostDataList $hostDataList
+        # Join datastore properties into strings
+        $dsNames = ($dsData | Select-Object -ExpandProperty Name) -join '~'
+        $dsCapacity = ($dsData | ForEach-Object { "{0:F2}" -f $_.CapacityGB }) -join '~'
+        $dsFree = ($dsData | ForEach-Object { "{0:F2}" -f $_.FreeSpaceGB }) -join '~'
+        $dsPercentUsing = ($dsData | ForEach-Object { $_.PercentUsed }) -join '~'
+        $storageCapacity = ($dsData | Measure-Object -Property CapacityGB -Sum).Sum
+        $freeStorage = ($dsData | Measure-Object -Property FreeSpaceGB -Sum).Sum
 
-    } catch {
-        Write-Error "Failed to process vCenter $vcenter: $_"
-    } finally {
-        Disconnect-VIServer -Server $vcenter -Confirm:$false
+        $uptimeDays = ((Get-Date) - $VMHost.ExtensionData.Runtime.BootTime).Days
+
+        # Add collected data to host data list
+        $hostDataList += @"
+        ('$hostName', '$hostModel', '$vcenter', '$hostManufacturer', '$hostCluster', '$hostDataCenter', '$lastWriteTime',
+            $hostTotalMemory, $hostMemoryUsage, $hostTotalCpu, $hostCpuUsage, '$version', '$hall',
+            $NumCpuThreads, '$cpuModel', '$dsNames', '$dsCapacity', '$dsFree', '$dsPercentUsing',
+            $("{0:F2}" -f [decimal]$storageCapacity), $("{0:F2}" -f [decimal]$freeStorage),$uptimeDays)
+"@
     }
+
+    # Insert data into SQL
+    Insert-HostData -hostDataList $hostDataList
+
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+    
 }
 
-# Close the database connection
 $conn.Close()
