@@ -2,8 +2,8 @@
 $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 
 # Read and decrypt service job credentials
-#$encrypted = Get-Content F:\Serhat\servicejobs_password.txt | ConvertTo-SecureString
-#$servicejobscred = New-Object System.Management.Automation.PsCredential("GARANTI\servicejobs", $encrypted)
+$encrypted = Get-Content F:\Serhat\servicejobs_password.txt | ConvertTo-SecureString
+$servicejobscred = New-Object System.Management.Automation.PsCredential("GARANTI\servicejobs", $encrypted)
 
 # Establish SQL connection
 $conn = New-Object System.Data.SqlClient.SqlConnection("Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True")
@@ -14,9 +14,11 @@ function Insert-HostData {
     param (
         [array]$hostDataList
     )
-    
-    if ($hostDataList.Count -gt 0) {
-        $values = $hostDataList -join ","
+
+    $batchSize = 500  # Define batch size
+    for ($i = 0; $i -lt $hostDataList.Count; $i += $batchSize) {
+        $batch = $hostDataList[$i..([math]::Min($i + $batchSize - 1, $hostDataList.Count - 1))]
+        $values = $batch -join ","
         $sql = @"
             INSERT INTO vmpediaHosts (
                 HostName, HostModel, vCenter, HostManufacturer, HostCluster, HostDataCenter, LastUpdate, 
@@ -28,13 +30,12 @@ function Insert-HostData {
         $command = $conn.CreateCommand()
         $command.CommandText = $sql
         $command.ExecuteNonQuery()  # Execute the SQL insert statement
-
     }
 }
 
 # Iterate over each vCenter server
 foreach ($vcenter in $vcenters) {
-    Connect-VIServer -Server $vcenter #-Credential $servicejobscred
+    Connect-VIServer -Server $vcenter -Credential $servicejobscred
     $hostDataList = @()
 
     $VMHosts = Get-VMHost
@@ -88,7 +89,7 @@ foreach ($vcenter in $vcenters) {
 "@
     }
 
-    # Insert data into SQL
+    # Insert data into SQL in batches
     Insert-HostData -hostDataList $hostDataList
 
     Disconnect-VIServer -Server $vcenter -Confirm:$false
