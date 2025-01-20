@@ -1,227 +1,218 @@
 using System;
-using System.Net;
-using System.Web;
-using System.Text;
-using System.Linq;
+using System.IO;
 using System.Web.UI;
-using System.Xml.Linq;
-using System.Net.Http;
-using System.Data.SqlClient;
-using System.Threading.Tasks;
-using System.Web.Configuration;
-using System.Collections.Generic;
-using System.Web.Script.Serialization;
+using System.Linq;
+using System.Data;
+using System.Diagnostics;
+using System.Text;
+using System.Data.OleDb;
 
-namespace odmvms
+public partial class UploadFile : Page
 {
-    public partial class _default : Page
+    private const string UploadDirectory = "~/Uploads";
+    private const string AllowedFileExtensions = ".csv,.xlsx";
+    
+    protected void Page_Load(object sender, EventArgs e)
     {
-        private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
-        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-
-        private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string _username;
-        private string _password;
-
-        static _default()
+        if (!IsPostBack)
         {
-            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
-        }
-
-        protected async void Page_Load(object sender, EventArgs e)
-        {
-            _username = WebConfigurationManager.AppSettings["VropsUsername"];
-            _password = WebConfigurationManager.AppSettings["VropsPassword"];
-
-            var data = await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
-            if (data == null)
-            {
-                form1.InnerHtml = "Bir hata olustu, daha sonra deneyiniz..";
-            }
-            
-        }
-
-        private async Task<string> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
-        {
-            var tokenInfo = await ReadTokenInfoAsync(tokenType);
-
-            if (tokenInfo.ExpiryDate <= DateTime.Now)
-            {
-                var newToken = await AcquireTokenAsync(vropsServer);
-                if (newToken != null)
-                {
-                    await StoreTokenInfoToDatabaseAsync(tokenType, new TokenInfo { Token = newToken, ExpiryDate = DateTime.Now.Add(TokenLifetime) });
-                    return await GetDataAsync(vropsServer, newToken);
-                }
-                return null;
-            }
-
-            var extendedTokenInfo = new TokenInfo { Token = tokenInfo.Token, ExpiryDate = DateTime.Now.Add(TokenLifetime) };
-            await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
-            return await GetDataAsync(vropsServer, tokenInfo.Token);
-        }
-
-        private async Task<string> AcquireTokenAsync(string vropsServer)
-        {
-            var requestUri = $"{vropsServer}/suite-api/api/auth/token/acquire?_no_links=true";
-            var requestBody = new { username = _username, password = _password };
-            var jsonContent = new JavaScriptSerializer().Serialize(requestBody);
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync(requestUri, content);
-            if (response.IsSuccessStatusCode)
-            {
-                var tokenXml = await response.Content.ReadAsStringAsync();
-                return string.IsNullOrWhiteSpace(tokenXml) ? null : ExtractTokenFromXml(tokenXml);
-            }
-            return null;
-        }
-
-        private static string ExtractTokenFromXml(string xmlData)
-        {
-            var xdoc = XDocument.Parse(xmlData);
-            var tokenElement = xdoc.Descendants(XName.Get("token", OpsNamespace)).FirstOrDefault();
-            return tokenElement?.Value;
-        }
-
-        private async Task<string> GetDataAsync(string vropsServer, string token)
-        {
-            var getIdUrl = $"{vropsServer}/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
-
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
-
-            using (var response = await _httpClient.SendAsync(request))
-            {
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonData = await response.Content.ReadAsStringAsync();
-                    return ParseDashboardData(jsonData);
-                }
-            }
-            return null;
-        }
-
-        private string ParseDashboardData(string jsonData)
-        {
-            var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
-            dynamic data = js.Deserialize<dynamic>(jsonData);
-            var tableRows = new List<Dictionary<string, object>>();
-
-            foreach (var view in data)
-            {
-                foreach (var elements in view.Value)
-                {
-                    foreach (var rows in elements["rows"])
-                    {
-                        var tableRow = new Dictionary<string, object>();
-                        foreach (var row in rows)
-                        {
-                            tableRow["name"] = row.Value["objId"];
-                            tableRow["ps"] = row.Value["1"];
-                            tableRow["ip"] = row.Value["2"];
-                            tableRow["os"] = row.Value["3"];
-                            tableRow["cl"] = row.Value["4"];
-                            tableRow["vc"] = row.Value["5"];
-                            tableRow["ds"] = row.Value["7"];
-                        }
-                        tableRows.Add(tableRow);
-                    }
-                }
-            }
-            var json = js.Serialize(tableRows);
-            var script = $"<script>data = {json}; initializeTable(); </script>";
-            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
-
-            return "1";
-        }
-
-        private async Task<TokenInfo> ReadTokenInfoAsync(string tokenType)
-        {
-            var tokenInfo = new TokenInfo();
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                var query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType";
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-
-                await connection.OpenAsync();
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    if (await reader.ReadAsync())
-                    {
-                        tokenInfo.Token = reader["Token"] as string;
-                        tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
-                    }
-                }
-            }
-            return tokenInfo;
-        }
-
-        private async Task StoreTokenInfoToDatabaseAsync(string tokenType, TokenInfo tokenInfo)
-        {
-            var connectionString = @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
-
-            using (var connection = new SqlConnection(connectionString))
-            {
-                var query = @"
-                    IF EXISTS (SELECT 1 FROM TokenInfo WHERE TokenType = @TokenType)
-                    BEGIN
-                        UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO TokenInfo (TokenType, Token, ExpiryDate) VALUES (@TokenType, @Token, @ExpiryDate)
-                    END";
-
-                var command = new SqlCommand(query, connection);
-                command.Parameters.AddWithValue("@TokenType", tokenType);
-                command.Parameters.AddWithValue("@Token", (object)tokenInfo.Token ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ExpiryDate", tokenInfo.ExpiryDate);
-
-                await connection.OpenAsync();
-                await command.ExecuteNonQueryAsync();
-            }
-        }
-
-        protected void hiddenButton_Click(object sender, EventArgs e)
-        {
-            string jsonData = hiddenField.Value;
-
-            if (!string.IsNullOrEmpty(jsonData))
-            {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<Dictionary<string,object>>>(jsonData);
-
-                if (tableData.Count == 0)
-                {
-                    Response.Write("No data available.");
-                    return;
-                }
-
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Name;Power State;IPv4;OS;Cluster;VCenter;Datastore Cluster");
-
-                foreach (var row in tableData)
-                {
-                    csv.AppendLine($"{row["name"]};{row["ps"]};{row["ip"]};{row["os"]};{row["cl"]};{row["vc"]};{row["ds"]}");
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=Replicated VMs.csv");
-                Response.Write(csv.ToString());
-                HttpContext.Current.ApplicationInstance.CompleteRequest();
-            }
+            ddlColumns.Items.Clear();
         }
     }
 
-    public class TokenInfo
+    protected void UploadFile(object sender, EventArgs e)
     {
-        public string Token { get; set; }
-        public DateTime ExpiryDate { get; set; }
+        if (!fileUpload.HasFile)
+        {
+            ShowMessage("Lütfen bir dosya yükleyin.");
+            return;
+        }
+
+        string fileExtension = Path.GetExtension(fileUpload.FileName).ToLower();
+        if (!AllowedFileExtensions.Contains(fileExtension))
+        {
+            ShowMessage("Geçersiz dosya tipi. Lütfen CSV veya XLSX dosyası yükleyin.");
+            return;
+        }
+
+        string uniqueFileName = Guid.NewGuid().ToString() + fileExtension;
+        string filePath = Path.Combine(Server.MapPath(UploadDirectory), uniqueFileName);
+
+        try
+        {
+            fileUpload.SaveAs(filePath);
+
+            string[] columns = fileExtension == ".csv" ? ReadCsvFile(filePath) : ReadExcelFile(filePath);
+            if (columns.Length > 0)
+            {
+                PopulateDropdown(columns);
+            }
+            else
+            {
+                ShowMessage("Dosya okuma hatası: Sütunlar alınamadı.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Dosya yüklenirken bir hata oluştu: " + ex.Message);
+        }
+    }
+
+    private void ShowMessage(string message)
+    {
+        // Assuming there's a Label control (lblMessage) in your page for messages
+        lblMessage.Text = message;
+    }
+
+    private void PopulateDropdown(string[] columns)
+    {
+        ddlColumns.Items.Clear();
+        foreach (var column in columns)
+        {
+            ddlColumns.Items.Add(new ListItem(column, column));
+        }
+    }
+
+    private string[] ReadCsvFile(string filePath)
+    {
+        try
+        {
+            var lines = File.ReadLines(filePath).Take(1).ToList();
+            if (lines.Any())
+            {
+                return lines[0].Split(',');
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("CSV dosyası işlenirken bir hata oluştu: " + ex.Message);
+        }
+        return Array.Empty<string>();
+    }
+
+    private string[] ReadExcelFile(string filePath)
+    {
+        try
+        {
+            string connectionString = $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={filePath};Extended Properties='Excel 12.0 Xml;HDR=YES;'";
+            using (OleDbConnection connection = new OleDbConnection(connectionString))
+            {
+                connection.Open();
+                DataTable schemaTable = connection.GetSchema("Columns");
+                return schemaTable.AsEnumerable().Select(row => row.Field<string>("COLUMN_NAME")).ToArray();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Excel dosyası işlenirken bir hata oluştu: " + ex.Message);
+        }
+        return Array.Empty<string>();
+    }
+
+    protected void RunPowerShellScript(object sender, EventArgs e)
+    {
+        string selectedColumn = ddlColumns.SelectedValue;
+
+        if (string.IsNullOrEmpty(selectedColumn))
+        {
+            ShowMessage("Lütfen bir sütun seçin.");
+            return;
+        }
+
+        string filePath = Path.Combine(Server.MapPath(UploadDirectory), fileUpload.FileName);
+        string fileExtension = Path.GetExtension(filePath).ToLower();
+        string fileContent = fileExtension == ".csv" 
+            ? ReadCsvFileContent(filePath, selectedColumn) 
+            : ReadExcelFileContent(filePath, selectedColumn);
+
+        if (string.IsNullOrEmpty(fileContent))
+        {
+            ShowMessage("Seçilen sütun ile ilgili veri alınamadı.");
+            return;
+        }
+
+        ExecutePowerShell(fileContent);
+    }
+
+    private string ReadCsvFileContent(string filePath, string selectedColumn)
+    {
+        var sb = new StringBuilder();
+        var lines = File.ReadLines(filePath).Skip(1);
+
+        foreach (var line in lines)
+        {
+            var columns = line.Split(',');
+            int columnIndex = Array.IndexOf(columns, selectedColumn);
+            if (columnIndex >= 0)
+            {
+                sb.AppendLine(columns[columnIndex]);
+            }
+        }
+        return sb.ToString();
+    }
+
+    private string ReadExcelFileContent(string filePath, string selectedColumn)
+    {
+        var sb = new StringBuilder();
+        try
+        {
+            string connectionString = $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={filePath};Extended Properties='Excel 12.0 Xml;HDR=YES;'";
+            using (OleDbConnection connection = new OleDbConnection(connectionString))
+            {
+                connection.Open();
+                DataTable sheetTable = connection.GetSchema("Tables");
+                string sheetName = sheetTable.Rows[0]["TABLE_NAME"].ToString();
+
+                string query = $"SELECT * FROM [{sheetName}]";
+                OleDbDataAdapter adapter = new OleDbDataAdapter(query, connection);
+                DataTable dt = new DataTable();
+                adapter.Fill(dt);
+
+                int columnIndex = dt.Columns.IndexOf(selectedColumn);
+                if (columnIndex >= 0)
+                {
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        sb.AppendLine(row[columnIndex].ToString());
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Excel dosyası işlenirken bir hata oluştu: " + ex.Message);
+        }
+        return sb.ToString();
+    }
+
+    private void ExecutePowerShell(string fileContent)
+    {
+        string psScriptPath = @"C:\path\to\your\script.ps1";
+        string arguments = $"-ExecutionPolicy Bypass -File \"{psScriptPath}\" -InputData \"{fileContent}\"";
+
+        try
+        {
+            var startInfo = new ProcessStartInfo()
+            {
+                FileName = "powershell.exe",
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (Process process = Process.Start(startInfo))
+            {
+                using (var reader = process.StandardOutput)
+                {
+                    string result = reader.ReadToEnd();
+                    ShowMessage("PowerShell Script Output: " + result);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("PowerShell betiği çalıştırılırken bir hata oluştu: " + ex.Message);
+        }
     }
 }
