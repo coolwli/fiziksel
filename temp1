@@ -1,28 +1,25 @@
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 $userPermissions = @{}
-$vcenters = @("apgaraavcs801")
 $allRoles = @()
 
 foreach ($vcenter in $vcenters) {
     # vCenter'a bağlan
-    Connect-VIServer -Server $vcenter
+    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321
     $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
     foreach ($user in $vcenterUsers) {
         if ($user.Principal -notmatch 'vsphere') {
             if (-not $userPermissions.ContainsKey($user.Principal)) {
                 $userPermissions[$user.Principal] = @{ $user.Role = $vcenter }
-                # Add role to the list of all roles
                 $allRoles += $user.Role
             } else {
                 if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
                     $userPermissions[$user.Principal][$user.Role] = $vcenter
-                    # Add role to the list of all roles
                     $allRoles += $user.Role
                 }
             }
         }
     }
 
-    # Cluster'daki kullanıcı izinlerini al
     $clusters = Get-Cluster
     foreach ($cluster in $clusters) {
         $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
@@ -30,12 +27,10 @@ foreach ($vcenter in $vcenters) {
             if ($perm.Principal -notmatch 'vsphere') {
                 if (-not $userPermissions.ContainsKey($perm.Principal)) {
                     $userPermissions[$perm.Principal] = @{ $perm.Role = $cluster.Name }
-                    # Add role to the list of all roles
                     $allRoles += $perm.Role
                 } else {
                     if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
                         $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
-                        # Add role to the list of all roles
                         $allRoles += $perm.Role
                     } else {
                         $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
@@ -45,21 +40,17 @@ foreach ($vcenter in $vcenters) {
         }
     }
 
-    # vCenter'dan çık
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Deduplicate roles (unique roles)
 $allRoles = $allRoles | Sort-Object -Unique
 
-# Tabloları oluşturma
 $results = @()
 foreach ($user in $userPermissions.Keys) {
     $userResult = @{
         User = $user
     }
 
-    # For each role, check if the user has that role, and place the assigned vCenters/clusters in the correct column
     foreach ($role in $allRoles) {
         if ($userPermissions[$user].ContainsKey($role)) {
             $userResult[$role] = $userPermissions[$user][$role] -join ", "
@@ -68,12 +59,10 @@ foreach ($user in $userPermissions.Keys) {
         }
     }
 
-    # Add the user result to the results array
     $results += New-Object PSObject -Property $userResult
 }
 
-# Sort the columns alphabetically (except the first column, which is User)
-$sortedResults = $results | Select-Object @{Name="User"; Expression={$_.User}}, 
+$sortedResults =$results | Select-Object @{Name="User"; Expression={$_.User}}, 
                             ( $allRoles | Sort-Object ) | ForEach-Object { 
                                 New-Object PSObject -Property @{
                                     User = $_.User
