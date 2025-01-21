@@ -1,34 +1,78 @@
-
 $vcenters = @("ptekvcs01")
+$results = @()
+
+# Kullanıcı rol ve vCenter/Cluster ilişkilerini tutmak için bir hash
+$roleColumns = @()
+
 foreach ($vcenter in $vcenters) {
+    # vCenter'a bağlan
     Connect-VIServer -Server $vcenter
     $userPermissions = @{}
+
+    # vCenter'daki kullanıcı izinlerini al
     $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
     foreach ($user in $vcenterUsers) {
         if ($user.Principal -notmatch 'vsphere') {
             if (-not $userPermissions.ContainsKey($user.Principal)) {
-                $userPermissions[$user.Principal] = @{}
+                $userPermissions[$user.Principal] = @{ $user.Role = $vcenter }
+            } else {
+                if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
+                    $userPermissions[$user.Principal][$user.Role] = $vcenter
+                }
             }
-            $userPermissions[$user.Principal][$user.Role] = $vcenter
         }
     }
+
+    # Cluster'daki kullanıcı izinlerini al
     $clusters = Get-Cluster
     foreach ($cluster in $clusters) {
         $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
         foreach ($perm in $clusterPermissions) {
             if ($perm.Principal -notmatch 'vsphere') {
                 if (-not $userPermissions.ContainsKey($perm.Principal)) {
-                    $userPermissions[$perm.Principal] = @{}
-                }
-                if ($userPermissions[$perm.Principal][$perm.Role].ContainsKey()) {
-                    $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
+                    $userPermissions[$perm.Principal] = @{ $perm.Role = $cluster.Name }
                 } else {
-                    $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
+                    if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
+                        $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
+                    } else {
+                        $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
+                    }
                 }
             }
         }
     }
-    $userPermissions
+
+    # Kullanıcı izinlerini tablo formatında toplama
+    foreach ($user in $userPermissions.Keys) {
+        $userResult = @{
+            KullanıcıAdı = $user
+        }
+        
+        foreach ($role in $userPermissions[$user].Keys) {
+            # Her rolü yeni bir sütun olarak ekliyoruz
+            $roleKey = "$role"
+            $roleValue = $userPermissions[$user][$role] -join ', '
+            
+            # Rol sütununu dinamik olarak oluşturuyoruz
+            if (-not $roleColumns.Contains($roleKey)) {
+                $roleColumns += $roleKey
+            }
+
+            $userResult[$roleKey] = $roleValue
+        }
+
+        $results += [PSCustomObject]$userResult
+    }
+
+    # vCenter'dan çık
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
-Write-Host "Kullanıcı izin raporları başarıyla Excel dosyasına yazıldı."
+
+# Tabloyu başlıkları ile yazdır
+$roleColumns = $roleColumns | Sort-Object
+$finalResults = $results | Select-Object @{Name="KullanıcıAdı";Expression={$_.KullanıcıAdı}}, $roleColumns
+
+# Tabloyu ekrana yazdır
+$finalResults | Format-Table -AutoSize
+
+Write-Host "Kullanıcı izin raporları başarıyla yazıldı."
