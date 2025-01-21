@@ -43,9 +43,6 @@ foreach ($vcenter in $vcenters) {
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Tüm rollerin benzersiz ve sıralanmış halini al
-$allRoles = $allRoles | Sort-Object -Unique
-
 # Kullanıcılar ve rollerle ilgili sonuçları hazırlıyoruz
 $results = @()
 foreach ($user in $userPermissions.Keys) {
