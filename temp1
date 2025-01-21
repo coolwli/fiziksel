@@ -65,24 +65,4 @@ foreach ($user in $userPermissions.Keys) {
     $results += New-Object PSObject -Property $userResult
 }
 
-# Sıralı sonuçları oluşturma
-$sortedResults = $results | ForEach-Object {
-    $userResult = @{
-        User = $_.User
-    }
-
-    # Tüm roller üzerinden geçerek kullanıcıların rollerini ekliyoruz
-    foreach ($role in $allRoles) {
-        if ($_.PSObject.Properties[$role]) {
-            $userResult[$role] = $_.$role -join ", "
-        } else {
-            $userResult[$role] = ""
-        }
-    }
-
-    # Yeni PSObject oluştur
-    New-Object PSObject -Property $userResult
-}
-
-# Sonuçları Excel'e aktarma
-$sortedResults | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
+$results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
