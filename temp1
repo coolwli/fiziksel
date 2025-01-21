@@ -72,5 +72,14 @@ foreach ($user in $userPermissions.Keys) {
     $results += New-Object PSObject -Property $userResult
 }
 
+# Sort the columns alphabetically (except the first column, which is User)
+$sortedResults = $results | Select-Object @{Name="User"; Expression={$_.User}}, 
+                            ( $allRoles | Sort-Object ) | ForEach-Object { 
+                                New-Object PSObject -Property @{
+                                    User = $_.User
+                                    $($_) = $_.($_)
+                                }
+                            }
+
 # Export to Excel
-$results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
+$sortedResults | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
