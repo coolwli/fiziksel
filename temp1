@@ -1,10 +1,6 @@
-# Import-Excel modülünü yükle
-Install-Module -Name ImportExcel -Force -Scope CurrentUser
-
-# Kullanıcı izinlerini içeren hash
 $userPermissions = @{}
+$vcenters = @("apgaraavcs801")
 
-# Kullanıcı izinlerini işlemek (örneğin $userPermissions'tan gelen verilerle)
 foreach ($vcenter in $vcenters) {
     # vCenter'a bağlan
     Connect-VIServer -Server $vcenter
@@ -47,17 +43,18 @@ foreach ($vcenter in $vcenters) {
 # Tabloları oluşturma
 $results = @()
 foreach ($user in $userPermissions.Keys) {
-    $userData = @{
-        'User' = $user
-    }
-    
-    foreach ($role in $userPermissions[$user].Keys) {
-        $userData[$role] = $userPermissions[$user][$role] -join ", "
-    }
 
-    $results += New-Object PSObject -Property $userData
 }
+$results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
 
-# Excel dosyasına aktarım
-$results | Export-Excel -Path "C:\Path\To\Your\Output.xlsx" -AutoSize -WorksheetName "User Permissions"
-
+GARANTI\USR_SRV_GAR_GTKGGuv... {VirtualMachinePowerUser}                                                                                                                                          
+GARANTI\USR_SRV_GAR_GTMTPKa... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTBTGRY... {VirtualMachineUser}                                                                                                                                               
+GARANTI\servicemonsrm          {ReadOnly}                                                                                                                                                         
+GARANTI\AnilCin1               {VirtualMachineUser}                                                                                                                                               
+GARANTI\servicejobs            {Admin}                                                                                                                                                            
+GARANTI\USR_SRV_GAR_GTVPYTO... {Admin}                                                                                                                                                            
+GARANTI\USR_SRV_GAR_GTAIDij... {VM_User_Network_Snapshot}                                                                                                                                         
+GARANTI\GT-Is Surekliligi T... {Admin, VirtualMachineUser}                                                                                                                                        
+GARANTI\USR_SRV_GAR_GTBTGRY... {VirtualMachinePowerUser}                                                                                                                                          
+GARANTI\servicegbsrm           {Admin}               
