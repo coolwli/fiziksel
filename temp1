@@ -1,35 +1,66 @@
+# Gerekli modülü yükle (Modülün yüklü olduğundan emin olmalısınız)
+# Install-Module -Name ImportExcel -Force -Scope CurrentUser
+
 $vcenters = @("01", "02", "03", "04", "05", "06")
 
-$vcenter = "01"
-Connect-VIServer -Server $vcenter
+# Excel raporu için bir nesne oluşturuyoruz
+$excelReport = @{}
 
-$report = @()
+foreach ($vcenter in $vcenters) {
+    # Her vCenter için bağlantıyı kuruyoruz
+    Connect-VIServer -Server $vcenter
 
-$vcenterUsers = Get-VIPermission | Select-Object Principal, Role
+    $report = @()
 
-$vcenterUsers | ForEach-Object {
-    $report += [PSCustomObject]@{
-        Domain    = $vcenter
-        Principal  = $_.Principal
-        Role       = $_.Role
-        Inherited  = $false
-    }
-}
+    # vCenter kullanıcılarını alıyoruz
+    $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
 
-$clusters = Get-Cluster
-
-foreach ($cluster in $clusters) {
-    $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
-    foreach ($perm in $clusterPermissions) {
-        $isInherited = ($perm.EntityId -ne $cluster.Id)
-
-        $report += [PSCustomObject]@{
-            Domain    = $cluster.Name
-            Principal  = $perm.Principal
-            Role       = $perm.Role
-            Inherited  = $isInherited
+    $vcenterUsers | ForEach-Object {
+        # Kullanıcı adı "\vsphere" içeriyorsa, o kullanıcıyı hariç tutuyoruz
+        if ($_..Principal -notmatch '\\vsphere') {
+            $report += [PSCustomObject]@{
+                Domain    = $vcenter
+                Principal  = $_.Principal
+                Role       = $_.Role
+                Inherited  = $false
+            }
         }
     }
+
+    # Cluster'ları alıyoruz
+    $clusters = Get-Cluster
+
+    foreach ($cluster in $clusters) {
+        $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
+        foreach ($perm in $clusterPermissions) {
+            $isInherited = ($perm.EntityId -ne $cluster.Id)
+
+            # Kullanıcı adı "\vsphere" içeriyorsa, o kullanıcıyı hariç tutuyoruz
+            if ($perm.Principal -notmatch '\\vsphere') {
+                $report += [PSCustomObject]@{
+                    Domain    = $cluster.Name
+                    Principal  = $perm.Principal
+                    Role       = $perm.Role
+                    Inherited  = $isInherited
+                }
+            }
+        }
+    }
+
+    # Sonuçları Excel raporuna ekliyoruz
+    $excelReport[$vcenter] = $report
+
+    # vCenter bağlantısını kapatıyoruz
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-Disconnect-VIServer -Server $vcenter -Confirm:$false
+# Sonuçları Excel dosyasına yazıyoruz
+$excelReport.GetEnumerator() | ForEach-Object {
+    $vcenter = $_.Key
+    $data = $_.Value
+
+    # Veriyi her vCenter için ayrı bir sayfada kaydediyoruz
+    $data | Export-Excel -Path "C:\path\to\your\report.xlsx" -WorksheetName $vcenter -Append
+}
+
+Write-Host "Raporlar başarıyla Excel dosyasına yazıldı."
