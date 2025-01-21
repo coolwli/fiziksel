@@ -1,31 +1,30 @@
-# Initialize the report array
+$vcenters = @("01", "02", "03", "04", "05", "06")
+
+$vcenter = "01"
+Connect-VIServer -Server $vcenter
+
 $report = @()
 
-# Get all vCenter users and their roles
 $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
 
-# Add vCenter user permissions to the report
 $vcenterUsers | ForEach-Object {
     $report += [PSCustomObject]@{
-        Cluster    = "vCenter"
+        Domain    = $vcenter
         Principal  = $_.Principal
         Role       = $_.Role
         Inherited  = $false
     }
 }
 
-# Get all clusters
 $clusters = Get-Cluster
 
-# Add cluster permissions to the report
 foreach ($cluster in $clusters) {
-    # Get cluster-specific permissions
     $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
     foreach ($perm in $clusterPermissions) {
         $isInherited = ($perm.EntityId -ne $cluster.Id)
 
         $report += [PSCustomObject]@{
-            Cluster    = $cluster.Name
+            Domain    = $cluster.Name
             Principal  = $perm.Principal
             Role       = $perm.Role
             Inherited  = $isInherited
@@ -33,5 +32,4 @@ foreach ($cluster in $clusters) {
     }
 }
 
-# Export the report to CSV
-$report | Export-Csv "E:\Murat\test\prod-perm_20012025.csv" -NoTypeInformation
+Disconnect-VIServer -Server $vcenter -Confirm:$false
