@@ -43,14 +43,17 @@ foreach ($vcenter in $vcenters) {
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
+# Tüm rollerin benzersiz ve sıralanmış halini al
 $allRoles = $allRoles | Sort-Object -Unique
 
+# Kullanıcılar ve rollerle ilgili sonuçları hazırlıyoruz
 $results = @()
 foreach ($user in $userPermissions.Keys) {
     $userResult = @{
         User = $user
     }
 
+    # Her bir rol için, kullanıcının hangi vCenter/Cluster'da bu role sahip olduğunu kontrol et
     foreach ($role in $allRoles) {
         if ($userPermissions[$user].ContainsKey($role)) {
             $userResult[$role] = $userPermissions[$user][$role] -join ", "
@@ -62,13 +65,24 @@ foreach ($user in $userPermissions.Keys) {
     $results += New-Object PSObject -Property $userResult
 }
 
-$sortedResults =$results | Select-Object @{Name="User"; Expression={$_.User}}, 
-                            ( $allRoles | Sort-Object ) | ForEach-Object { 
-                                New-Object PSObject -Property @{
-                                    User = $_.User
-                                    $($_) = $_.($_)
-                                }
-                            }
+# Sıralı sonuçları oluşturma
+$sortedResults = $results | ForEach-Object {
+    $userResult = @{
+        User = $_.User
+    }
 
-# Export to Excel
+    # Tüm roller üzerinden geçerek kullanıcıların rollerini ekliyoruz
+    foreach ($role in $allRoles) {
+        if ($_.PSObject.Properties[$role]) {
+            $userResult[$role] = $_.$role -join ", "
+        } else {
+            $userResult[$role] = ""
+        }
+    }
+
+    # Yeni PSObject oluştur
+    New-Object PSObject -Property $userResult
+}
+
+# Sonuçları Excel'e aktarma
 $sortedResults | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
