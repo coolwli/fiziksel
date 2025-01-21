@@ -1,1 +1,63 @@
+# Import-Excel modülünü yükle
+Install-Module -Name ImportExcel -Force -Scope CurrentUser
+
+# Kullanıcı izinlerini içeren hash
+$userPermissions = @{}
+
+# Kullanıcı izinlerini işlemek (örneğin $userPermissions'tan gelen verilerle)
+foreach ($vcenter in $vcenters) {
+    # vCenter'a bağlan
+    Connect-VIServer -Server $vcenter
+    $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
+    foreach ($user in $vcenterUsers) {
+        if ($user.Principal -notmatch 'vsphere') {
+            if (-not $userPermissions.ContainsKey($user.Principal)) {
+                $userPermissions[$user.Principal] = @{ $user.Role = $vcenter }
+            } else {
+                if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
+                    $userPermissions[$user.Principal][$user.Role] = $vcenter
+                }
+            }
+        }
+    }
+
+    # Cluster'daki kullanıcı izinlerini al
+    $clusters = Get-Cluster
+    foreach ($cluster in $clusters) {
+        $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
+        foreach ($perm in $clusterPermissions) {
+            if ($perm.Principal -notmatch 'vsphere') {
+                if (-not $userPermissions.ContainsKey($perm.Principal)) {
+                    $userPermissions[$perm.Principal] = @{ $perm.Role = $cluster.Name }
+                } else {
+                    if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
+                        $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
+                    } else {
+                        $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
+                    }
+                }
+            }
+        }
+    }
+
+    # vCenter'dan çık
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
+}
+
+# Tabloları oluşturma
+$results = @()
+foreach ($user in $userPermissions.Keys) {
+    $userData = @{
+        'User' = $user
+    }
+    
+    foreach ($role in $userPermissions[$user].Keys) {
+        $userData[$role] = $userPermissions[$user][$role] -join ", "
+    }
+
+    $results += New-Object PSObject -Property $userData
+}
+
+# Excel dosyasına aktarım
+$results | Export-Excel -Path "C:\Path\To\Your\Output.xlsx" -AutoSize -WorksheetName "User Permissions"
 
