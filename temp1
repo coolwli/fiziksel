@@ -1,11 +1,37 @@
-$cluster="GBTKSCL"
-get-cluster $cluster | Get-VIPermission | Where-Object{
-$row = "" | Select-Object Cluster, Principal, Role, Inherited
-$row.cluster = $cluster
-$row.Principal = $_.Principal
-$row.Role = $_.Role
-$row.Inherited = ($_.EntityId -ne $cls.Id)
-$report += $row
+# Initialize the report array
+$report = @()
+
+# Get all vCenter users and their roles
+$vcenterUsers = Get-VIPermission | Select-Object Principal, Role
+
+# Add vCenter user permissions to the report
+$vcenterUsers | ForEach-Object {
+    $report += [PSCustomObject]@{
+        Cluster    = "vCenter"
+        Principal  = $_.Principal
+        Role       = $_.Role
+        Inherited  = $false
+    }
 }
 
-$report | Export-Csv E:\Murat\test\prod-perm_20012025.csv
+# Get all clusters
+$clusters = Get-Cluster
+
+# Add cluster permissions to the report
+foreach ($cluster in $clusters) {
+    # Get cluster-specific permissions
+    $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
+    foreach ($perm in $clusterPermissions) {
+        $isInherited = ($perm.EntityId -ne $cluster.Id)
+
+        $report += [PSCustomObject]@{
+            Cluster    = $cluster.Name
+            Principal  = $perm.Principal
+            Role       = $perm.Role
+            Inherited  = $isInherited
+        }
+    }
+}
+
+# Export the report to CSV
+$report | Export-Csv "E:\Murat\test\prod-perm_20012025.csv" -NoTypeInformation
