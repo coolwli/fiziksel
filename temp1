@@ -1,23 +1,17 @@
-# Gerekli modülü yükle (Modülün yüklü olduğundan emin olmalısınız)
-# Install-Module -Name ImportExcel -Force -Scope CurrentUser
+$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
+$vcenters = @("ptekvcs01")
 
-$vcenters = @("01", "02", "03", "04", "05", "06")
-
-# Excel raporu için bir nesne oluşturuyoruz
 $excelReport = @{}
 
 foreach ($vcenter in $vcenters) {
-    # Her vCenter için bağlantıyı kuruyoruz
     Connect-VIServer -Server $vcenter
 
     $report = @()
 
-    # vCenter kullanıcılarını alıyoruz
     $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
 
     $vcenterUsers | ForEach-Object {
-        # Kullanıcı adı "\vsphere" içeriyorsa, o kullanıcıyı hariç tutuyoruz
-        if ($_..Principal -notmatch '\\vsphere') {
+        if ($_.Principal -notmatch 'vsphere') {
             $report += [PSCustomObject]@{
                 Domain    = $vcenter
                 Principal  = $_.Principal
@@ -27,7 +21,6 @@ foreach ($vcenter in $vcenters) {
         }
     }
 
-    # Cluster'ları alıyoruz
     $clusters = Get-Cluster
 
     foreach ($cluster in $clusters) {
@@ -35,8 +28,7 @@ foreach ($vcenter in $vcenters) {
         foreach ($perm in $clusterPermissions) {
             $isInherited = ($perm.EntityId -ne $cluster.Id)
 
-            # Kullanıcı adı "\vsphere" içeriyorsa, o kullanıcıyı hariç tutuyoruz
-            if ($perm.Principal -notmatch '\\vsphere') {
+            if ($perm.Principal -icontains 'vsphere') {
                 $report += [PSCustomObject]@{
                     Domain    = $cluster.Name
                     Principal  = $perm.Principal
@@ -47,19 +39,17 @@ foreach ($vcenter in $vcenters) {
         }
     }
 
-    # Sonuçları Excel raporuna ekliyoruz
     $excelReport[$vcenter] = $report
 
-    # vCenter bağlantısını kapatıyoruz
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Sonuçları Excel dosyasına yazıyoruz
+$excelReport.Values
+
 $excelReport.GetEnumerator() | ForEach-Object {
     $vcenter = $_.Key
     $data = $_.Value
 
-    # Veriyi her vCenter için ayrı bir sayfada kaydediyoruz
     $data | Export-Excel -Path "C:\path\to\your\report.xlsx" -WorksheetName $vcenter -Append
 }
 
