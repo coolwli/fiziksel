@@ -1,5 +1,6 @@
 $userPermissions = @{}
 $vcenters = @("apgaraavcs801")
+$allRoles = @()
 
 foreach ($vcenter in $vcenters) {
     # vCenter'a bağlan
@@ -9,9 +10,13 @@ foreach ($vcenter in $vcenters) {
         if ($user.Principal -notmatch 'vsphere') {
             if (-not $userPermissions.ContainsKey($user.Principal)) {
                 $userPermissions[$user.Principal] = @{ $user.Role = $vcenter }
+                # Add role to the list of all roles
+                $allRoles += $user.Role
             } else {
                 if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
                     $userPermissions[$user.Principal][$user.Role] = $vcenter
+                    # Add role to the list of all roles
+                    $allRoles += $user.Role
                 }
             }
         }
@@ -25,9 +30,13 @@ foreach ($vcenter in $vcenters) {
             if ($perm.Principal -notmatch 'vsphere') {
                 if (-not $userPermissions.ContainsKey($perm.Principal)) {
                     $userPermissions[$perm.Principal] = @{ $perm.Role = $cluster.Name }
+                    # Add role to the list of all roles
+                    $allRoles += $perm.Role
                 } else {
                     if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
                         $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
+                        # Add role to the list of all roles
+                        $allRoles += $perm.Role
                     } else {
                         $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
                     }
@@ -40,21 +49,28 @@ foreach ($vcenter in $vcenters) {
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
+# Deduplicate roles (unique roles)
+$allRoles = $allRoles | Sort-Object -Unique
+
 # Tabloları oluşturma
 $results = @()
 foreach ($user in $userPermissions.Keys) {
+    $userResult = @{
+        User = $user
+    }
 
+    # For each role, check if the user has that role, and place the assigned vCenters/clusters in the correct column
+    foreach ($role in $allRoles) {
+        if ($userPermissions[$user].ContainsKey($role)) {
+            $userResult[$role] = $userPermissions[$user][$role] -join ", "
+        } else {
+            $userResult[$role] = ""
+        }
+    }
+
+    # Add the user result to the results array
+    $results += New-Object PSObject -Property $userResult
 }
-$results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
 
-GARANTI\USR_SRV_GAR_GTKGGuv... {VirtualMachinePowerUser}                                                                                                                                          
-GARANTI\USR_SRV_GAR_GTMTPKa... {VirtualMachineUser}                                                                                                                                               
-GARANTI\USR_SRV_GAR_GTBTGRY... {VirtualMachineUser}                                                                                                                                               
-GARANTI\servicemonsrm          {ReadOnly}                                                                                                                                                         
-GARANTI\AnilCin1               {VirtualMachineUser}                                                                                                                                               
-GARANTI\servicejobs            {Admin}                                                                                                                                                            
-GARANTI\USR_SRV_GAR_GTVPYTO... {Admin}                                                                                                                                                            
-GARANTI\USR_SRV_GAR_GTAIDij... {VM_User_Network_Snapshot}                                                                                                                                         
-GARANTI\GT-Is Surekliligi T... {Admin, VirtualMachineUser}                                                                                                                                        
-GARANTI\USR_SRV_GAR_GTBTGRY... {VirtualMachinePowerUser}                                                                                                                                          
-GARANTI\servicegbsrm           {Admin}               
+# Export to Excel
+$results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -AutoSize -WorksheetName "AllUsers"
