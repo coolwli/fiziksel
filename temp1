@@ -42,37 +42,59 @@ foreach ($vcenter in $vcenters) {
         }
     }
 
-    # Kullanıcı izinlerini tablo formatında toplama
-    foreach ($user in $userPermissions.Keys) {
-        $userResult = @{
-            KullanıcıAdı = $user
-        }
-        
-        foreach ($role in $userPermissions[$user].Keys) {
-            # Her rolü yeni bir sütun olarak ekliyoruz
-            $roleKey = "$role"
-            $roleValue = $userPermissions[$user][$role] -join ', '
-            
-            # Rol sütununu dinamik olarak oluşturuyoruz
-            if (-not $roleColumns.Contains($roleKey)) {
-                $roleColumns += $roleKey
-            }
-
-            $userResult[$roleKey] = $roleValue
-        }
-
-        $results += [PSCustomObject]$userResult
-    }
-
     # vCenter'dan çık
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Tabloyu başlıkları ile yazdır
-$roleColumns = $roleColumns | Sort-Object
-$finalResults = $results | Select-Object @{Name="KullanıcıAdı";Expression={$_.KullanıcıAdı}}, $roleColumns
-
-# Tabloyu ekrana yazdır
-$finalResults | Format-Table -AutoSize
-
-Write-Host "Kullanıcı izin raporları başarıyla yazıldı."
+Name                           Value                                                                                                                                                              
+----                           -----                                                                                                                                                              
+GARANTI\USR_SRV_GAR_GTKGGuv... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTKGGuv... {VirtualMachinePowerUser}                                                                                                                                          
+GARANTI\GT-Kampanya ve Kana... {VirtualMachineUser}                                                                                                                                               
+GARANTI\GLB_GT_TSM             {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTKGSib... {VirtualMachineUser, VirtualMachinePowerUser}                                                                                                                      
+GARANTI\USR_SRV_GAR_GTUOTek... {VirtualMachineUser}                                                                                                                                               
+GARANTI\rbtuser36              {VirtualMachineUser}                                                                                                                                               
+GARANTI\glb_gb_gpoadmins       {VirtualMachineUser}                                                                                                                                               
+TEKNOLOJI\GLB_GT_PF_Depolam... {VirtualMachineUser, ReadOnly}                                                                                                                                     
+GARANTI\uxdyntst               {ReadOnly}                                                                                                                                                         
+GARANTI\USR_SRV_GAR_GTAIBul... {ReadOnly}                                                                                                                                                         
+GARANTI\USR_SRV_GAR_GTDBMDM... {VirtualMachineUser}                                                                                                                                               
+GARANTI\serviceCloudMgmtVM     {ServiceCloud}                                                                                                                                                     
+GARANTI\USR_SRV_GAR_GTUOKur... {VirtualMachineUser}                                                                                                                                               
+GARANTI\GLB_GT_BesDataWareH... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTNSYTu... {VirtualMachineUser, VM_User_Network_RevertSnapshot}                                                                                                               
+GARANTI\USR_PC_Abacus_Otoma... {VirtualMachineUser}                                                                                                                                               
+GARANTI\GT-Ortak Uygulama M... {VM_User_Network_RevertSnapshot}                                                                                                                                   
+GARANTI\uxdynprd               {ReadOnly}                                                                                                                                                         
+GARANTI\GLB_GT_FTP_CariMevd... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTKGSib... {VirtualMachinePowerUser}                                                                                                                                          
+GARANTI\GLB_GT_PF_YerelAlan... {VirtualMachineUser}                                                                                                                                               
+GARANTI\uxrun                  {VirtualMachineUser}                                                                                                                                               
+GARANTI\GLB_GT_ElevatedUcKu... {MobilVeUcKullaniciTeknolojileri, VM_User_Network_RevertSnapshot, Clone of Virtual machine user (sample) + Take Snapshot, VirtualMachineUser}                      
+TEKNOLOJI\GLB_GT_TSM           {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTSRSTe... {VirtualMachineUser}                                                                                                                                               
+GARANTI\srv_serviceirm         {ReadOnly}                                                                                                                                                         
+GARANTI\servicemonsrm          {ReadOnly}                                                                                                                                                         
+GARANTI\srv_vm_unix_user       {Admin}                                                                                                                                                            
+GARANTI\servicejobs            {Admin}                                                                                                                                                            
+GARANTI\GT-Bireysel Emeklil... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTAIDij... {VirtualMachineUser, VirtualMachinePowerUser, ReadOnly, VPC_User}                                                                                                  
+GARANTI\USR_SRV_GAR_GTAIBul... {ReadOnly, VirtualMachinePowerUser, VirtualMachineConsoleUser}                                                                                                     
+GARANTI\srv_dpavmware          {ReadOnly}                                                                                                                                                         
+GARANTI\USR_SRV_GAR_GTAIBul... {VirtualMachineUser}                                                                                                                                               
+GARANTI\GLB_GT_PF_Hazine_ve... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTAIDij... {VirtualMachineUser}                                                                                                                                               
+GARANTI\POL_GB_VPC_SelfServ... {VPC_SelfService_PowerOn}                                                                                                                                          
+GARANTI\GLB_GB_VMwareClient    {VirtualMachineUser}                                                                                                                                               
+GARANTI\uxvmware               {ReadOnly}                                                                                                                                                         
+GARANTI\serviceilmt            {ReadOnly}                                                                                                                                                         
+GARANTI\GLB_GB_TS_STEP_TEST... {VirtualMachineUser}                                                                                                                                               
+GARANTI\GLB_GT_Sqlteam         {VM_User_Network_RevertSnapshot}                                                                                                                                   
+GARANTI\srv_serviceassetpoc    {ReadOnly}                                                                                                                                                         
+GARANTI\USR_SRV_GAR_GTNSYGe... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTVPYTO... {VirtualMachineUser, VirtualMachinePowerUser}                                                                                                                      
+GARANTI\USR_SRV_GAR_GTBTGRY... {VirtualMachineUser}                                                                                                                                               
+GARANTI\ADM_GT_Helpdesk_Gar... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTKGGuv... {VirtualMachineUser}                                                                                                                                               
+GARANTI\USR_SRV_GAR_GTAIDij... {MobilVeUcKullaniciTeknolojileri, VirtualMachinePowerUser} 
