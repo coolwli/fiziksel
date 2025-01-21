@@ -1,56 +1,34 @@
+
 $vcenters = @("ptekvcs01")
 foreach ($vcenter in $vcenters) {
-    try {
-        Connect-VIServer -Server $vcenter
-        $userPermissions = @{}
-        $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
-        foreach ($user in $vcenterUsers) {
-            if ($user.Principal -notmatch 'vsphere') {
-                if (-not $userPermissions.ContainsKey($user.Principal)) {
-                    $userPermissions[$user.Principal] = @{}
+    Connect-VIServer -Server $vcenter
+    $userPermissions = @{}
+    $vcenterUsers = Get-VIPermission | Select-Object Principal, Role
+    foreach ($user in $vcenterUsers) {
+        if ($user.Principal -notmatch 'vsphere') {
+            if (-not $userPermissions.ContainsKey($user.Principal)) {
+                $userPermissions[$user.Principal] = @{}
+            }
+            $userPermissions[$user.Principal][$user.Role] = $vcenter
+        }
+    }
+    $clusters = Get-Cluster
+    foreach ($cluster in $clusters) {
+        $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
+        foreach ($perm in $clusterPermissions) {
+            if ($perm.Principal -notmatch 'vsphere') {
+                if (-not $userPermissions.ContainsKey($perm.Principal)) {
+                    $userPermissions[$perm.Principal] = @{}
                 }
-                if ($userPermissions[$user.Principal].ContainsKey($user.Role)) {
-                    $userPermissions[$user.Principal][$user.Role] += ",$vcenter"
+                if ($userPermissions[$perm.Principal][$perm.Role].ContainsKey()) {
+                    $userPermissions[$perm.Principal][$perm.Role] += ", $($cluster.Name)"
                 } else {
-                    $userPermissions[$user.Principal][$user.Role] = $vcenter
+                    $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
                 }
             }
         }
-        $clusters = Get-Cluster
-        foreach ($cluster in $clusters) {
-            $clusterPermissions = Get-Cluster $cluster | Get-VIPermission
-            foreach ($perm in $clusterPermissions) {
-                if ($perm.Principal -notmatch 'vsphere') {
-                    if (-not $userPermissions.ContainsKey($perm.Principal)) {
-                        $userPermissions[$perm.Principal] = @{}
-                    }
-                    if ($userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
-                        $userPermissions[$perm.Principal][$perm.Role] += ",$cluster.Name"
-                    } else {
-                        $userPermissions[$perm.Principal][$perm.Role] = $cluster.Name
-                    }
-                }
-            }
-        }
-        $excelReport = @()
-        foreach ($user in $userPermissions.Keys) {
-            $userRow = @{ User = $user }
-            foreach ($role in $userPermissions[$user].Keys) {
-                $domainList = $userPermissions[$user][$role]
-                $userRow[$role] = $domainList
-            }
-            $excelReport += [PSCustomObject]$userRow
-        }
-        $filePath = "C:\path\to\your\user_permissions_report_$vcenter.xlsx"
-        if (Test-Path $filePath) {
-            $excelReport | Export-Excel -Path $filePath -WorksheetName "PermissionsReport" -AutoSize -Append
-        } else {
-            $excelReport | Export-Excel -Path $filePath -WorksheetName "PermissionsReport" -AutoSize
-        }
-        Disconnect-VIServer -Server $vcenter -Confirm:$false
     }
-    catch {
-        Write-Warning "Could not connect to vCenter $vcenter. Error: $_"
-    }
+    $userPermissions
+    Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 Write-Host "Kullanıcı izin raporları başarıyla Excel dosyasına yazıldı."
