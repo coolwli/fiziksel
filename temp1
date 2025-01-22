@@ -26,8 +26,10 @@ foreach ($vcenter in $vcenters) {
             $userRoles[$user.Principal][$user.Role] = @()
         }
 
-        # Kullanıcı rolüne vCenter'ı ekliyoruz
-        $userRoles[$user.Principal][$user.Role] += $vcenter
+        # Kullanıcı rolüne vCenter'ı ekliyoruz, tekrarları önlemek için -contains kontrolü
+        if (-not $userRoles[$user.Principal][$user.Role] -contains $vcenter) {
+            $userRoles[$user.Principal][$user.Role] += $vcenter
+        }
     }
 
     # Cluster'lar üzerindeki izinleri alıyoruz
@@ -46,8 +48,10 @@ foreach ($vcenter in $vcenters) {
                 $userRoles[$perm.Principal][$perm.Role] = @()
             }
 
-            # Kullanıcı rolüne cluster'ı ekliyoruz
-            $userRoles[$perm.Principal][$perm.Role] += $cluster.Name
+            # Kullanıcı rolüne cluster'ı ekliyoruz, tekrarları önlemek için -contains kontrolü
+            if (-not $userRoles[$perm.Principal][$perm.Role] -contains $cluster.Name) {
+                $userRoles[$perm.Principal][$perm.Role] += $cluster.Name
+            }
         }
     }
 
