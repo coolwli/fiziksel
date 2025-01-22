@@ -44,22 +44,23 @@ foreach ($vcenter in $vcenters) {
     }
 
     # Her vCenter için veriyi uygun formatta hazırlamak
-    $vcenterResults = $userPermissions.GetEnumerator() | ForEach-Object {
+    $vcenterResults = @()
+    $userPermissions.GetEnumerator() | ForEach-Object {
         $user = $_.Key
         $roles = $_.Value.GetEnumerator() | ForEach-Object {
             $role = $_.Key
-            $clusters = $_.Value -join ", "
+            $usingIn = $_.Value -join ", "
             # Rol ve ilgili cluster bilgilerini dönüyoruz
             [PSCustomObject]@{
                 User     = $user
                 Role     = $role
-                Clusters = $clusters
+                "Using In" = $usingIn
             }
         }
-
-        # vCenter-specific sonuçları bir listeye ekle
-        $vcenterResults
+        $vcenterResults +=$roles
+        
     }
+    $vcenterResults
 
     # Her vCenter için verileri birleştirip Excel sonuçları listesine ekleyin
     $excelResults += [PSCustomObject]@{
@@ -76,5 +77,5 @@ $excelResults | ForEach-Object {
     $results = $_.Results
 
     # Her bir vCenter için verileri Export-Excel'e aktar
-    $results | Select-Object User, Role, Clusters | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -WorksheetName $vcenter -AutoSize -Append
+    #$results | Select-Object User, Role, Clusters | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -WorksheetName $vcenter -AutoSize -Append
 }
