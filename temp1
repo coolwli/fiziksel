@@ -15,7 +15,7 @@ foreach ($vcenter in $vcenters) {
     foreach ($user in $vcenterUsers) {
         if ($user.Principal -notmatch 'vsphere') {
             if (-not $userPermissions.ContainsKey($user.Principal)) {
-                $userPermissions[$user.Principal] = @{}
+                $userPermissions[$user.Principal] = @{ }
             }
             if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
                 $userPermissions[$user.Principal][$user.Role] = @()
@@ -32,7 +32,7 @@ foreach ($vcenter in $vcenters) {
         foreach ($perm in $clusterPermissions) {
             if ($perm.Principal -notmatch 'vsphere') {
                 if (-not $userPermissions.ContainsKey($perm.Principal)) {
-                    $userPermissions[$perm.Principal] = @{}
+                    $userPermissions[$perm.Principal] = @{ }
                 }
                 if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
                     $userPermissions[$perm.Principal][$perm.Role] = @()
@@ -48,13 +48,20 @@ foreach ($vcenter in $vcenters) {
         $user = $_.Key
         $roles = $_.Value.GetEnumerator() | ForEach-Object {
             $role = $_.Key
-            $clusters = $_.Value -join " "
-            "$role---$clusters"
-        } -join ", "
-        "$user,$roles"
+            $clusters = $_.Value -join ", "
+            # Rol ve ilgili cluster bilgilerini dönüyoruz
+            [PSCustomObject]@{
+                User     = $user
+                Role     = $role
+                Clusters = $clusters
+            }
+        }
+
+        # vCenter-specific sonuçları bir listeye ekle
+        $vcenterResults
     }
 
-    # vCenter-specific sonuçları bir listeye ekle
+    # Her vCenter için verileri birleştirip Excel sonuçları listesine ekleyin
     $excelResults += [PSCustomObject]@{
         vCenter = $vcenter
         Results = $vcenterResults
@@ -63,10 +70,11 @@ foreach ($vcenter in $vcenters) {
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
-# Excel'e aktarırken her vCenter için ayrı bir worksheet oluştur
+# Excel dosyasına her vCenter için ayrı bir sayfa yazma
 $excelResults | ForEach-Object {
     $vcenter = $_.vCenter
     $results = $_.Results
 
-    $results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -WorksheetName $vcenter -AutoSize -Append
+    # Her bir vCenter için verileri Export-Excel'e aktar
+    $results | Select-Object User, Role, Clusters | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -WorksheetName $vcenter -AutoSize -Append
 }
