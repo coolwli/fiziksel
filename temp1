@@ -1,27 +1,15 @@
-# Gerekli modül
-Import-Module VMware.PowerCLI
-
-# vCenter sunucularının listesi
 $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
+$vcenters = @("ptekvcs01")
 
-# Kullanıcı izinlerini depolamak için boş bir hash table
 $userPermissions = @{}
 $allRoles = @()
 
-# Excel dosyasına yazmak için hedef yol
 $exportPath = "F:\Ali\exports\service_users_report.xlsx"
 
-# vCenter'lar üzerinde döngü
 foreach ($vcenter in $vcenters) {
-    Write-Host "Processing vCenter: $vcenter"
+    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321 
 
-    # vCenter'a bağlan
-    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321
-
-    # Kullanıcı izinlerini sıfırla
     $userPermissions = @{}
-
-    # vCenter'daki kullanıcılar ve roller
     $vcenterUsers = Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
     foreach ($user in $vcenterUsers) {
         if (-not $userPermissions.ContainsKey($user.Principal)) {
@@ -33,10 +21,10 @@ foreach ($vcenter in $vcenters) {
         }
 
         $userPermissions[$user.Principal][$user.Role] += $vcenter
+        $vcenter
         $allRoles += $user.Role
     }
 
-    # vCenter'daki cluster'lar ve izinler
     $clusters = Get-Cluster
     foreach ($cluster in $clusters) {
         $clusterPermissions = Get-Cluster $cluster | Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
@@ -55,7 +43,6 @@ foreach ($vcenter in $vcenters) {
         }
     }
 
-    # Verileri uygun formata dönüştür
     $vcenterResults = @()
     $userPermissions.GetEnumerator() | ForEach-Object {
         $user = $_.Key
@@ -71,11 +58,9 @@ foreach ($vcenter in $vcenters) {
         }
         $vcenterResults += $roles
     }
+    $vcenterResults
+    #$vcenterResults | Export-Excel -Path $exportPath -WorksheetName $vcenter -AutoSize -Append
 
-    # vCenter verilerini Excel dosyasına yaz
-    $vcenterResults | Export-Excel -Path $exportPath -WorksheetName $vcenter -AutoSize -Append
-
-    # vCenter'dan çıkış yap
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
 
