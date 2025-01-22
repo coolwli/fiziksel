@@ -1,67 +1,45 @@
 $vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
 $vcenters = @("ptekvcs01")
 
-$userPermissions = @{}
-$allRoles = @()
-
 $exportPath = "F:\Ali\exports\service_users_report.xlsx"
 
+# Sonuçları depolayacağımız dizi
+$results = @()
+
 foreach ($vcenter in $vcenters) {
-    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321 
+    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321
 
-    $userPermissions = @{}
+    # vCenter kullanıcı izinlerini alıyoruz
     $vcenterUsers = Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
+
     foreach ($user in $vcenterUsers) {
-        if (-not $userPermissions.ContainsKey($user.Principal)) {
-            $userPermissions[$user.Principal] = @{}
+        # Kullanıcı ve rol bilgilerini 3 sütunda depolamak için çıktı oluşturuyoruz
+        $results += [PSCustomObject]@{
+            User     = $user.Principal
+            Role     = $user.Role
+            "Using In" = $vcenter
         }
-
-        if (-not $userPermissions[$user.Principal].ContainsKey($user.Role)) {
-            $userPermissions[$user.Principal][$user.Role] = @()
-        }
-
-        $userPermissions[$user.Principal][$user.Role] += $vcenter
-        $vcenter
-        $allRoles += $user.Role
     }
 
+    # Cluster'lar üzerindeki izinleri alıyoruz
     $clusters = Get-Cluster
     foreach ($cluster in $clusters) {
         $clusterPermissions = Get-Cluster $cluster | Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
 
         foreach ($perm in $clusterPermissions) {
-            if (-not $userPermissions.ContainsKey($perm.Principal)) {
-                $userPermissions[$perm.Principal] = @{}
-            }
-
-            if (-not $userPermissions[$perm.Principal].ContainsKey($perm.Role)) {
-                $userPermissions[$perm.Principal][$perm.Role] = @()
-            }
-
-            $userPermissions[$perm.Principal][$perm.Role] += $cluster.Name
-            $allRoles += $perm.Role
-        }
-    }
-
-    $vcenterResults = @()
-    $userPermissions.GetEnumerator() | ForEach-Object {
-        $user = $_.Key
-        $roles = $_.Value.GetEnumerator() | ForEach-Object {
-            $role = $_.Key
-            $usingIn = $_.Value -join ", "
-
-            [PSCustomObject]@{
-                User     = $user
-                Role     = $role
-                "Using In" = $usingIn
+            # Cluster bazında da aynı şekilde kullanıcı ve rol bilgilerini alıyoruz
+            $results += [PSCustomObject]@{
+                User     = $perm.Principal
+                Role     = $perm.Role
+                "Using In" = $cluster.Name
             }
         }
-        $vcenterResults += $roles
     }
-    $vcenterResults
-    #$vcenterResults | Export-Excel -Path $exportPath -WorksheetName $vcenter -AutoSize -Append
 
     Disconnect-VIServer -Server $vcenter -Confirm:$false
 }
+
+# Sonuçları Excel dosyasına aktarıyoruz
+$results | Export-Excel -Path $exportPath -WorksheetName "User Permissions" -AutoSize
 
 Write-Host "Data export completed!"
