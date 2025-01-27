@@ -1,69 +1,67 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Data;
-using System.Data.OleDb;
-using System.Web.UI;
-
-public partial class ExcelReader : Page
-{
-    protected void Page_Load(object sender, EventArgs e)
-    {
-        string sharedFolderPath = @"\\sunucuadi\f$\paylasim";  // Paylaşımlı klasör yolu
-
-        // Klasördeki tüm Excel dosyalarını al (xlsx uzantılı)
-        var excelFiles = Directory.GetFiles(sharedFolderPath, "*.xlsx")
-                                   .Select(file => new FileInfo(file))
-                                   .OrderByDescending(file => file.LastWriteTime)  // En son değiştirilene göre sırala
-                                   .Take(4)  // En son 4 dosyayı al
-                                   .ToList();
-
-        // Dosya listesi boşsa hata mesajı ver
-        if (excelFiles.Count == 0)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            Response.Write("Paylaşımlı klasörde hiç Excel dosyası bulunamadı.");
-            return;
-        }
+            string sharedFolderPath = @"\\tekscr1\f$\Serhat\RvTools_Inventory\Reports";  
 
-        // Excel dosyalarını tek tek oku
-        foreach (var file in excelFiles)
-        {
-            string excelFilePath = file.FullName;  // Dosyanın tam yolu
-            string connectionString = 
-                @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + excelFilePath + @";Extended Properties=""Excel 12.0 Xml;HDR=YES;""";
+            // Klasördeki tüm Excel dosyalarını al (xlsx uzantılı)
+            var excelFiles = Directory.GetFiles(sharedFolderPath, "*.xlsx")
+                                       .Select(file => new FileInfo(file))
+                                       .OrderByDescending(file => file.LastWriteTime)  // En son değiştirilene göre sırala
+                                       .Take(4)  // En son 4 dosyayı al
+                                       .ToList();
 
-            OleDbConnection connection = new OleDbConnection(connectionString);
-
-            try
+            // Dosya listesi boşsa hata mesajı ver
+            if (excelFiles.Count == 0)
             {
-                connection.Open();
+                Response.Write("Paylaşımlı klasörde hiç Excel dosyası bulunamadı.");
+                return;
+            }
 
-                // Belirli bir sayfayı seçin (Örneğin, "Sheet1")
-                string query = "SELECT [Column1], [Column2], [Column3] FROM [Sheet1$]";  // Verileri alacağınız sayfa
+            // Excel dosyalarını tek tek oku
+            foreach (var file in excelFiles)
+            {
+                string excelFilePath = file.FullName;  // Dosyanın tam yolu
+                string connectionString =
+                    @"Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + excelFilePath + @";Extended Properties=""Excel 12.0 Xml;HDR=YES;""";
 
-                OleDbDataAdapter dataAdapter = new OleDbDataAdapter(query, connection);
-                DataTable dt = new DataTable();
-                dataAdapter.Fill(dt);
+                OleDbConnection connection = new OleDbConnection(connectionString);
 
-                // Dosya adı ve veriyi ekrana yazdırma
-                Response.Write("<b>Dosya Adı: </b>" + file.Name + "<br/>");
-
-                // Veriyi ekranda yazdırma
-                foreach (DataRow row in dt.Rows)
+                try
                 {
-                    Response.Write(row["Column1"] + " - " + row["Column2"] + " - " + row["Column3"] + "<br/>");
-                }
+                    connection.Open();
+                    Response.Write("aldiö");
+                    return;
+                    // Belirli bir sayfayı seçin (Örneğin, "Sheet1")
+                    string query = "SELECT [Column1], [Column2], [Column3] FROM [Sheet1$]";  // Verileri alacağınız sayfa
 
-                Response.Write("<br/>");
-            }
-            catch (Exception ex)
-            {
-                Response.Write("Hata: " + ex.Message);
-            }
-            finally
-            {
-                connection.Close();
+                    OleDbDataAdapter dataAdapter = new OleDbDataAdapter(query, connection);
+                    DataTable dt = new DataTable();
+                    dataAdapter.Fill(dt);
+
+                    // Dosya adı ve veriyi ekrana yazdırma
+                    Response.Write("<b>Dosya Adı: </b>" + file.Name + "<br/>");
+
+                    // Veriyi ekranda yazdırma
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        Response.Write(row["Column1"] + " - " + row["Column2"] + " - " + row["Column3"] + "<br/>");
+                    }
+
+                    Response.Write("<br/>");
+                }
+                catch (Exception ex)
+                {
+                    Response.Write("Hata: " + ex.Message);
+                }
+                finally
+                {
+                    connection.Close();
+                }
             }
         }
-    }
-}
+        office intertop excell
+                List<string[]> rows = new List<string[]>();
+        JavaScriptSerializer serializer = new JavaScriptSerializer();
+        serializer.MaxJsonLength = Int32.MaxValue;
+                string json = serializer.Serialize(rows);
+        string script = $"<script> data = {json};initializeTable();</script>";
+        ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
