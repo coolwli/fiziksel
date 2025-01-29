@@ -1,77 +1,63 @@
-# vCenter isimleri
-$vcenters = @("ptekvcs01", "apgaraavcs801", "apgartstvcs201", "ptekvcsd01", "apgartksvcs201", "apgartksvcs801")
-$vcenters = @("ptekvcs01")
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$filePath = "C:\dosya_yolu\dosya_adı.xlsx"
+$workbook = $excel.Workbooks.Open($filePath)
 
-# Sonuçları depolayacağımız dizi
-$results = @()
+try {
+    # İkinci sayfayı al
+    $worksheet2 = $workbook.Sheets.Item(2)
+    $usedRange2 = $worksheet2.UsedRange
+    $rows2 = $usedRange2.Rows
 
-foreach ($vcenter in $vcenters) {
-    # vCenter'a bağlanıyoruz
-    Connect-VIServer -Server $vcenter -User alicanda1 -Password Bytar4321
+    $data = @()
 
-    # Kullanıcı ve rollerini saklayacağımız bir hash table
-    $userRoles = @{}
-
-    # vCenter kullanıcı izinlerini alıyoruz
-    $vcenterUsers = Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
-
-    foreach ($user in $vcenterUsers) {
-        # Eğer bu kullanıcı daha önce eklenmediyse, hash table'a ekliyoruz
-        if (-not $userRoles.ContainsKey($user.Principal)) {
-            $userRoles[$user.Principal] = @{}
-        }
-
-        # Eğer bu kullanıcının rolü daha önce eklenmediyse, rolü ekliyoruz
-        if (-not $userRoles[$user.Principal].ContainsKey($user.Role)) {
-            $userRoles[$user.Principal][$user.Role] = @()
-        }
-
-        # Kullanıcı rolüne vCenter'ı ekliyoruz, tekrarları önlemek için -contains kontrolü
-        if (-not $userRoles[$user.Principal][$user.Role] -contains $vcenter) {
-            $userRoles[$user.Principal][$user.Role] += $vcenter
+    foreach ($row in $rows2) {
+        $rowData = @(
+            $row.Cells.Item(3).Text,  # C sütunu
+            $row.Cells.Item(4).Text,  # D sütunu
+            $row.Cells.Item(5).Text,  # E sütunu
+            $row.Cells.Item(6).Text   # F sütunu
+        )
+        $data += New-Object PSObject -property @{
+            C = $rowData[0]
+            D = $rowData[1]
+            E = $rowData[2]
+            F = $rowData[3]
         }
     }
 
-    # Cluster'lar üzerindeki izinleri alıyoruz
-    $clusters = Get-Cluster
-    foreach ($cluster in $clusters) {
-        $clusterPermissions = Get-Cluster $cluster | Get-VIPermission | Where-Object { $_.Principal -notmatch 'vsphere' }
+    # Dördüncü sayfayı al ve C sütunundaki isme göre 9. sütun verisini al
+    $worksheet4 = $workbook.Sheets.Item(4)
+    $usedRange4 = $worksheet4.UsedRange
+    $rows4 = $usedRange4.Rows
 
-        foreach ($perm in $clusterPermissions) {
-            # Eğer bu kullanıcı daha önce eklenmediyse, hash table'a ekliyoruz
-            if (-not $userRoles.ContainsKey($perm.Principal)) {
-                $userRoles[$perm.Principal] = @{}
-            }
-
-            # Eğer bu kullanıcının rolü daha önce eklenmediyse, rolü ekliyoruz
-            if (-not $userRoles[$perm.Principal].ContainsKey($perm.Role)) {
-                $userRoles[$perm.Principal][$perm.Role] = @()
-            }
-
-            # Kullanıcı rolüne cluster'ı ekliyoruz, tekrarları önlemek için -contains kontrolü
-            if (-not $userRoles[$perm.Principal][$perm.Role] -contains $cluster.Name) {
-                $userRoles[$perm.Principal][$perm.Role] += $cluster.Name
-            }
+    $namesData = @{}
+    foreach ($row in $rows4) {
+        $key = $row.Cells.Item(3).Text  # C sütunu
+        $value = $row.Cells.Item(9).Text # I sütunu (9. sütun)
+        if ($key -and $value) {
+            $namesData[$key] = $value
         }
     }
 
-    # Kullanıcı ve rollerine ait bilgileri sonuç dizisine ekliyoruz
-    foreach ($user in $userRoles.GetEnumerator()) {
-        $userName = $user.Key
-        foreach ($role in $user.Value.GetEnumerator()) {
-            $results += [PSCustomObject]@{
-                User     = $userName
-                Role     = $role.Key
-                "Using In" = ($role.Value -join ", ")  # Birleştirilen vCenter ve Cluster isimleri
-            }
+    foreach ($item in $data) {
+        $name = $item.C  # 2. sayfadaki C sütunu adı
+        if ($namesData.ContainsKey($name)) {
+            $item | Add-Member -MemberType NoteProperty -Name "ValueFromSheet4" -Value $namesData[$name]
         }
     }
 
-    # vCenter'a olan bağlantıyı kapatıyoruz
-    Disconnect-VIServer -Server $vcenter -Confirm:$false
+    # Veriyi CSV'ye kaydet
+    $csvFilePath = "C:\dosya_yolu\yeni_dosya.csv"
+    $data | Export-Csv -Path $csvFilePath -NoTypeInformation
 
-    # Excel dosyasına yazmak için her vCenter için ayrı sayfa olacak şekilde düzenleme
-    $results | Export-Excel -Path "F:\Ali\exports\service_users_report.xlsx" -WorksheetName $vcenter -AutoSize -Append
+} catch {
+    Write-Error "Bir hata oluştu: $_"
+} finally {
+    $workbook.Close($false)
+    $excel.Quit()
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet2) | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet4) | Out-Null
 }
-
-Write-Host "Data export completed!"
