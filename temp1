@@ -1,15 +1,80 @@
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$filePath = "C:\dosya_yolu\dosya_adı.xlsx"
-$workbook = $excel.Workbooks.Open($filePath)
+# Excel Uygulamasını başlat
+$excelApp = New-Object -ComObject Excel.Application
+$excelApp.Visible = $false
 
-try {
-    # İkinci sayfayı al
+# Klasör yolu ve çıkış CSV dosyasının yolu
+$folderPath = "C:\dosya_yolu\"
+$csvFilePath = "C:\dosya_yolu\yeni_dosya.csv"
+
+# Anahtar kelimeler dizisi - Buraya filtrelemek istediğiniz anahtar kelimeleri ekleyin
+$keywords = @("kelime1", "kelime2", "kelime3")
+
+# Toplanan verilerin saklanacağı bir dizi
+$allData = @()
+
+# Veriyi almak ve işlemek için her bir anahtar kelimeyi işleyelim
+foreach ($keyword in $keywords) {
+    $latestFile = GetLatestExcelFile($keyword, $folderPath)
+
+    # Eğer geçerli bir dosya bulunmuşsa, veriyi işleyelim
+    if ($latestFile) {
+        try {
+            $fileData = ProcessExcelFile($latestFile, $keyword, $excelApp)
+            $allData += $fileData
+        } catch {
+            Write-Warning "Hata oluştu dosyada '$($latestFile.Name)': $_"
+        }
+    }
+}
+
+# Veriyi CSV'ye kaydet
+Export-DataToCsv $allData $csvFilePath
+
+# Excel uygulamasını kapat
+$excelApp.Quit()
+
+# Excel COM nesnelerini serbest bırak
+Release-ComObjects $excelApp
+
+# --- Fonksiyonlar Başlangıç ---
+
+# En son eklenen dosyayı almak için kullanılan fonksiyon
+function GetLatestExcelFile {
+    param (
+        [string]$keyword,
+        [string]$folderPath
+    )
+
+    # Klasördeki tüm Excel dosyalarını al
+    $allFiles = Get-ChildItem -Path $folderPath -Filter "*.xlsx"
+
+    # Kelimeyi içeren dosyaları filtrele
+    $filteredFiles = $allFiles | Where-Object { $_.Name -like "*$keyword*" }
+
+    # Eğer filtrelenmiş dosya varsa, en son eklenen dosyayı al
+    $latestFile = $filteredFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+    return $latestFile
+}
+
+# Excel dosyasını işleyip veriyi almak için kullanılan fonksiyon
+function ProcessExcelFile {
+    param (
+        [System.IO.FileInfo]$excelFile,
+        [string]$keyword,
+        [System.Object]$excelApp
+    )
+
+    # Dosyayı aç
+    $workbook = $excelApp.Workbooks.Open($excelFile.FullName)
+
+    # İkinci sayfayı al ve verileri oku
     $worksheet2 = $workbook.Sheets.Item(2)
     $usedRange2 = $worksheet2.UsedRange
     $rows2 = $usedRange2.Rows
 
-    $data = @()
+    # Veriyi toplamak için bir dizi
+    $fileData = @()
 
     foreach ($row in $rows2) {
         $rowData = @(
@@ -18,11 +83,14 @@ try {
             $row.Cells.Item(5).Text,  # E sütunu
             $row.Cells.Item(6).Text   # F sütunu
         )
-        $data += New-Object PSObject -property @{
+
+        $fileData += New-Object PSObject -property @{
             C = $rowData[0]
             D = $rowData[1]
             E = $rowData[2]
             F = $rowData[3]
+            ExcelFileName = $excelFile.Name  # Excel dosyasının adı
+            Keyword = $keyword  # İlgili anahtar kelime
         }
     }
 
@@ -31,6 +99,7 @@ try {
     $usedRange4 = $worksheet4.UsedRange
     $rows4 = $usedRange4.Rows
 
+    # İkinci sayfadaki verileri üçüncü sayfadan alınan verilerle eşleştir
     $namesData = @{}
     foreach ($row in $rows4) {
         $key = $row.Cells.Item(3).Text  # C sütunu
@@ -40,24 +109,38 @@ try {
         }
     }
 
-    foreach ($item in $data) {
+    # İkinci sayfadaki verileri üçüncü sayfadan alınan verilerle birleştir
+    foreach ($item in $fileData) {
         $name = $item.C  # 2. sayfadaki C sütunu adı
         if ($namesData.ContainsKey($name)) {
             $item | Add-Member -MemberType NoteProperty -Name "ValueFromSheet4" -Value $namesData[$name]
         }
     }
 
-    # Veriyi CSV'ye kaydet
-    $csvFilePath = "C:\dosya_yolu\yeni_dosya.csv"
-    $data | Export-Csv -Path $csvFilePath -NoTypeInformation
-
-} catch {
-    Write-Error "Bir hata oluştu: $_"
-} finally {
+    # Excel dosyasını kapat
     $workbook.Close($false)
-    $excel.Quit()
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet2) | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($worksheet4) | Out-Null
+
+    return $fileData
 }
+
+# Verileri CSV dosyasına aktarmak için kullanılan fonksiyon
+function Export-DataToCsv {
+    param (
+        [Array]$data,
+        [string]$csvFilePath
+    )
+
+    # Veriyi CSV'ye kaydet
+    $data | Export-Csv -Path $csvFilePath -NoTypeInformation
+}
+
+# COM nesnelerini serbest bırakmak için kullanılan fonksiyon
+function Release-ComObjects {
+    param (
+        [Object]$comObject
+    )
+
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($comObject) | Out-Null
+}
+
+# --- Fonksiyonlar Bitiş ---
