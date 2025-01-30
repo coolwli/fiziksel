@@ -17,17 +17,21 @@ namespace vNetwork
 
             try
             {
+                // CSV dosyalarını al
                 var csvFiles = Directory.GetFiles(folderPath, "*.csv");
 
+                // CSV dosyası bulunmazsa hata mesajı göster
                 if (csvFiles.Length == 0)
                 {
                     Response.Write("CSV dosyası bulunamadı.");
                     return;
                 }
 
+                // En son oluşturulan CSV dosyasını seç
                 string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
                 List<string[]> rows = new List<string[]>();
 
+                // CSV dosyasını oku
                 using (StreamReader reader = new StreamReader(latestFile))
                 {
                     string line;
@@ -35,14 +39,20 @@ namespace vNetwork
                     {
                         if (!string.IsNullOrEmpty(line))
                         {
-
+                            // Satırı ; ile ayır
+                            string[] columns = line.Split(';');
+                            rows.Add(columns);
                         }
                     }
                 }
+
+                // JavaScript'e veri aktarımı için JSON formatına dönüştür
                 JavaScriptSerializer serializer = new JavaScriptSerializer();
                 serializer.MaxJsonLength = Int32.MaxValue;
                 string json = serializer.Serialize(rows);
-                string script = $"<script> data = {json};initializeTable();</script>";
+
+                // JSON verisini sayfaya aktar
+                string script = $"<script>data = {json}; initializeTable();</script>";
                 ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
             }
             catch (Exception ex)
@@ -50,6 +60,7 @@ namespace vNetwork
                 Response.Write("Hata: " + ex.Message);
             }
         }
+
         protected void hiddenButton_Click(object sender, EventArgs e)
         {
             string jsonData = hiddenField.Value;
@@ -71,10 +82,11 @@ namespace vNetwork
 
                 foreach (var row in tableData)
                 {
-                    csv.AppendLine($"{row[0]};{row[1]}...");
-
+                    // Satırdaki verileri ; ile ayırarak CSV formatına ekle
+                    csv.AppendLine($"{row[0]};{row[1]};{row[2]};{row[3]};{row[4]};{row[5]}");
                 }
 
+                // CSV dosyasını istemciye gönder
                 Response.Clear();
                 Response.ContentType = "text/csv";
                 Response.AddHeader("content-disposition", "attachment;filename=administrators.csv");
