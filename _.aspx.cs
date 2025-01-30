@@ -1,65 +1,86 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Collections.Generic;
 using System.Web.UI;
 using System.Web.Script.Serialization;
-using Microsoft.Office.Interop.Excel;
+using System.Web.UI.WebControls;
 
-public partial class Default : Page
+namespace vNetwork
 {
-    protected void Page_Load(object sender, EventArgs e)
+    public partial class _default : Page
     {
-        string sharedFolderPath = @"\\tekscr1\f$\Serhat\RvTools_Inventory\Reports";  
-
-        // Klasördeki tüm Excel dosyalarını al (xlsx uzantılı)
-        var excelFiles = Directory.GetFiles(sharedFolderPath, "*.xlsx")
-                                   .Select(file => new FileInfo(file))
-                                   .OrderByDescending(file => file.LastWriteTime)  // En son değiştirilene göre sırala
-                                   .Take(4)  // En son 4 dosyayı al
-                                   .ToList();
-
-        // Dosya listesi boşsa hata mesajı ver
-        if (excelFiles.Count == 0)
+        protected void Page_Load(object sender, EventArgs e)
         {
-            Response.Write("Paylaşımlı klasörde hiç Excel dosyası bulunamadı.");
-            return;
-        }
+            string folderPath = @"C:\Temp\Winwin\Windows VM Networks";
 
-        // Excel dosyalarını tek tek oku
-        List<string[]> rows = new List<string[]>();
-
-        foreach (var file in excelFiles)
-        {
-            string excelFilePath = file.FullName;  // Dosyanın tam yolu
-
-            Application excelApp = new Application();
-            Workbook workbook = excelApp.Workbooks.Open(excelFilePath);
-            Worksheet worksheet = (Worksheet)workbook.Sheets[1]; // İlk sayfayı al
-
-            Range range = worksheet.UsedRange;
-            int rowCount = range.Rows.Count;
-
-            // Excel dosyasındaki verileri oku
-            for (int i = 1; i <= rowCount; i++)
+            try
             {
-                string[] row = new string[3]; // 3 sütun olduğunu varsayıyoruz
-                row[0] = range.Cells[i, 1].Value2.ToString();
-                row[1] = range.Cells[i, 2].Value2.ToString();
-                row[2] = range.Cells[i, 3].Value2.ToString();
-                rows.Add(row);
+                var csvFiles = Directory.GetFiles(folderPath, "*.csv");
+
+                if (csvFiles.Length == 0)
+                {
+                    Response.Write("CSV dosyası bulunamadı.");
+                    return;
+                }
+
+                string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
+                List<string[]> rows = new List<string[]>();
+
+                using (StreamReader reader = new StreamReader(latestFile))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        if (!string.IsNullOrEmpty(line))
+                        {
+
+                        }
+                    }
+                }
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = Int32.MaxValue;
+                string json = serializer.Serialize(rows);
+                string script = $"<script> data = {json};initializeTable();</script>";
+                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
             }
-
-            // Çalışma kitabını ve Excel uygulamasını kapat
-            workbook.Close(0);
-            excelApp.Quit();
+            catch (Exception ex)
+            {
+                Response.Write("Hata: " + ex.Message);
+            }
         }
+        protected void hiddenButton_Click(object sender, EventArgs e)
+        {
+            string jsonData = hiddenField.Value;
 
-        // JavaScript'e veri göndermek için JSON formatına dönüştür
-        JavaScriptSerializer serializer = new JavaScriptSerializer();
-        serializer.MaxJsonLength = Int32.MaxValue;
-        string json = serializer.Serialize(rows);
-        string script = $"<script>data = {json}; initializeTable();</script>";
+            if (!string.IsNullOrEmpty(jsonData))
+            {
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue;
+                var tableData = js.Deserialize<List<string[]>>(jsonData);
 
-        ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
+                if (tableData.Count == 0)
+                {
+                    Response.Write("No data available.");
+                    return;
+                }
+
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine("Sunucu Adı;IP Adresi;Subnet Bilgisi;Mac Adresi;İşletim Sistemi;vCenter");
+
+                foreach (var row in tableData)
+                {
+                    csv.AppendLine($"{row[0]};{row[1]}...");
+
+                }
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=administrators.csv");
+                Response.Write(csv.ToString());
+                Response.End();
+            }
+        }
     }
 }
