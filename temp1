@@ -1,156 +1,29 @@
-# Konfigürasyon ve Sabitler
-$TokenLifetime = [TimeSpan]::FromHours(3)  # Token süresi
-$vropsServer = "ptekvrops01.fw.garanti.com.tr"
-$vropsUsername = "admin"
-$vropsPassword = "VMware123!"  # Şifreyi güvenli bir yerde saklamak daha iyi olacaktır
-$tokenType = "pendik"
-$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
-
 # SMTP Ayarları
 $SMTPHost = "smtpappv1.fw.garanti.com.tr"
 $SMTPPort = 25
 $from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
 $to = "GTAgileCloudUnited@garantibbva.com.tr"
+$subject = "faz-4"
 
-$subject = "Irregular VMs"
+# Excel dosyasını oku
+$excelFile = "C:\Users\o\Desktop\data.xlsx"
+$excelData = Import-Excel -Path $excelFile
 
-# SQL Veri Tabanı Bağlantısı
-function Get-Token {
-    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-    $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
-    $command = $connection.CreateCommand()
-    $command.CommandText = $query
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+# Son sütunu dinamik olarak al (Sahibi Sütunu)
+$lastColumnIndex = $excelData[0].PSObject.Properties.Count - 1
+$ownerColumnName = $excelData[0].PSObject.Properties[$lastColumnIndex].Name
 
-    # Veritabanı bağlantısını açıyoruz ve token bilgilerini alıyoruz
-    $connection.Open()
-    $reader = $command.ExecuteReader()
+# Grupları ayır ve her grup için email gönder
+$groupedData = $excelData | Group-Object -Property $ownerColumnName
 
-    if ($reader.Read()) {
-        $token = $reader["Token"]
-        $tokenExpiryDate = $reader["ExpiryDate"]
-    }
+foreach ($group in $groupedData) {
+    $groupName = $group.Name
+    $groupRows = $group.Group
 
-    $connection.Close()
+    # HTML Tablosunu oluştur
+    $htmlTable = $groupRows | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
 
-    return @{ token = $token; expiryDate = $tokenExpiryDate }
-}
-
-# Token bilgisini güncelleme
-function Update-Token($token, $expiryDate) {
-    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-    $query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType"
-    $command = $connection.CreateCommand()
-    $command.CommandText = $query
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
-    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
-
-    # Veritabanını güncelliyoruz
-    $connection.Open()
-    $command.ExecuteNonQuery()
-    $connection.Close()
-}
-
-# Yeni bir token almak için fonksiyon
-function Get-NewToken {
-    $jsonAuthentication = @{
-        username = $vropsUsername
-        password = $vropsPassword
-    } | ConvertTo-Json
-
-    $restUrlAuthenticate = "https://$($vropsServer)/suite-api/api/auth/token/acquire?_no_links=true"
-    $restAuthenticate = Invoke-RestMethod -Method POST -Uri $restUrlAuthenticate -Body $jsonAuthentication -ContentType "application/json"
-    
-    return $restAuthenticate.'auth-token'.token
-}
-
-# Veritabanındaki token'ı al
-$tokenInfo = Get-Token
-
-# Eğer token süresi dolmuşsa, yeni token al
-if ($tokenInfo.expiryDate -le (Get-Date)) {
-    Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
-    $token = Get-NewToken
-} 
-else {
-    Write-Host "Token geçerli. Süresi uzatılıyor..."
-    $token = $tokenInfo.token
-}
-
-# Yeni token bilgilerini veritabanına kaydet
-Update-Token -token $token -expiryDate ((Get-Date).Add($TokenLifetime))
-
-# API için gerekli başlıkları ayarla
-$headers = @{
-    "Content-Type"  = "application/json"
-    "Authorization" = "vRealizeOpsToken $token"
-}
-
-# Rapor URL'si ve API çağrısı
-$reportsUrl = "https://$($vropsServer)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
-
-# Satırlardaki düzensiz VM'leri filtrele
-$irregularRows = @()
-foreach ($row in $reportsResponse.viewsData.rows) {
-    $datastores = $row.cells.7
-    foreach ($ds in $datastores -split ',') {
-        if ($ds -inotlike "*repl*") {
-            $irregularRows += [PSCustomObject]@{
-                Name         = $row.cells.objId
-                Power_State  = $row.cells.1
-                vCenter      = $row.cells.5
-                DS_Cluster   = $row.cells.7
-            }
-            break
-        }
-    }
-}
-
-# Email gönderme fonksiyonu
-function Send-Email($subject, $body, $to) {
-    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
-    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
-    $message.IsBodyHtml = $true
-
-    # Email gönderimi
-    $SMTPClient.Send($message)
-    $message.Dispose()
-    $SMTPClient.Dispose()
-}
-
-# Email içeriğini oluştur
-if ($irregularRows.Count -eq 0) {
-    $body = @"
-<html>
-<head>
-    <style>
-        body {
-            font-family: Verdana, Geneva, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h4 {
-            color: #333;
-            text-align: left;
-        }
-        p {
-            color: #555;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <h4>Bu haftaki replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
-</body>
-</html>
-"@
-}
-else {
-    $htmlTable = $irregularRows | Select-Object Name, Power_State, vCenter, DS_Cluster | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
+    # E-posta içeriği oluştur
     $body = @"
 <html>
 <head>
@@ -189,7 +62,25 @@ else {
 </body>
 </html>
 "@
+
+    # Email gönder
+    Send-Email -subject "$subject - $groupName" -body $body -to $groupName
 }
 
-# Email gönder
-Send-Email -subject $subject -body $body -to $to
+# Send-Email Fonksiyonu
+function Send-Email {
+    param(
+        [string]$subject,
+        [string]$body,
+        [string]$to
+    )
+
+    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
+    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+    $message.IsBodyHtml = $true
+
+    # Email gönderimi
+    $SMTPClient.Send($message)
+    $message.Dispose()
+    $SMTPClient.Dispose()
+}
