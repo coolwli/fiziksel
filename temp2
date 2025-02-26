@@ -1,9 +1,50 @@
-            <asp:UpdatePanel ID="UpdatePanel1" runat="server">
-                <ContentTemplate>
-                    <asp:Label ID="lblTime" runat="server" Text="Saat: "></asp:Label><br />
-                    <asp:Button ID="btnUpdate" runat="server" Text="Güncelle" OnClick="btnUpdate_Click" />
-                </ContentTemplate>
-                <Triggers>
-                    <asp:AsyncPostBackTrigger ControlID="btnUpdate" EventName="Click" />
-                </Triggers>
-            </asp:UpdatePanel>
+# SMTP Ayarları
+$SMTPHost = "smtpappv1.fw.garanti.com.tr"
+$SMTPPort = 25
+$from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
+$to = "GTAgileCloudUnited@garantibbva.com.tr"
+
+# E-posta gönderme fonksiyonu
+function Send-Email {
+    param(
+        [string]$subject,
+        [string]$body
+    )
+
+        $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
+        $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+        $message.IsBodyHtml = $true
+
+        # Email gönderimi
+        $SMTPClient.Send($message)
+
+        $message.Dispose()
+        $SMTPClient.Dispose()
+    
+}
+
+# Hata bildirimi gönderme fonksiyonu
+function Handle-Error {
+    param(
+        [string]$scriptName,
+        [string]$errorMessage
+    )
+
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $body = "<h2>Hata Bildirimi</h2>"
+    $body += "<p><strong>Script Adı:</strong> $scriptName</p>"
+    $body += "<p><strong>Hata Mesajı:</strong> $errorMessage</p>"
+    $body += "<p><strong>Zaman:</strong> $timestamp</p>"
+
+    # E-posta gönder
+    Send-Email -subject "Hata Bildirimi: $scriptName" -body $body
+}
+
+# Örnek kullanım
+. "./excell2mail.ps1"  
+try {
+    "A" + 1 
+}
+catch {
+    Handle-Error -scriptName "AnotherScript.ps1" -errorMessage $_.Exception.Message
+}
