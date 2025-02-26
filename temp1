@@ -1,146 +1,195 @@
-# Excel Uygulamasını başlat
-$excelApp = New-Object -ComObject Excel.Application
-$excelApp.Visible = $false
+# Konfigürasyon ve Sabitler
+$TokenLifetime = [TimeSpan]::FromHours(3)  # Token süresi
+$vropsServer = "ptekvrops01.fw.garanti.com.tr"
+$vropsUsername = "admin"
+$vropsPassword = "VMware123!"  # Şifreyi güvenli bir yerde saklamak daha iyi olacaktır
+$tokenType = "pendik"
+$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True"
 
-# Klasör yolu ve çıkış CSV dosyasının yolu
-$folderPath = "C:\dosya_yolu\"
-$csvFilePath = "C:\dosya_yolu\yeni_dosya.csv"
+# SMTP Ayarları
+$SMTPHost = "smtpappv1.fw.garanti.com.tr"
+$SMTPPort = 25
+$from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
+$to = "GTAgileCloudUnited@garantibbva.com.tr"
 
-# Anahtar kelimeler dizisi - Buraya filtrelemek istediğiniz anahtar kelimeleri ekleyin
-$keywords = @("kelime1", "kelime2", "kelime3")
+$subject = "Irregular VMs"
 
-# Toplanan verilerin saklanacağı bir dizi
-$allData = @()
+# SQL Veri Tabanı Bağlantısı
+function Get-Token {
+    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+    $query = "SELECT Token, ExpiryDate FROM TokenInfo WHERE TokenType = @TokenType"
+    $command = $connection.CreateCommand()
+    $command.CommandText = $query
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
 
-# Veriyi almak ve işlemek için her bir anahtar kelimeyi işleyelim
-foreach ($keyword in $keywords) {
-    $latestFile = GetLatestExcelFile($keyword, $folderPath)
+    # Veritabanı bağlantısını açıyoruz ve token bilgilerini alıyoruz
+    $connection.Open()
+    $reader = $command.ExecuteReader()
 
-    # Eğer geçerli bir dosya bulunmuşsa, veriyi işleyelim
-    if ($latestFile) {
-        try {
-            $fileData = ProcessExcelFile($latestFile, $keyword, $excelApp)
-            $allData += $fileData
-        } catch {
-            Write-Warning "Hata oluştu dosyada '$($latestFile.Name)': $_"
+    if ($reader.Read()) {
+        $token = $reader["Token"]
+        $tokenExpiryDate = $reader["ExpiryDate"]
+    }
+
+    $connection.Close()
+
+    return @{ token = $token; expiryDate = $tokenExpiryDate }
+}
+
+# Token bilgisini güncelleme
+function Update-Token($token, $expiryDate) {
+    $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+    $query = "UPDATE TokenInfo SET Token = @Token, ExpiryDate = @ExpiryDate WHERE TokenType = @TokenType"
+    $command = $connection.CreateCommand()
+    $command.CommandText = $query
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@TokenType",[Data.SqlDbType]::VarChar, 50))).Value = $tokenType
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@Token",[Data.SqlDbType]::VarChar, 500))).Value = $token
+    $command.Parameters.Add((New-Object Data.SqlClient.SqlParameter("@ExpiryDate",[Data.SqlDbType]::DateTime))).Value = (Get-Date).Add($TokenLifetime)
+
+    # Veritabanını güncelliyoruz
+    $connection.Open()
+    $command.ExecuteNonQuery()
+    $connection.Close()
+}
+
+# Yeni bir token almak için fonksiyon
+function Get-NewToken {
+    $jsonAuthentication = @{
+        username = $vropsUsername
+        password = $vropsPassword
+    } | ConvertTo-Json
+
+    $restUrlAuthenticate = "https://$($vropsServer)/suite-api/api/auth/token/acquire?_no_links=true"
+    $restAuthenticate = Invoke-RestMethod -Method POST -Uri $restUrlAuthenticate -Body $jsonAuthentication -ContentType "application/json"
+    
+    return $restAuthenticate.'auth-token'.token
+}
+
+# Veritabanındaki token'ı al
+$tokenInfo = Get-Token
+
+# Eğer token süresi dolmuşsa, yeni token al
+if ($tokenInfo.expiryDate -le (Get-Date)) {
+    Write-Host "Token süresi dolmuş. Yeni token alınıyor..."
+    $token = Get-NewToken
+} 
+else {
+    Write-Host "Token geçerli. Süresi uzatılıyor..."
+    $token = $tokenInfo.token
+}
+
+# Yeni token bilgilerini veritabanına kaydet
+Update-Token -token $token -expiryDate ((Get-Date).Add($TokenLifetime))
+
+# API için gerekli başlıkları ayarla
+$headers = @{
+    "Content-Type"  = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
+
+# Rapor URL'si ve API çağrısı
+$reportsUrl = "https://$($vropsServer)/suite-api/internal/views/e5bb44f3-f7d8-45c5-8819-dfc6e7672463/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=10000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+
+# Satırlardaki düzensiz VM'leri filtrele
+$irregularRows = @()
+foreach ($row in $reportsResponse.viewsData.rows) {
+    $datastores = $row.cells.7
+    foreach ($ds in $datastores -split ',') {
+        if ($ds -inotlike "*repl*") {
+            $irregularRows += [PSCustomObject]@{
+                Name         = $row.cells.objId
+                Power_State  = $row.cells.1
+                vCenter      = $row.cells.5
+                DS_Cluster   = $row.cells.7
+            }
+            break
         }
     }
 }
 
-# Veriyi CSV'ye kaydet
-Export-DataToCsv $allData $csvFilePath
+# Email gönderme fonksiyonu
+function Send-Email($subject, $body, $to) {
+    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
+    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+    $message.IsBodyHtml = $true
 
-# Excel uygulamasını kapat
-$excelApp.Quit()
-
-# Excel COM nesnelerini serbest bırak
-Release-ComObjects $excelApp
-
-# --- Fonksiyonlar Başlangıç ---
-
-# En son eklenen dosyayı almak için kullanılan fonksiyon
-function GetLatestExcelFile {
-    param (
-        [string]$keyword,
-        [string]$folderPath
-    )
-
-    # Klasördeki tüm Excel dosyalarını al
-    $allFiles = Get-ChildItem -Path $folderPath -Filter "*.xlsx"
-
-    # Kelimeyi içeren dosyaları filtrele
-    $filteredFiles = $allFiles | Where-Object { $_.Name -like "*$keyword*" }
-
-    # Eğer filtrelenmiş dosya varsa, en son eklenen dosyayı al
-    $latestFile = $filteredFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-
-    return $latestFile
+    # Email gönderimi
+    $SMTPClient.Send($message)
+    $message.Dispose()
+    $SMTPClient.Dispose()
 }
 
-# Excel dosyasını işleyip veriyi almak için kullanılan fonksiyon
-function ProcessExcelFile {
-    param (
-        [System.IO.FileInfo]$excelFile,
-        [string]$keyword,
-        [System.Object]$excelApp
-    )
-
-    # Dosyayı aç
-    $workbook = $excelApp.Workbooks.Open($excelFile.FullName)
-
-    # İkinci sayfayı al ve verileri oku
-    $worksheet2 = $workbook.Sheets.Item(2)
-    $usedRange2 = $worksheet2.UsedRange
-    $rows2 = $usedRange2.Rows
-
-    # Veriyi toplamak için bir dizi
-    $fileData = @()
-
-    foreach ($row in $rows2) {
-        $rowData = @(
-            $row.Cells.Item(3).Text,  # C sütunu
-            $row.Cells.Item(4).Text,  # D sütunu
-            $row.Cells.Item(5).Text,  # E sütunu
-            $row.Cells.Item(6).Text   # F sütunu
-        )
-
-        $fileData += New-Object PSObject -property @{
-            C = $rowData[0]
-            D = $rowData[1]
-            E = $rowData[2]
-            F = $rowData[3]
-            ExcelFileName = $excelFile.Name  # Excel dosyasının adı
-            Keyword = $keyword  # İlgili anahtar kelime
+# Email içeriğini oluştur
+if ($irregularRows.Count -eq 0) {
+    $body = @"
+<html>
+<head>
+    <style>
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
         }
-    }
-
-    # Dördüncü sayfayı al ve C sütunundaki isme göre 9. sütun verisini al
-    $worksheet4 = $workbook.Sheets.Item(4)
-    $usedRange4 = $worksheet4.UsedRange
-    $rows4 = $usedRange4.Rows
-
-    # İkinci sayfadaki verileri üçüncü sayfadan alınan verilerle eşleştir
-    $namesData = @{}
-    foreach ($row in $rows4) {
-        $key = $row.Cells.Item(3).Text  # C sütunu
-        $value = $row.Cells.Item(9).Text # I sütunu (9. sütun)
-        if ($key -and $value) {
-            $namesData[$key] = $value
+        h4 {
+            color: #333;
+            text-align: left;
         }
-    }
-
-    # İkinci sayfadaki verileri üçüncü sayfadan alınan verilerle birleştir
-    foreach ($item in $fileData) {
-        $name = $item.C  # 2. sayfadaki C sütunu adı
-        if ($namesData.ContainsKey($name)) {
-            $item | Add-Member -MemberType NoteProperty -Name "ValueFromSheet4" -Value $namesData[$name]
+        p {
+            color: #555;
+            font-size: 14px;
         }
-    }
-
-    # Excel dosyasını kapat
-    $workbook.Close($false)
-
-    return $fileData
+    </style>
+</head>
+<body>
+    <h4>Bu haftaki replike VM taramasında uyumsuz VM bulunmamıştır.</h4>
+</body>
+</html>
+"@
+}
+else {
+    $htmlTable = $irregularRows | Select-Object Name, Power_State, vCenter, DS_Cluster | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
+    $body = @"
+<html>
+<head>
+    <style>
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h4 {
+            color: #333;
+            text-align: left;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    $htmlTable
+</body>
+</html>
+"@
 }
 
-# Verileri CSV dosyasına aktarmak için kullanılan fonksiyon
-function Export-DataToCsv {
-    param (
-        [Array]$data,
-        [string]$csvFilePath
-    )
-
-    # Veriyi CSV'ye kaydet
-    $data | Export-Csv -Path $csvFilePath -NoTypeInformation
-}
-
-# COM nesnelerini serbest bırakmak için kullanılan fonksiyon
-function Release-ComObjects {
-    param (
-        [Object]$comObject
-    )
-
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($comObject) | Out-Null
-}
-
-# --- Fonksiyonlar Bitiş ---
+# Email gönder
+Send-Email -subject $subject -body $body -to $to
