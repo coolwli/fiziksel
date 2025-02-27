@@ -2,12 +2,18 @@
 $SMTPHost = "smtpappv1.fw.garanti.com.tr"
 $SMTPPort = 25
 $from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
-$to = "GTAgileCloudUnited@garantibbva.com.tr"
+$to = "alicanda1@garantibbva.com.tr"
 $subject = "faz-4"
 
+$excelApp = New-Object -ComObject Excel.Application
 # Excel dosyasını oku
-$excelFile = "C:\Users\o\Desktop\data.xlsx"
+$excelFile = "F:\Ali\powershell\data.xlsx"
+
+
+
+#################### böyle yaz eskisini değiştir
 $excelData = Import-Excel -Path $excelFile
+$excelApp.Visible = $false###############
 
 # Son sütunu dinamik olarak al (Sahibi Sütunu)
 $lastColumnIndex = $excelData[0].PSObject.Properties.Count - 1
