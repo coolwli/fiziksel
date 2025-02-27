@@ -5,19 +5,51 @@ $from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
 $to = "alicanda1@garantibbva.com.tr"
 $subject = "faz-4"
 
-$excelApp = New-Object -ComObject Excel.Application
-# Excel dosyasını oku
+# Excel dosyasını açmak için Excel COM nesneleri
 $excelFile = "F:\Ali\powershell\data.xlsx"
 
+# Excel Uygulamasını başlat ve gizle
+$excelApp = New-Object -ComObject Excel.Application
+$excelApp.Visible = $false
 
+# Excel dosyasını aç
+$wb = $excelApp.Workbooks.Open($excelFile)
 
-#################### böyle yaz eskisini değiştir
-$excelData = Import-Excel -Path $excelFile
-$excelApp.Visible = $false###############
+# İlk sayfayı al
+$ws = $wb.Sheets.Item(1)
 
-# Son sütunu dinamik olarak al (Sahibi Sütunu)
-$lastColumnIndex = $excelData[0].PSObject.Properties.Count - 1
-$ownerColumnName = $excelData[0].PSObject.Properties[$lastColumnIndex].Name
+# Verilerin bulunduğu satır sayısını al (Başlık satırı hariç)
+$rowsCount = $ws.UsedRange.Rows.Count
+
+# Sütun adlarını başlık satırından al
+$columnNames = @()
+for ($col = 1; $col -le $ws.UsedRange.Columns.Count; $col++) {
+    $columnNames += $ws.Cells.Item(1, $col).Value2
+}
+
+# Verileri okuma ve saklama (Başlık satırı hariç)
+$excelData = @()
+for ($i = 2; $i -le $rowsCount; $i++) {
+    $rowData = @{}
+    for ($col = 1; $col -le $ws.UsedRange.Columns.Count; $col++) {
+        $columnName = $columnNames[$col - 1]  # 0 index-based list
+        $rowData[$columnName] = $ws.Cells.Item($i, $col).Value2
+    }
+    $excelData += New-Object PSObject -property $rowData
+}
+
+# Excel dosyasını kapat
+$wb.Close()
+$excelApp.Quit()
+
+# Sahip sütununu (Owner) dinamik olarak belirleyin
+$ownerColumnName = "Owner"  # Burada 'Owner' sütununu doğru belirlediğinizden emin olun
+
+# Eğer Owner sütunu yoksa, bu durumda kullanıcıdan dinamik olarak giriş alınabilir.
+if ($excelData[0].PSObject.Properties[$ownerColumnName] -eq $null) {
+    Write-Host "Owner sütunu bulunamadı. Lütfen uygun bir sütun adı girin."
+    $ownerColumnName = Read-Host "Owner sütun adı"
+}
 
 # Grupları ayır ve her grup için email gönder
 $groupedData = $excelData | Group-Object -Property $ownerColumnName
@@ -69,11 +101,11 @@ foreach ($group in $groupedData) {
 </html>
 "@
 
-    # Email gönder
+    # E-posta gönder
     Send-Email -subject "$subject - $groupName" -body $body -to $groupName
 }
 
-# Send-Email Fonksiyonu
+# E-posta gönderme fonksiyonu
 function Send-Email {
     param(
         [string]$subject,
@@ -81,6 +113,7 @@ function Send-Email {
         [string]$to
     )
 
+    # SMTP client ayarları
     $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
     $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
     $message.IsBodyHtml = $true
