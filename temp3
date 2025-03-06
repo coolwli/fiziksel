@@ -1,1 +1,7 @@
-
+                        if (!string.IsNullOrEmpty(line))
+                        {
+                            string[] columns = line.Split(',')
+                                .Select(col => col.Replace("\"", "").Trim())
+                                .ToArray();
+                            rows.Add(columns);
+                        }
