@@ -7,52 +7,93 @@ using System.Web.UI;
 using System.Web.Script.Serialization;
 using System.Web.UI.WebControls;
 
-
 namespace HallAyrimliVMLists
 {
     public partial class _default : System.Web.UI.Page
     {
+        private const string CsvFilesPath = @"\\gbnas02\GTSunucuOrtakAlan";
+
         protected void Page_Load(object sender, EventArgs e)
         {
+            try
+            {
+                List<string[]> allRows = LoadCsvFiles(CsvFilesPath);
+                string json = ConvertToJson(allRows);
 
-            string csvFilesPath = @"\\gbnas02\GTSunucuOrtakAlan";
+                // Initialize data for JavaScript
+                string script = $"<script>baseData = {json}; initializeTable();</script>";
+                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
+            }
+            catch (IOException ioEx)
+            {
+                // Handle file I/O exceptions
+                Response.Write($"File I/O Error: {ioEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                // Handle general exceptions
+                Response.Write($"An error occurred: {ex.Message}");
+            }
+        }
+
+        private List<string[]> LoadCsvFiles(string folderPath)
+        {
+            List<string[]> allRows = new List<string[]>();
+
+            // Get all CSV files in the folder
+            string[] csvFiles = Directory.GetFiles(folderPath, "*.csv");
+
+            foreach (var csvFilePath in csvFiles)
+            {
+                allRows.AddRange(ReadCsvFile(csvFilePath));
+            }
+
+            return allRows;
+        }
+
+        private IEnumerable<string[]> ReadCsvFile(string filePath)
+        {
+            List<string[]> rows = new List<string[]>();
 
             try
             {
-                List<string[]> rows = new List<string[]>();
-
-                using (StreamReader reader = new StreamReader(csvFilePath))
+                using (StreamReader reader = new StreamReader(filePath))
                 {
-                    string line;
-
+                    // Skip the header row
                     reader.ReadLine();
 
+                    string line;
                     while ((line = reader.ReadLine()) != null)
                     {
-                        if (!string.IsNullOrEmpty(line))
+                        if (!string.IsNullOrWhiteSpace(line))
                         {
+                            // Parse each row and clean the data
                             string[] columns = line.Split(',')
                                 .Select(col => col.Replace("\"", "").Trim())
                                 .Select(col => string.IsNullOrWhiteSpace(col) ? "" : col)
                                 .ToArray();
+
                             rows.Add(columns);
                         }
                     }
                 }
-
-                JavaScriptSerializer serializer = new JavaScriptSerializer
-                {
-                    MaxJsonLength = Int32.MaxValue
-                };
-                string json = serializer.Serialize(rows);
-
-                string script = $"<script>baseData = {json}; initializeTable();</script>";
-                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
             }
             catch (Exception ex)
             {
-                Response.Write("Hata: " + ex.Message);
+                // Log or handle the exception as needed
+                throw new IOException($"Error reading file {filePath}: {ex.Message}", ex);
             }
+
+            return rows;
+        }
+
+        private string ConvertToJson(List<string[]> data)
+        {
+            JavaScriptSerializer serializer = new JavaScriptSerializer
+            {
+                MaxJsonLength = Int32.MaxValue
+            };
+            return serializer.Serialize(data);
         }
 
         protected void hiddenButton_Click(object sender, EventArgs e)
@@ -63,12 +104,7 @@ namespace HallAyrimliVMLists
             {
                 try
                 {
-                    JavaScriptSerializer js = new JavaScriptSerializer
-                    {
-                        MaxJsonLength = int.MaxValue
-                    };
-
-                    var tableData = js.Deserialize<List<string[]>>(jsonData);
+                    var tableData = DeserializeJson(jsonData);
 
                     if (tableData.Count == 0)
                     {
@@ -76,24 +112,44 @@ namespace HallAyrimliVMLists
                         return;
                     }
 
-                    StringBuilder csv = new StringBuilder();
-                    csv.AppendLine("Name;ID;Created Date;Cluster;vCenter;User Name");
-                    foreach (var row in tableData)
-                    {
-                        csv.AppendLine($"{row[0]};{row[1]};{row[2]};{row[3]};{row[4]};{row[5]}");
-                    }
+                    string csvContent = GenerateCsvContent(tableData);
 
-                    Response.Clear();
-                    Response.ContentType = "text/csv";
-                    Response.AddHeader("content-disposition", "attachment;filename=createdVMs.csv");
-                    Response.Write(csv.ToString());
-                    Response.End();
+                    // Send CSV file to user
+                    SendCsvToClient(csvContent);
                 }
                 catch (Exception ex)
                 {
-                    Response.Write("Hata: " + ex.Message);
+                    Response.Write($"An error occurred: {ex.Message}");
                 }
             }
+        }
+
+        private List<string[]> DeserializeJson(string jsonData)
+        {
+            JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+            return js.Deserialize<List<string[]>>(jsonData);
+        }
+
+        private string GenerateCsvContent(List<string[]> tableData)
+        {
+            StringBuilder csv = new StringBuilder();
+            csv.AppendLine("Name;ID;Created Date;Cluster;vCenter;User Name");
+
+            foreach (var row in tableData)
+            {
+                csv.AppendLine(string.Join(";", row));
+            }
+
+            return csv.ToString();
+        }
+
+        private void SendCsvToClient(string csvContent)
+        {
+            Response.Clear();
+            Response.ContentType = "text/csv";
+            Response.AddHeader("content-disposition", "attachment;filename=createdVMs.csv");
+            Response.Write(csvContent);
+            Response.End();
         }
     }
 }
