@@ -7,59 +7,46 @@ using System.Web.UI;
 using System.Web.Script.Serialization;
 using System.Web.UI.WebControls;
 
-namespace vNetwork
+
+namespace HallAyrimliVMLists
 {
-    public partial class _default : Page
+    public partial class _default : System.Web.UI.Page
     {
         protected void Page_Load(object sender, EventArgs e)
         {
-            string folderPath = @"C:\Temp\Winwin\Windows VM Networks";
+
+            string csvFilesPath = @"\\gbnas02\GTSunucuOrtakAlan";
 
             try
             {
-                var csvFiles = Directory.GetFiles(folderPath, "*.csv");
-
-                if (csvFiles.Length == 0)
-                {
-                    Response.Write("CSV dosyası bulunamadı.");
-                    return;
-                }
-
-                // En son oluşturulmuş CSV dosyasını alıyoruz
-                string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
                 List<string[]> rows = new List<string[]>();
 
-                // Dosyayı daha hızlı bir şekilde okuyalım
-                using (StreamReader reader = new StreamReader(latestFile))
+                using (StreamReader reader = new StreamReader(csvFilePath))
                 {
                     string line;
-                    
-                    // İlk satırı (başlık satırını) atlıyoruz
+
                     reader.ReadLine();
 
-                    // Diğer satırlarda işlem yapıyoruz
                     while ((line = reader.ReadLine()) != null)
                     {
                         if (!string.IsNullOrEmpty(line))
                         {
-                            // Split işlemi yerine doğrudan kolonları temizleyelim
                             string[] columns = line.Split(',')
                                 .Select(col => col.Replace("\"", "").Trim())
+                                .Select(col => string.IsNullOrWhiteSpace(col) ? "" : col)
                                 .ToArray();
                             rows.Add(columns);
                         }
                     }
                 }
 
-                // JSON verisine dönüştürme
                 JavaScriptSerializer serializer = new JavaScriptSerializer
                 {
                     MaxJsonLength = Int32.MaxValue
                 };
                 string json = serializer.Serialize(rows);
 
-                // Veriyi JavaScript ile başlat
-                string script = $"<script>data = {json}; initializeTable();</script>";
+                string script = $"<script>baseData = {json}; initializeTable();</script>";
                 ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
             }
             catch (Exception ex)
@@ -89,19 +76,16 @@ namespace vNetwork
                         return;
                     }
 
-                    // CSV'yi hazırlarken StringBuilder kullanımı daha verimli
                     StringBuilder csv = new StringBuilder();
-                    csv.AppendLine("Sunucu Adı;IP Adresi;Subnet Bilgisi;Mac Adresi;İşletim Sistemi;vCenter");
-
+                    csv.AppendLine("Name;ID;Created Date;Cluster;vCenter;User Name");
                     foreach (var row in tableData)
                     {
                         csv.AppendLine($"{row[0]};{row[1]};{row[2]};{row[3]};{row[4]};{row[5]}");
                     }
 
-                    // CSV dosyasını kullanıcıya gönder
                     Response.Clear();
                     Response.ContentType = "text/csv";
-                    Response.AddHeader("content-disposition", "attachment;filename=administrators.csv");
+                    Response.AddHeader("content-disposition", "attachment;filename=createdVMs.csv");
                     Response.Write(csv.ToString());
                     Response.End();
                 }
