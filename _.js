@@ -12,28 +12,42 @@ function applyFilters(lastSelectedDropdown) {
             return [];
         });
 
-    const searchInput = document.querySelector('.table-top input[type="text"]');
-    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+    const selectedHalls = Array.from(document.querySelectorAll('#hall-buttons .active'))
+        .map(button => button.innerText.split(' ')[1]);
+    
+    if (selectedHalls.toString() != "Halls" && selectedHalls.length != Array.from(document.querySelectorAll('#hall-buttons .active')).length) {
+        filteredData = baseData.filter(row => {
+            for (let columnIndex = 0; columnIndex < selectedFilters.length; columnIndex++) {
+                const values = selectedFilters[columnIndex];
+                if (values.length === 0) continue;  
 
-    const searchColumnName = searchInput ? columns[columns.findIndex(column => column.hasSearchBar)].name : null;
-
-    filteredData = baseData.filter(row => {
-        const matchesSearchTerm = searchInput ? row[searchColumnName].toLowerCase().includes(searchTerm):true;
-
-        const matchesFilters = selectedFilters.every((values, columnIndex) => {
-            if (values.length === 0) return true;
-            const columnName = columns[columnIndex].name;
-            return values.includes(row[columnName]);
-        });
-        return matchesSearchTerm && matchesFilters;
-    });
-
-    const selectedHalls = Array.from(document.querySelectorAll('#hall-buttons .active')).map(button => button.innerText.split(' ')[1]);
-    if (selectedHalls.toString() != "Halls") {
-        filteredData = filteredData.filter(row => {
-            return selectedHalls.includes(row[1]);
+                const columnName = columns[columnIndex].name;
+                if (!values.includes(row[columnName])) {
+                    return false; 
+                }
+            }
+            if (!selectedHalls.includes(row[1])) {
+                return false; 
+            }
+            return true; 
         });
     }
+    else{
+        filteredData = baseData.filter(row => {
+            for (let columnIndex = 0; columnIndex < selectedFilters.length; columnIndex++) {
+                const values = selectedFilters[columnIndex];
+                if (values.length === 0) continue; 
+
+                const columnName = columns[columnIndex].name;
+                if (!values.includes(row[columnName])) {
+                    return false; 
+                }
+            }
+            return true; 
+        });
+    }
+
+
     columns.forEach((column, index) => {
         if (column.hasSearchBar || column.onlyTH) return;
 
