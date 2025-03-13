@@ -1,125 +1,21 @@
-# SMTP Ayarları
-$SMTPHost = "smtpappv1.fw.garanti.com.tr"
-$SMTPPort = 25
-$from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
-$to = "alicanda1@garantibbva.com.tr"
-$subject = "faz-4"
+https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/fc892664-4ad5-43d6-8f83-a355c0c31dbe/properties
+"summary|guest|ipAddress"
+"summary|runtime|powerState"
+"summary|parentVcenter"
+"summary|parentCluster"
+"summary|parentHost"
+"summary|parentDatacenter"
+"summary|guest|fullName"
+"summary|parentFolder"
+"summary|customTag:OwnerDept|customTagValue"****
+"config|hardware|numCpu"
+"config|createDate"
+"config|memoryAllocation|shares|shares" /1024 /10
+"name": "config|hardware|diskSpace"
+"summary|guest|toolsVersion"
+"config|hardware|numSockets"
+"virtualDisk:scsi0:3|provisioning_type" "virtualDisk:scsi0:3|configuredGB" "virtualDisk:scsi0:3|label" 
 
-# Excel dosyasını açmak için Excel COM nesneleri
-$excelFile = "F:\Ali\powershell\data.xlsx"
-
-# Excel Uygulamasını başlat ve gizle
-$excelApp = New-Object -ComObject Excel.Application
-$excelApp.Visible = $false
-
-# Excel dosyasını aç
-$wb = $excelApp.Workbooks.Open($excelFile)
-
-# İlk sayfayı al
-$ws = $wb.Sheets.Item(1)
-
-# Verilerin bulunduğu satır sayısını al (Başlık satırı hariç)
-$rowsCount = $ws.UsedRange.Rows.Count
-
-# Sütun adlarını başlık satırından al
-$columnNames = @()
-for ($col = 1; $col -le $ws.UsedRange.Columns.Count; $col++) {
-    $columnNames += $ws.Cells.Item(1, $col).Value2
-}
-
-# Verileri okuma ve saklama (Başlık satırı hariç)
-$excelData = @()
-for ($i = 2; $i -le $rowsCount; $i++) {
-    $rowData = @{}
-    for ($col = 1; $col -le $ws.UsedRange.Columns.Count; $col++) {
-        $columnName = $columnNames[$col - 1]  # 0 index-based list
-        $rowData[$columnName] = $ws.Cells.Item($i, $col).Value2
-    }
-    $excelData += New-Object PSObject -property $rowData
-}
-
-# Excel dosyasını kapat
-$wb.Close()
-$excelApp.Quit()
-
-# Sahip sütununu (Owner) dinamik olarak belirleyin
-$ownerColumnName = "Owner"  # Burada 'Owner' sütununu doğru belirlediğinizden emin olun
-
-# Eğer Owner sütunu yoksa, bu durumda kullanıcıdan dinamik olarak giriş alınabilir.
-if ($excelData[0].PSObject.Properties[$ownerColumnName] -eq $null) {
-    Write-Host "Owner sütunu bulunamadı. Lütfen uygun bir sütun adı girin."
-    $ownerColumnName = Read-Host "Owner sütun adı"
-}
-
-# Grupları ayır ve her grup için email gönder
-$groupedData = $excelData | Group-Object -Property $ownerColumnName
-
-foreach ($group in $groupedData) {
-    $groupName = $group.Name
-    $groupRows = $group.Group
-
-    # HTML Tablosunu oluştur
-    $htmlTable = $groupRows | ConvertTo-Html -As Table -PreContent "<h4>ODM Replike olan DataStore'larda düzensiz VM'ler bulunmuştur:</h4>"
-
-    # E-posta içeriği oluştur
-    $body = @"
-<html>
-<head>
-    <style>
-        body {
-            font-family: Verdana, Geneva, sans-serif;
-            background-color: #f9f9f9;
-            margin: 0;
-            padding: 20px;
-        }
-        h4 {
-            color: #333;
-            text-align: left;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 8px;
-            text-align: left;
-            border: 1px solid #ddd;
-        }
-        th {
-            background-color: #f4f4f4;
-            color: #333;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-    </style>
-</head>
-<body>
-    $htmlTable
-</body>
-</html>
-"@
-
-    # E-posta gönder
-    Send-Email -subject "$subject - $groupName" -body $body -to $groupName
-}
-
-# E-posta gönderme fonksiyonu
-function Send-Email {
-    param(
-        [string]$subject,
-        [string]$body,
-        [string]$to
-    )
-
-    # SMTP client ayarları
-    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
-    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
-    $message.IsBodyHtml = $true
-
-    # Email gönderimi
-    $SMTPClient.Send($message)
-    $message.Dispose()
-    $SMTPClient.Dispose()
-}
+https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/fc892664-4ad5-43d6-8f83-a355c0c31dbe/stats/latest
+"guestfilesystem|usage_total"
+"guestfilesystem|capacity_total"
