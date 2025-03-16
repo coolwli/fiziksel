@@ -13,9 +13,9 @@ namespace vmpedia
     public partial class vmscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private string vRopsServer;
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         private string _token;
+        private string vRopsServer;
         private List<string> _metricsToFilter = new List<string> { "cpu|usage_average", "mem|usage_average" };
         private Dictionary<string, string> propertyValues = new Dictionary<string, string>();
 
@@ -27,174 +27,200 @@ namespace vmpedia
         protected async void Page_Load(object sender, EventArgs e)
         {
             string uuid = Request.QueryString["id"];
-            string vcenter = Request.QueryString["vcenter"];
+            string vCenter = Request.QueryString["vcenter"];
 
             if (string.IsNullOrEmpty(uuid))
             {
-                DisplayHostNameError("Eksik URL.", null);
+                form1.InnerHtml = "";
+                DisplayError("Eksik URL.");
                 return;
             }
 
             if (!IsPostBack)
             {
-                await EnsureTokenAsync();
+                await InitializeAsync(vCenter);
 
-                if (string.IsNullOrEmpty(_token)) {
-                    DisplayHostNameError("token alınamadı.", null);
+                if (string.IsNullOrEmpty(_token))
+                {
+                    DisplayError("Token alınamadı. Daha sonra");
                     return;
                 }
 
                 string vmID = await GetVmIDAsync(uuid);
-
-                if (string.IsNullOrEmpty(vmID)) {
-                    DisplayHostNameError("vm id bulunamadı", null);
+                if (string.IsNullOrEmpty(vmID))
+                {
+                    DisplayError("VM ID bulunamadı");
                     return;
                 }
 
-                await FetchVMMetricsAsync(vmID);
-                await FetchVMDataAsync(vmID);
+                await DiscoverDiskKeysAsync(vmID);
+
+                var fetchDataTask = Task.WhenAll(
+                    FetchVMMetricsAsync(vmID),
+                    FetchVMDataAsync(vmID)
+                );
+
+                await fetchDataTask;
             }
         }
 
-        private async Task EnsureTokenAsync()
+        private async Task InitializeAsync(string vCenter)
         {
-            vRopsServer = (vCenter == "apgaraavcs801" || vCenter == "apgartksvcs801" || vCenter == "ptekvcsd01")
+            vRopsServer = GetVropsServer(vCenter);
+            await EnsureTokenAsync(vCenter);
+        }
+
+        private string GetVropsServer(string vCenter)
+        {
+            return (vCenter == "apgaraavcs801" || vCenter == "apgartksvcs801" || vCenter == "ptekvcsd01")
                 ? "https://apgaravrops801.fw.garanti.com.tr"
                 : "https://ptekvrops01.fw.garanti.com.tr";
+        }
 
-            TokenManager tokenManager = new TokenManager(_httpClient);
+        private async Task EnsureTokenAsync(string vCenter)
+        {
+            var tokenManager = new TokenManager(_httpClient);
             try
             {
                 _token = await tokenManager.GetTokenAsync(vCenter);
             }
             catch (Exception ex)
             {
-                DisplayHostNameError("An error occurred while fetching token. Please try again later.", ex);
+                DisplayError("Token alınırken bir hata oluştu.", ex);
             }
         }
 
         private async Task<string> GetVmIDAsync(string uuid)
         {
+            string url = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
             try
             {
-                string getIdUrl = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
-                string responseText = await ExecuteRequestAsync(getIdUrl);
-                if (responseText == null) return null;
+                using (var response = await _httpClient.SendAsync(request))
+                {
+                    response.EnsureSuccessStatusCode();
 
-                var doc = XDocument.Parse(responseText);
-                return doc.Descendants(XName.Get("resource", OpsNamespace))
-                         .FirstOrDefault()?
-                         .Attribute("identifier")?.Value;
+                    var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    return doc.Descendants(XName.Get("resource", OpsNamespace))
+                              .FirstOrDefault()?
+                              .Attribute("identifier")?.Value;
+                }
             }
             catch (Exception ex)
             {
-                HandleError("VM ID retrieval failed", ex);
+                DisplayError("Request failed", ex);
                 return null;
             }
         }
 
         private async Task FetchVMDataAsync(string vmID)
         {
-            try
+            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
             {
-                var url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
-                var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
-                using var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-
-                var properties = new List<string>
-                {
-                    "summary|guest|ipAddress",
-                    "summary|runtime|powerState",
-                    "summary|parentVcenter",
-                    "summary|parentCluster",
-                    "summary|parentHost",
-                    "summary|parentDatacenter",
-                    "summary|guest|fullName",
-                    "summary|parentFolder",
-                    "config|hardware|numCpu",
-                    "config|createDate",
-                    "config|memoryAllocation|shares",
-                    "config|hardware|diskSpace",
-                    "summary|guest|toolsVersion",
-                    "config|hardware|numSockets"
-                };
-
-                foreach (var element in doc.Descendants(XName.Get("property", OpsNamespace)))
-                {
-                    string name = element.Attribute("name")?.Value;
-                    if (name?.StartsWith("virtualDisk:") == true &&
-                        (name.EndsWith("|provisioning_type") ||
-                         name.EndsWith("|configuredGB") ||
-                         name.EndsWith("|label")))
-                    {
-                        properties.Add(name);
-                    }
-                    else if (name?.StartsWith("summary|customTag:") == true &&
-                             name.EndsWith("|customTagValue"))
-                    {
-                        properties.Add(name);
-                    }
-                }
-
-                foreach (var prop in properties)
-                {
-                    var value = doc.Descendants(XName.Get("property", OpsNamespace))
-                                   .FirstOrDefault(e => e.Attribute("name")?.Value == prop)?
-                                   .Value;
-                    propertyValues[prop] = value ?? "-";
-                }
-
-                Response.Write("<h2>VM Properties</h2>");
-                Response.Write("<ul>");
-                foreach (var property in propertyValues)
-                {
-                    Response.Write($"<li>{property.Key}: {property.Value}</li>");
-                }
-                Response.Write("</ul>");
-            }
-            catch (Exception ex)
-            {
-                HandleError("Failed to load VM data", ex);
-            }
-        }
-
-        private async Task FetchVMMetricsAsync(string vmID)
-        {
-            try
-            {
-                await DiscoverDiskKeysAsync(vmID);
-                var metricsData = await FetchMetricsAsync(vmID);
-                SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
-            }
-            catch (Exception ex)
-            {
-                DisplayHostNameError("An error occurred while fetching VM metrics.", ex);
-            }
-        }
-
-        private async Task DiscoverDiskKeysAsync(string vmID)
-        {
-            string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats/latest";
-            var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
 
             try
             {
                 using (var response = await _httpClient.SendAsync(request))
                 {
                     response.EnsureSuccessStatusCode();
-                    string responseText = await response.Content.ReadAsStringAsync();
 
-                    var xmlDoc = XDocument.Parse(responseText);
+                    var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    var properties = GetVMProperties(doc);
+
+                    foreach (var prop in properties)
+                    {
+                        var value = doc.Descendants(XName.Get("property", OpsNamespace))
+                                       .FirstOrDefault(e => e.Attribute("name")?.Value == prop)?
+                                       .Value ?? "-";
+
+                        propertyValues[prop] = value;
+                    }
+
+                    DisplayVMProperties();
+                }
+
+            }
+            catch (Exception ex)
+            {
+                DisplayError("VM data retrieval failed", ex);
+            }
+        }
+
+        private List<string> GetVMProperties(XDocument doc)
+        {
+            var properties = new List<string>
+            {
+                "summary|guest|ipAddress", "summary|runtime|powerState", "summary|parentVcenter", "summary|parentCluster",
+                "summary|parentHost", "summary|parentDatacenter", "summary|guest|fullName", "summary|parentFolder",
+                "config|hardware|numCpu", "config|createDate", "config|memoryAllocation|shares|shares", "config|hardware|diskSpace",
+                "summary|guest|toolsVersion", "config|hardware|numSockets"
+            };
+
+            foreach (var element in doc.Descendants(XName.Get("property", OpsNamespace)))
+            {
+                string name = element.Attribute("name")?.Value;
+                if (name?.StartsWith("virtualDisk:") == true &&
+                    (name.EndsWith("|provisioning_type") || name.EndsWith("|configuredGB") || name.EndsWith("|label")))
+                {
+                    properties.Add(name);
+                }
+                else if (name?.StartsWith("summary|customTag:") == true && name.EndsWith("|customTagValue"))
+                {
+                    properties.Add(name);
+                }
+            }
+
+            return properties;
+        }
+
+        private void DisplayVMProperties()
+        {
+            Response.Write("<h2>VM Properties</h2>");
+            Response.Write("<ul>");
+            foreach (var property in propertyValues)
+            {
+                Response.Write($"<li>{property.Key}: {property.Value}</li>");
+            }
+            Response.Write("</ul>");
+        }
+
+        private async Task FetchVMMetricsAsync(string vmID)
+        {
+            try
+            {
+                var metricsData = await FetchMetricsAsync(vmID);
+                SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+            }
+            catch (Exception ex)
+            {
+                DisplayError("VM metrics retrieval failed", ex);
+            }
+        }
+
+        private async Task DiscoverDiskKeysAsync(string vmID)
+        {
+            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats/latest";
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
+
+            try
+            {
+                using (var response = await _httpClient.SendAsync(request))
+                {
+                    response.EnsureSuccessStatusCode();
+
+                    var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
                     var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-                    var stats = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName));
-
-                    foreach (var stat in stats)
+                    foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
                     {
                         var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
                                       .Element(XName.Get("key", ns.NamespaceName))
@@ -204,28 +230,22 @@ namespace vmpedia
                         {
                             _metricsToFilter.Add(key);
                         }
-                        if (key== "guestfilesystem|usage_total"){
-                            var usageTotal = stat.Element(XName.Get("data", ns.NamespaceName))
-                                                .Elements(XName.Get("datum", ns.NamespaceName))
-                                                .FirstOrDefault()?
-                                                .Element(XName.Get("value", ns.NamespaceName))?.Value;
-                            propertyValues["guestfilesystem|usage_total"] = usageTotal;
-                        }
-                        if (key == "guestfilesystem|capacity_total"){
-                            var capacityTotal = stat.Element(XName.Get("data", ns.NamespaceName))
-                                                .Elements(XName.Get("datum", ns.NamespaceName))
-                                                .FirstOrDefault()?
-                                                .Element(XName.Get("value", ns.NamespaceName))?.Value;
-                            propertyValues["guestfilesystem|capacity_total"] = capacityTotal;
+
+                        else if (key == "guestfilesystem|usage_total")
+                        {
+                            propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
                         }
 
+                        else if (key == "guestfilesystem|capacity_total")
+                        {
+                            propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
+                        }
                     }
-
                 }
             }
             catch (Exception ex)
             {
-                DisplayHostNameError("Failed to fetch metrics keys.", ex);
+                DisplayError("Metrics discovery failed", ex);
             }
         }
 
@@ -242,6 +262,7 @@ namespace vmpedia
                 {
                     string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
                     var data = await FetchMetricsDataAsync(metricsUrl);
+
                     var parsedData = ParseMetricsData(data, metric, ref timestamps);
                     if (parsedData != null)
                     {
@@ -253,7 +274,7 @@ namespace vmpedia
             }
             catch (Exception ex)
             {
-                DisplayHostNameError("An error occurred while fetching metrics data.", ex);
+                DisplayError("Metrics fetch failed", ex);
             }
 
             return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
@@ -261,8 +282,10 @@ namespace vmpedia
 
         private async Task<string> FetchMetricsDataAsync(string url)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
 
             try
             {
@@ -274,7 +297,7 @@ namespace vmpedia
             }
             catch (Exception ex)
             {
-                DisplayHostNameError("Error fetching metrics data from the server.", ex);
+                DisplayError("Error fetching metrics data", ex);
             }
 
             return null;
@@ -289,28 +312,29 @@ namespace vmpedia
                                     .Where(e => e.Element(XName.Get("statKey", ns.NamespaceName))
                                                 .Element(XName.Get("key", ns.NamespaceName)).Value == metric);
 
-            var values = new List<double>();
-
-            foreach (var statElement in statElements)
+            foreach (var stat in statElements)
             {
-                var dataPoints = statElement.Element(XName.Get("data", ns.NamespaceName))
-                                            .Elements(XName.Get("datum", ns.NamespaceName));
-
-                foreach (var dataPoint in dataPoints)
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && !timestamps.Any())
                 {
-                    var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(
-                        long.Parse(dataPoint.Element(XName.Get("timestamp", ns.NamespaceName)).Value)).DateTime;
+                    timestamps = timestampElems.Value.Split(' ')
+                                    .Select(ts => long.TryParse(ts, out long result)
+                                    ? DateTimeOffset.FromUnixTimeMilliseconds(result + 10800000).DateTime
+                                    : DateTime.MinValue)
+                                    .Where(t => t != DateTime.MinValue)
+                                    .ToList();
+                }
 
-                    if (!timestamps.Contains(timestamp))
-                    {
-                        timestamps.Add(timestamp);
-                    }
-
-                    values.Add(double.Parse(dataPoint.Element(XName.Get("value", ns.NamespaceName)).Value));
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                            .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                            .ToArray();
                 }
             }
 
-            return values.ToArray();
+            return null;
         }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
@@ -336,7 +360,7 @@ namespace vmpedia
                 else
                 {
                     string key = metric.Key.Substring(0, 3);
-                    string dataArray = string.join(",", metric.Value.Select(v => v.ToString("F2")));
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
                     scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
                 }
             }
@@ -345,17 +369,10 @@ namespace vmpedia
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
-        private void DisplayHostNameError(string errorMessage, Exception ex)
+        private void DisplayError(string message, Exception ex = null)
         {
-            form1.InnerHtml = "";
-            string fullErrorMessage = string.IsNullOrEmpty(ex?.Message) ? errorMessage : $"{errorMessage} Details: {ex.Message}";
-            Response.Write(fullErrorMessage);
-        }
-
-        private void HandleError(string errorMessage, Exception ex)
-        {
-            // Log the error (not implemented here)
-            DisplayHostNameError(errorMessage, ex);
+            string fullErrorMessage = string.IsNullOrEmpty(ex?.Message) ? message : $"{message}. Details: {ex?.Message}";
+            Response.Write($"<h3>Error: {fullErrorMessage}</h3>");
         }
     }
 }
