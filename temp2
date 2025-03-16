@@ -1,358 +1,383 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using System.Web;
-using System.Xml.Linq;
+using System.Xml;
 using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Xml.Linq;
+using System.Threading.Tasks;
 
 namespace vmpedia
 {
     public partial class vmscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-        private const int MaxConcurrentRequests = 4;
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        private static readonly SemaphoreSlim _semaphore = new SemaphoreSlim(MaxConcurrentRequests);
-        private static readonly HashSet<string> _baseMetrics = new HashSet<string> { "cpu|usage_average", "mem|usage_average" };
-
-        private string _vRopsServer;
         private string _token;
-        private string _vmId;
-        private readonly HashSet<string> _metricsToCollect = new HashSet<string>(_baseMetrics);
+        private string vRopsServer;
+        private List<string> _metricsToFilter = new List<string> { "cpu|usage_average", "mem|usage_average" };
         private Dictionary<string, string> propertyValues = new Dictionary<string, string>();
 
-        protected override async void OnLoad(EventArgs e)
+        static vmscreen()
         {
-            try
-            {
-                if (!IsPostBack)
-                {
-                    await InitializeDataAsync();
-                }
-                base.OnLoad(e);
-            }
-            catch (Exception ex)
-            {
-                HandleError("An unexpected error occurred", ex);
-            }
+            ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
 
-        private async Task InitializeDataAsync()
+        protected async void Page_Load(object sender, EventArgs e)
         {
-            try
+            string uuid = Request.QueryString["id"];
+            string vCenter = Request.QueryString["vcenter"];
+
+            if (string.IsNullOrEmpty(uuid))
             {
-                var (hostId, vCenter) = ValidateQueryParameters();
-                await AuthenticateAsync(vCenter);
-                await LoadVmDataAsync(hostId);
-                await LoadVmMetricsAsync();
+                DisplayError("Eksik URL.");
+                return;
             }
-            catch (ArgumentException ex)
+
+            if (!IsPostBack)
             {
-                HandleError("Invalid input parameters", ex);
-            }
-            catch (Exception ex)
-            {
-                HandleError("An unexpected error occurred", ex);
-            }
-        }
-
-        private (string hostId, string vCenter) ValidateQueryParameters()
-        {
-            var hostId = Request.QueryString["id"];
-            var vCenter = Request.QueryString["vcenter"];
-
-            if (string.IsNullOrEmpty(hostId)  || string.IsNullOrEmpty(vCenter))
-                throw new ArgumentException("Invalid URL format");
-
-            return (hostId, vCenter);
-        }
-
-        private async Task AuthenticateAsync(string vCenter)
-        {
-            try
-            {
-                _vRopsServer = GetVropsServer(vCenter);
-                _token = await TokenManager.GetTokenAsync(vCenter, _httpClient);
+                await InitializeAsync(vCenter);
 
                 if (string.IsNullOrEmpty(_token))
-                    throw new ApplicationException("Failed to obtain authentication token");
-            }
-            catch (Exception ex)
-            {
-                HandleError("Authentication failed", ex);
-            }
-        }
-
-        private static string GetVropsServer(string vCenter) =>
-            new[] { "apgaraavcs801", "apgartksvcs801", "ptekvcsd01" }.Contains(vCenter)
-                ? "https://apgaravrops801.fw.garanti.com.tr"
-                : "https://ptekvrops01.fw.garanti.com.tr";
-
-        private async Task LoadVmDataAsync(string hostId)
-        {
-            try
-            {
-                _vmId = await FetchVmIdentifierAsync(hostId);
-
-                var url = $"{_vRopsServer}/suite-api/api/resources/{_vmId}/properties";
-                using var response = await ExecuteRequestAsync(url);
-                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-
-                var properties = new List<string>
                 {
-                    "summary|guest|ipAddress",
-                    "summary|runtime|powerState",
-                    "summary|parentVcenter",
-                    "summary|parentCluster",
-                    "summary|parentHost",
-                    "summary|parentDatacenter",
-                    "summary|guest|fullName",
-                    "summary|parentFolder",
-                    "config|hardware|numCpu",
-                    "config|createDate",
-                    "config|memoryAllocation|shares",
-                    "config|hardware|diskSpace",
-                    "summary|guest|toolsVersion",
-                    "config|hardware|numSockets"
-                };
-
-                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
-                    .Where(p => p.Attribute("name")?.Value.StartsWith("virtualDisk:") == true &&
-                                (p.Attribute("name")?.Value.EndsWith("|provisioning_type") == true ||
-                                p.Attribute("name")?.Value.EndsWith("|configuredGB") == true ||
-                                p.Attribute("name")?.Value.EndsWith("|label") == true))
-                    .Select(p => p.Attribute("name")?.Value));
-
-                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
-                    .Where(p => p.Attribute("name")?.Value.StartsWith("summary|customTag:") == true &&
-                                p.Attribute("name")?.Value.EndsWith("|customTagValue") == true)
-                    .Select(p => p.Attribute("name")?.Value));
-
-                foreach (var property in properties)
-                {
-                    var value = doc.Descendants(XName.Get("property", OpsNamespace))
-                        .FirstOrDefault(p => p.Attribute("name")?.Value == property)?
-                        .Value;
-
-                    propertyValues[property] = value;
+                    DisplayError("Token alınamadı.");
+                    return;
                 }
 
-                GenerateClientScriptForProperties(propertyValues);
-            }
-            catch (Exception ex)
-            {
-                HandleError("Failed to load VM data", ex);
+                string vmID = await GetVmIDAsync(uuid);
+                if (string.IsNullOrEmpty(vmID))
+                {
+                    DisplayError("VM ID bulunamadı");
+                    return;
+                }
+
+                // Parallelize the fetch for VM data and metrics
+                var fetchDataTask = Task.WhenAll(
+                    FetchVMMetricsAsync(vmID),
+                    FetchVMDataAsync(vmID)
+                );
+
+                await fetchDataTask;
             }
         }
 
-        private async Task LoadVmMetricsAsync()
+        private async Task InitializeAsync(string vCenter)
         {
+            vRopsServer = GetVropsServer(vCenter);
+            await EnsureTokenAsync(vCenter);
+        }
+
+        private string GetVropsServer(string vCenter)
+        {
+            return (vCenter == "apgaraavcs801" || vCenter == "apgartksvcs801" || vCenter == "ptekvcsd01")
+                ? "https://apgaravrops801.fw.garanti.com.tr"
+                : "https://ptekvrops01.fw.garanti.com.tr";
+        }
+
+        private async Task EnsureTokenAsync(string vCenter)
+        {
+            var tokenManager = new TokenManager(_httpClient);
             try
             {
-                await DiscoverDiskMetricsAsync();
-                var (metrics, timestamps) = await GatherMetricsDataAsync();
-                GenerateClientScript(metrics, timestamps);
+                _token = await tokenManager.GetTokenAsync(vCenter);
             }
             catch (Exception ex)
             {
-                HandleError("Failed to load VM metrics", ex);
+                DisplayError("Token alınırken bir hata oluştu.", ex);
             }
         }
 
-        private async Task<string> FetchVmIdentifierAsync(string hostId)
+        private async Task<string> GetVmIDAsync(string uuid)
+        {
+            string url = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
+            return await ExecuteRequestAsync(url);
+        }
+
+        private async Task<string> ExecuteRequestAsync(string url)
         {
             try
             {
-                var url = $"{_vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?" +
-                         $"identifiers[VMEntityInstanceUUID]={hostId}";
-
-                using var response = await ExecuteRequestAsync(url);
-                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                var responseText = await _httpClient.GetStringAsync(url);
+                var doc = XDocument.Parse(responseText);
                 return doc.Descendants(XName.Get("resource", OpsNamespace))
                           .FirstOrDefault()?
-                          .Attribute("identifier")?
-                          .Value;
+                          .Attribute("identifier")?.Value;
             }
             catch (Exception ex)
             {
-                HandleError("Failed to fetch VM identifier", ex);
+                HandleError("Request failed", ex);
                 return null;
             }
         }
 
-        private async Task DiscoverDiskMetricsAsync()
+        private async Task FetchVMDataAsync(string vmID)
         {
+            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
+
             try
             {
-                var url = $"{_vRopsServer}/suite-api/api/resources/{_vmId}/stats/latest";
-                using var response = await ExecuteRequestAsync(url);
+                using var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
                 var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                var properties = GetVMProperties(doc);
 
-                var diskMetrics = doc.Descendants(XName.Get("stat", OpsNamespace))
-                    .Select(stat => stat.Element(XName.Get("statKey", OpsNamespace))?
-                    .Where(e => e?.Value?.StartsWith("guestfilesystem") == true && e.Value.EndsWith("|percentage"))
-                    .Select(e => e.Value);
+                foreach (var prop in properties)
+                {
+                    var value = doc.Descendants(XName.Get("property", OpsNamespace))
+                                   .FirstOrDefault(e => e.Attribute("name")?.Value == prop)? 
+                                   .Value ?? "-";
 
-                _metricsToCollect.UnionWith(diskMetrics);
+                    propertyValues[prop] = value;
+                }
 
-                propertyValues["guestfilesystem|usage_total"] = doc.Descendants(XName.Get("stat", OpsNamespace))
-                    .FirstOrDefault(stat => stat.Element(XName.Get("statKey", OpsNamespace))?.Value == "guestfilesystem|usage_total")?
-                    .Element(XName.Get("data", OpsNamespace))?
-                    .Value;
-
-                propertyValues["guestfilesystem|capacity_total"] = doc.Descendants(XName.Get("stat", OpsNamespace))
-                    .FirstOrDefault(stat => stat.Element(XName.Get("statKey", OpsNamespace))?.Value == "guestfilesystem|capacity_total")?
-                    .Element(XName.Get("data", OpsNamespace))?
-                    .Value;
+                DisplayVMProperties();
             }
             catch (Exception ex)
             {
-                HandleError("Failed to discover disk metrics", ex);
+                HandleError("VM data retrieval failed", ex);
             }
         }
 
-        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> GatherMetricsDataAsync()
+        private List<string> GetVMProperties(XDocument doc)
         {
-            var endTime = DateTime.Now;
-            var startTime = endTime.AddDays(-365);
-            var timestamps = new List<DateTime>();
-            var metricsData = new Dictionary<string, double[]>();
+            var properties = new List<string>
+            {
+                "summary|guest|ipAddress", "summary|runtime|powerState", "summary|parentVcenter", "summary|parentCluster",
+                "summary|parentHost", "summary|parentDatacenter", "summary|guest|fullName", "summary|parentFolder",
+                "config|hardware|numCpu", "config|createDate", "config|memoryAllocation|shares", "config|hardware|diskSpace",
+                "summary|guest|toolsVersion", "config|hardware|numSockets"
+            };
+
+            foreach (var element in doc.Descendants(XName.Get("property", OpsNamespace)))
+            {
+                string name = element.Attribute("name")?.Value;
+                if (name?.StartsWith("virtualDisk:") == true &&
+                    (name.EndsWith("|provisioning_type") || name.EndsWith("|configuredGB") || name.EndsWith("|label")))
+                {
+                    properties.Add(name);
+                }
+                else if (name?.StartsWith("summary|customTag:") == true && name.EndsWith("|customTagValue"))
+                {
+                    properties.Add(name);
+                }
+            }
+
+            return properties;
+        }
+
+        private void DisplayVMProperties()
+        {
+            Response.Write("<h2>VM Properties</h2>");
+            Response.Write("<ul>");
+            foreach (var property in propertyValues)
+            {
+                Response.Write($"<li>{property.Key}: {property.Value}</li>");
+            }
+            Response.Write("</ul>");
+        }
+
+        private async Task FetchVMMetricsAsync(string vmID)
+        {
+            try
+            {
+                await DiscoverDiskKeysAsync(vmID);
+                var metricsData = await FetchMetricsAsync(vmID);
+                SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+            }
+            catch (Exception ex)
+            {
+                DisplayError("VM metrics retrieval failed", ex);
+            }
+        }
+
+        private async Task DiscoverDiskKeysAsync(string vmID)
+        {
+            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats/latest";
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
 
             try
             {
-                var tasks = _metricsToCollect.Select(async metric =>
+                using var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+                foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
                 {
-                    await _semaphore.WaitAsync();
-                    try
+                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                  .Element(XName.Get("key", ns.NamespaceName))
+                                  .Value;
+
+                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
                     {
-                        var data = await RetrieveMetricSeriesAsync(metric, startTime, endTime);
-                        lock (metricsData)
-                        {
-                            metricsData[metric] = data.Item1;
-                            if (timestamps.Count == 0) timestamps.AddRange(data.Item2);
-                        }
+                        _metricsToFilter.Add(key);
                     }
-                    finally
+
+                    // Extracting specific disk usage and capacity data
+                    ProcessDiskUsage(stat, "guestfilesystem|usage_total", "guestfilesystem|capacity_total");
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayError("Metrics discovery failed", ex);
+            }
+        }
+
+        private void ProcessDiskUsage(XElement stat, string usageKey, string capacityKey)
+        {
+            var usageValue = stat.Element(XName.Get("data", stat.GetNamespaceOfPrefix("ops").NamespaceName))
+                                 .Elements(XName.Get("datum", stat.GetNamespaceOfPrefix("ops").NamespaceName))
+                                 .FirstOrDefault()?
+                                 .Element(XName.Get("value", stat.GetNamespaceOfPrefix("ops").NamespaceName))?.Value;
+
+            if (usageKey == "guestfilesystem|usage_total")
+            {
+                propertyValues[usageKey] = usageValue;
+            }
+
+            var capacityValue = stat.Element(XName.Get("data", stat.GetNamespaceOfPrefix("ops").NamespaceName))
+                                    .Elements(XName.Get("datum", stat.GetNamespaceOfPrefix("ops").NamespaceName))
+                                    .FirstOrDefault()?
+                                    .Element(XName.Get("value", stat.GetNamespaceOfPrefix("ops").NamespaceName))?.Value;
+
+            if (capacityKey == "guestfilesystem|capacity_total")
+            {
+                propertyValues[capacityKey] = capacityValue;
+            }
+        }
+
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmID)
+        {
+            long startTimeMillis = new DateTimeOffset(DateTime.Now.AddDays(-365)).ToUnixTimeMilliseconds();
+            long endTimeMillis = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
+            var metricsData = new Dictionary<string, double[]>();
+            var timestamps = new List<DateTime>();
+
+            try
+            {
+                var fetchTasks = _metricsToFilter.Select(async metric =>
+                {
+                    string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
+                    var data = await FetchMetricsDataAsync(metricsUrl);
+                    var parsedData = ParseMetricsData(data, metric, ref timestamps);
+                    if (parsedData != null)
                     {
-                        _semaphore.Release();
+                        metricsData[metric] = parsedData;
                     }
                 });
 
-                await Task.WhenAll(tasks);
+                await Task.WhenAll(fetchTasks);
             }
             catch (Exception ex)
             {
-                HandleError("Failed to gather metrics data", ex);
+                DisplayError("Metrics fetch failed", ex);
             }
-            return Tuple.Create(metricsData, timestamps.ToArray());
+
+            return new Tuple<Dictionary<string, double[]>, DateTime[]>(metricsData, timestamps.ToArray());
         }
 
-        private async Task<Tuple<double[], DateTime[]>> RetrieveMetricSeriesAsync(string metric, DateTime start, DateTime end)
+        private async Task<string> FetchMetricsDataAsync(string url)
         {
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
+
             try
             {
-                var url = $"{_vRopsServer}/suite-api/api/resources/{_vmId}/stats?" +
-                         $"statKey={HttpUtility.UrlEncode(metric)}&" +
-                         $"begin={start.ToUnixMilliseconds()}&" +
-                         $"end={end.ToUnixMilliseconds()}&" +
-                         "intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
-
-                using var response = await ExecuteRequestAsync(url);
-                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-
-                var values = doc.Descendants(XName.Get("value", OpsNamespace))
-                              .Select(x => double.TryParse(x.Value, out var d) ? d : 0)
-                              .ToArray();
-
-                var times = doc.Descendants(XName.Get("timestamp", OpsNamespace))
-                              .Select(x => DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(x.Value)).DateTime)
-                              .ToArray();
-
-                return Tuple.Create(values, times);
-            }
-            catch (Exception ex)
-            {
-                HandleError($"Failed to retrieve metric series for {metric}", ex);
-                return Tuple.Create(new double[0], new DateTime[0]);
-            }
-        }
-
-        private async Task<HttpResponseMessage> ExecuteRequestAsync(string url)
-        {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "vRealizeOpsToken", _token);
-
-                var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                return response;
-            }
-            catch (Exception ex)
-            {
-                HandleError("Failed to execute request", ex);
-                return null;
-            }
-        }
-
-        private void GenerateClientScript(Dictionary<string, double[]> metrics, DateTime[] timestamps)
-        {
-            try
-            {
-                var script = new StringBuilder()
-                    .AppendLine($"const timestamps = {JsonConvert.SerializeObject(timestamps)};")
-                    .AppendLine("const metrics = {};");
-
-                foreach (var (metric, values) in metrics)
+                using (var response = await _httpClient.SendAsync(request))
                 {
-                    var safeName = SanitizeMetricName(metric);
-                    script.AppendLine($"metrics['{safeName}'] = {JsonConvert.SerializeObject(values)};");
+                    response.EnsureSuccessStatusCode();
+                    return await response.Content.ReadAsStringAsync();
                 }
-
-                script.AppendLine("initializeCharts();");
-                ClientScript.RegisterStartupScript(GetType(), "metricsData", script.ToString(), true);
             }
             catch (Exception ex)
             {
-                HandleError("Failed to generate client script for metrics", ex);
+                DisplayError("Error fetching metrics data", ex);
             }
+
+            return null;
         }
 
-        private void GenerateClientScriptForProperties(Dictionary<string, string> properties)
+        private double[] ParseMetricsData(string data, string metric, ref List<DateTime> timestamps)
         {
-            try
-            {
-                var script = new StringBuilder()
-                    .AppendLine("const properties = {};");
+            var xmlDoc = XDocument.Parse(data);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-                foreach (var (property, value) in properties)
+            var statElements = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                                    .Where(e => e.Element(XName.Get("statKey", ns.NamespaceName))
+                                                .Element(XName.Get("key", ns.NamespaceName)).Value == metric);
+
+            var values = new List<double>();
+
+            foreach (var statElement in statElements)
+            {
+                var dataPoints = statElement.Element(XName.Get("data", ns.NamespaceName))
+                                            .Elements(XName.Get("datum", ns.NamespaceName));
+
+                foreach (var dataPoint in dataPoints)
                 {
-                    var safeName = SanitizePropertyName(property);
-                    script.AppendLine($"properties['{safeName}'] = '{HttpUtility.JavaScriptStringEncode(value)}';");
-                }
+                    var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(
+                        long.Parse(dataPoint.Element(XName.Get("timestamp", ns.NamespaceName)).Value)).DateTime;
 
-                script.AppendLine("initializeProperties();");
-                ClientScript.RegisterStartupScript(GetType(), "propertiesData", script.ToString(), true);
+                    if (!timestamps.Contains(timestamp))
+                    {
+                        timestamps.Add(timestamp);
+                    }
+
+                    values.Add(double.Parse(dataPoint.Element(XName.Get("value", ns.NamespaceName)).Value));
+                }
             }
-            catch (Exception ex)
-            {
-                HandleError("Failed to generate client script for properties", ex);
-            }
+
+            return values.ToArray();
         }
 
-        private static string SanitizePropertyName(string property) =>
-            new string(property.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
-
-        private static string SanitizeMetricName(string metric) =>
-            new string(metric.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
-
-        private void HandleError(string message, Exception ex)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
-            form1.InnerHtml = $"<div class='error'>{message}: {ex?.Message}</div>";
+            var scriptBuilder = new StringBuilder();
+            scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
+
+            var processedDiskMetrics = new HashSet<string>();
+
+            foreach (var metric in metricsData)
+            {
+                if (metric.Key.StartsWith("guestfilesystem"))
+                {
+                    string key = metric.Key.Split(':')[1].Split('|')[0];
+
+                    if (!processedDiskMetrics.Contains(key))
+                    {
+                        string diskDataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                        scriptBuilder.AppendLine($"diskDataMap['{key}'] = [{diskDataArray}];");
+                        processedDiskMetrics.Add(key);
+                    }
+                }
+                else
+                {
+                    string key = metric.Key.Substring(0, 3);
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
+                }
+            }
+
+            scriptBuilder.AppendLine("fetchDisk();");
+            ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
+        }
+
+        private void DisplayError(string message, Exception ex = null)
+        {
+            string fullErrorMessage = string.IsNullOrEmpty(ex?.Message) ? message : $"{message}. Details: {ex?.Message}";
+            Response.Write($"<h3>Error: {fullErrorMessage}</h3>");
         }
     }
 }
