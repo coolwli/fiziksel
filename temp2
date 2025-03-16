@@ -31,6 +31,7 @@ namespace vmpedia
 
             if (string.IsNullOrEmpty(uuid))
             {
+                form1.InnerHtml = "";
                 DisplayError("Eksik URL.");
                 return;
             }
@@ -41,7 +42,7 @@ namespace vmpedia
 
                 if (string.IsNullOrEmpty(_token))
                 {
-                    DisplayError("Token alınamadı.");
+                    DisplayError("Token alınamadı. Daha sonra");
                     return;
                 }
 
@@ -52,7 +53,8 @@ namespace vmpedia
                     return;
                 }
 
-                // Parallelize the fetch for VM data and metrics
+                await DiscoverDiskKeysAsync(vmID);
+
                 var fetchDataTask = Task.WhenAll(
                     FetchVMMetricsAsync(vmID),
                     FetchVMDataAsync(vmID)
@@ -91,22 +93,25 @@ namespace vmpedia
         private async Task<string> GetVmIDAsync(string uuid)
         {
             string url = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
-            return await ExecuteRequestAsync(url);
-        }
-
-        private async Task<string> ExecuteRequestAsync(string url)
-        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
             try
             {
-                var responseText = await _httpClient.GetStringAsync(url);
-                var doc = XDocument.Parse(responseText);
-                return doc.Descendants(XName.Get("resource", OpsNamespace))
-                          .FirstOrDefault()?
-                          .Attribute("identifier")?.Value;
+                using (var response = await _httpClient.SendAsync(request))
+                {
+                    response.EnsureSuccessStatusCode();
+
+                    var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    return doc.Descendants(XName.Get("resource", OpsNamespace))
+                              .FirstOrDefault()?
+                              .Attribute("identifier")?.Value;
+                }
             }
             catch (Exception ex)
             {
-                HandleError("Request failed", ex);
+                DisplayError("Request failed", ex);
                 return null;
             }
         }
@@ -121,26 +126,29 @@ namespace vmpedia
 
             try
             {
-                using var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-
-                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-                var properties = GetVMProperties(doc);
-
-                foreach (var prop in properties)
+                using (var response = await _httpClient.SendAsync(request))
                 {
-                    var value = doc.Descendants(XName.Get("property", OpsNamespace))
-                                   .FirstOrDefault(e => e.Attribute("name")?.Value == prop)? 
-                                   .Value ?? "-";
+                    response.EnsureSuccessStatusCode();
 
-                    propertyValues[prop] = value;
+                    var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    var properties = GetVMProperties(doc);
+
+                    foreach (var prop in properties)
+                    {
+                        var value = doc.Descendants(XName.Get("property", OpsNamespace))
+                                       .FirstOrDefault(e => e.Attribute("name")?.Value == prop)?
+                                       .Value ?? "-";
+
+                        propertyValues[prop] = value;
+                    }
+
+                    DisplayVMProperties();
                 }
 
-                DisplayVMProperties();
             }
             catch (Exception ex)
             {
-                HandleError("VM data retrieval failed", ex);
+                DisplayError("VM data retrieval failed", ex);
             }
         }
 
@@ -150,7 +158,7 @@ namespace vmpedia
             {
                 "summary|guest|ipAddress", "summary|runtime|powerState", "summary|parentVcenter", "summary|parentCluster",
                 "summary|parentHost", "summary|parentDatacenter", "summary|guest|fullName", "summary|parentFolder",
-                "config|hardware|numCpu", "config|createDate", "config|memoryAllocation|shares", "config|hardware|diskSpace",
+                "config|hardware|numCpu", "config|createDate", "config|memoryAllocation|shares|shares", "config|hardware|diskSpace",
                 "summary|guest|toolsVersion", "config|hardware|numSockets"
             };
 
@@ -186,9 +194,8 @@ namespace vmpedia
         {
             try
             {
-                await DiscoverDiskKeysAsync(vmID);
                 var metricsData = await FetchMetricsAsync(vmID);
-                SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
+                SendUsageDataToClient(metricsData.Item1, metricsData.Item2, propertyValues);
             }
             catch (Exception ex)
             {
@@ -206,53 +213,39 @@ namespace vmpedia
 
             try
             {
-                using var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-
-                var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-                var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-                foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
+                using (var response = await _httpClient.SendAsync(request))
                 {
-                    var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                  .Element(XName.Get("key", ns.NamespaceName))
-                                  .Value;
+                    response.EnsureSuccessStatusCode();
 
-                    if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                    var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+                    foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
                     {
-                        _metricsToFilter.Add(key);
-                    }
+                        var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
+                                      .Element(XName.Get("key", ns.NamespaceName))
+                                      .Value;
 
-                    // Extracting specific disk usage and capacity data
-                    ProcessDiskUsage(stat, "guestfilesystem|usage_total", "guestfilesystem|capacity_total");
+                        if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
+                        {
+                            _metricsToFilter.Add(key);
+                        }
+
+                        else if (key == "guestfilesystem|usage_total")
+                        {
+                            propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
+                        }
+
+                        else if (key == "guestfilesystem|capacity_total")
+                        {
+                            propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 DisplayError("Metrics discovery failed", ex);
-            }
-        }
-
-        private void ProcessDiskUsage(XElement stat, string usageKey, string capacityKey)
-        {
-            var usageValue = stat.Element(XName.Get("data", stat.GetNamespaceOfPrefix("ops").NamespaceName))
-                                 .Elements(XName.Get("datum", stat.GetNamespaceOfPrefix("ops").NamespaceName))
-                                 .FirstOrDefault()?
-                                 .Element(XName.Get("value", stat.GetNamespaceOfPrefix("ops").NamespaceName))?.Value;
-
-            if (usageKey == "guestfilesystem|usage_total")
-            {
-                propertyValues[usageKey] = usageValue;
-            }
-
-            var capacityValue = stat.Element(XName.Get("data", stat.GetNamespaceOfPrefix("ops").NamespaceName))
-                                    .Elements(XName.Get("datum", stat.GetNamespaceOfPrefix("ops").NamespaceName))
-                                    .FirstOrDefault()?
-                                    .Element(XName.Get("value", stat.GetNamespaceOfPrefix("ops").NamespaceName))?.Value;
-
-            if (capacityKey == "guestfilesystem|capacity_total")
-            {
-                propertyValues[capacityKey] = capacityValue;
             }
         }
 
@@ -269,6 +262,7 @@ namespace vmpedia
                 {
                     string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
                     var data = await FetchMetricsDataAsync(metricsUrl);
+
                     var parsedData = ParseMetricsData(data, metric, ref timestamps);
                     if (parsedData != null)
                     {
@@ -318,31 +312,32 @@ namespace vmpedia
                                     .Where(e => e.Element(XName.Get("statKey", ns.NamespaceName))
                                                 .Element(XName.Get("key", ns.NamespaceName)).Value == metric);
 
-            var values = new List<double>();
-
-            foreach (var statElement in statElements)
+            foreach (var stat in statElements)
             {
-                var dataPoints = statElement.Element(XName.Get("data", ns.NamespaceName))
-                                            .Elements(XName.Get("datum", ns.NamespaceName));
-
-                foreach (var dataPoint in dataPoints)
+                var timestampElems = stat.Element(XName.Get("timestamps", ns.NamespaceName));
+                if (timestampElems != null && !timestamps.Any())
                 {
-                    var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(
-                        long.Parse(dataPoint.Element(XName.Get("timestamp", ns.NamespaceName)).Value)).DateTime;
+                    timestamps = timestampElems.Value.Split(' ')
+                                    .Select(ts => long.TryParse(ts, out long result)
+                                    ? DateTimeOffset.FromUnixTimeMilliseconds(result + 10800000).DateTime
+                                    : DateTime.MinValue)
+                                    .Where(t => t != DateTime.MinValue)
+                                    .ToList();
+                }
 
-                    if (!timestamps.Contains(timestamp))
-                    {
-                        timestamps.Add(timestamp);
-                    }
-
-                    values.Add(double.Parse(dataPoint.Element(XName.Get("value", ns.NamespaceName)).Value));
+                var dataElems = stat.Element(XName.Get("data", ns.NamespaceName));
+                if (dataElems != null)
+                {
+                    return dataElems.Value.Split(' ')
+                            .Select(d => double.TryParse(d, out double value) ? value : 0.0)
+                            .ToArray();
                 }
             }
 
-            return values.ToArray();
+            return null;
         }
 
-        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
+        private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps, Dictionary<string, string> properties)
         {
             var scriptBuilder = new StringBuilder();
             scriptBuilder.AppendLine("let dates = [" + string.Join(",", timestamps.Select(t => $"\"{t:yyyy-MM-ddTHH:mm:ss}\"")) + "];");
@@ -365,10 +360,17 @@ namespace vmpedia
                 else
                 {
                     string key = metric.Key.Substring(0, 3);
-                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    string dataArray = string.join(",", metric.Value.Select(v => v.ToString("F2")));
                     scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
                 }
             }
+
+            scriptBuilder.AppendLine("let vmProperties = {");
+            foreach (var property in properties)
+            {
+                scriptBuilder.AppendLine($"'{property.Key}': '{property.Value}',");
+            }
+            scriptBuilder.AppendLine("};");
 
             scriptBuilder.AppendLine("fetchDisk();");
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
