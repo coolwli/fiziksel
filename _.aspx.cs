@@ -20,6 +20,7 @@ namespace vmpedia
         private string vCenter;
         private string _token;
         private List<string> _metricsToFilter = new List<string> { "cpu|usage_average", "mem|usage_average" };
+        private Dictionary<string, string> propertyValues = new Dictionary<string, string>();
 
         static vmscreen()
         {
@@ -40,17 +41,20 @@ namespace vmpedia
             if (!IsPostBack)
             {
                 await EnsureTokenAsync();
+
                 if (string.IsNullOrEmpty(_token)) {
                     DisplayHostNameError("token alınamadı.", null);
                     return;
                 }
 
                 string vmID = await GetVmIDAsync(hostID);
+
                 if (string.IsNullOrEmpty(vmID)) {
                     DisplayHostNameError("vm id bulunamadı", null);
                     return;
                 }
 
+                await FetchVMDataAsync(vmID);
                 await FetchVMMetricsAsync(vmID);
             }
         }
@@ -104,11 +108,71 @@ namespace vmpedia
             return null;
         }
 
+        private async Task FetchVMDataAsync(string vmID)
+        {
+            try
+            {
+                var url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
+                using var response = await ExecuteRequestAsync(url);
+                var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+
+                var properties = new List<string>
+                {
+                    "summary|guest|ipAddress",
+                    "summary|runtime|powerState",
+                    "summary|parentVcenter",
+                    "summary|parentCluster",
+                    "summary|parentHost",
+                    "summary|parentDatacenter",
+                    "summary|guest|fullName",
+                    "summary|parentFolder",
+                    "config|hardware|numCpu",
+                    "config|createDate",
+                    "config|memoryAllocation|shares",
+                    "config|hardware|diskSpace",
+                    "summary|guest|toolsVersion",
+                    "config|hardware|numSockets"
+                };
+
+                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
+                    .Where(p => p.Attribute("name")?.Value.StartsWith("virtualDisk:") == true &&
+                                (p.Attribute("name")?.Value.EndsWith("|provisioning_type") == true ||
+                                p.Attribute("name")?.Value.EndsWith("|configuredGB") == true ||
+                                p.Attribute("name")?.Value.EndsWith("|label") == true))
+                    .Select(p => p.Attribute("name")?.Value));
+
+                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
+                    .Where(p => p.Attribute("name")?.Value.StartsWith("summary|customTag:") == true &&
+                                p.Attribute("name")?.Value.EndsWith("|customTagValue") == true)
+                    .Select(p => p.Attribute("name")?.Value));
+
+                foreach (var property in properties)
+                {
+                    var value = doc.Descendants(XName.Get("property", OpsNamespace))
+                        .FirstOrDefault(p => p.Attribute("name")?.Value == property)?
+                        .Value;
+
+                    propertyValues[property] = value;
+                }
+                Response.Write("<h2>VM Properties</h2>");
+                Response.Write("<ul>");
+                foreach (var property in propertyValues)
+                {
+                    Response.Write($"<li>{property.Key}: {property.Value}</li>");
+                }
+                Response.Write("</ul>");
+            }
+            catch (Exception ex)
+            {
+                HandleError("Failed to load VM data", ex);
+            }
+        }
+
         private async Task FetchVMMetricsAsync(string vmID)
         {
             try
             {
-                await FetchAllMetricsKeysAsync(vmID);
+                await DiscoverDiskKeysAsync(vmID);
                 var metricsData = await FetchMetricsAsync(vmID);
                 SendUsageDataToClient(metricsData.Item1, metricsData.Item2);
             }
@@ -118,7 +182,26 @@ namespace vmpedia
             }
         }
 
-        private async Task FetchAllMetricsKeysAsync(string vmID)
+        private async Task<HttpResponseMessage> ExecuteRequestAsync(string url)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                    "vRealizeOpsToken", _token);
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                return response;
+            }
+            catch (Exception ex)
+            {
+                HandleError("Failed to execute request", ex);
+                return null;
+            }
+        }
+
+        private async Task DiscoverDiskKeysAsync(string vmID)
         {
             string statsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats/latest";
             var request = new HttpRequestMessage(HttpMethod.Get, statsUrl);
@@ -146,7 +229,23 @@ namespace vmpedia
                         {
                             _metricsToFilter.Add(key);
                         }
+                        if (key== "guestfilesystem|usage_total"){
+                            var usageTotal = stat.Element(XName.Get("data", ns.NamespaceName))
+                                                .Elements(XName.Get("datum", ns.NamespaceName))
+                                                .FirstOrDefault()?
+                                                .Element(XName.Get("value", ns.NamespaceName))?.Value;
+                            propertyValues["guestfilesystem|usage_total"] = usageTotal;
+                        }
+                        if (key == "guestfilesystem|capacity_total"){
+                            var capacityTotal = stat.Element(XName.Get("data", ns.NamespaceName))
+                                                .Elements(XName.Get("datum", ns.NamespaceName))
+                                                .FirstOrDefault()?
+                                                .Element(XName.Get("value", ns.NamespaceName))?.Value;
+                            propertyValues["guestfilesystem|capacity_total"] = capacityTotal;
+                        }
+
                     }
+
                 }
             }
             catch (Exception ex)
@@ -206,6 +305,38 @@ namespace vmpedia
             return null;
         }
 
+        private double[] ParseMetricsData(string data, string metric, ref List<DateTime> timestamps)
+        {
+            var xmlDoc = XDocument.Parse(data);
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            var statElements = xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName))
+                                    .Where(e => e.Element(XName.Get("statKey", ns.NamespaceName))
+                                                .Element(XName.Get("key", ns.NamespaceName)).Value == metric);
+
+            var values = new List<double>();
+
+            foreach (var statElement in statElements)
+            {
+                var dataPoints = statElement.Element(XName.Get("data", ns.NamespaceName))
+                                            .Elements(XName.Get("datum", ns.NamespaceName));
+
+                foreach (var dataPoint in dataPoints)
+                {
+                    var timestamp = DateTimeOffset.FromUnixTimeMilliseconds(
+                        long.Parse(dataPoint.Element(XName.Get("timestamp", ns.NamespaceName)).Value)).DateTime;
+
+                    if (!timestamps.Contains(timestamp))
+                    {
+                        timestamps.Add(timestamp);
+                    }
+
+                    values.Add(double.Parse(dataPoint.Element(XName.Get("value", ns.NamespaceName)).Value));
+                }
+            }
+
+            return values.ToArray();
+        }
 
         private void SendUsageDataToClient(Dictionary<string, double[]> metricsData, DateTime[] timestamps)
         {
@@ -230,7 +361,7 @@ namespace vmpedia
                 else
                 {
                     string key = metric.Key.Substring(0, 3);
-                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
+                    string dataArray = string.join(",", metric.Value.Select(v => v.ToString("F2")));
                     scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
                 }
             }
@@ -239,11 +370,17 @@ namespace vmpedia
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
-         private void DisplayHostNameError(string errorMessage, Exception ex)
+        private void DisplayHostNameError(string errorMessage, Exception ex)
         {
             form1.InnerHtml = "";
             string fullErrorMessage = string.IsNullOrEmpty(ex?.Message) ? errorMessage : $"{errorMessage} Details: {ex.Message}";
             Response.Write(fullErrorMessage);
+        }
+
+        private void HandleError(string errorMessage, Exception ex)
+        {
+            // Log the error (not implemented here)
+            DisplayHostNameError(errorMessage, ex);
         }
     }
 }
