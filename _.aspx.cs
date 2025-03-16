@@ -15,9 +15,6 @@ namespace vmpedia
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private string vRopsServer;
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        private string hostID;
-        private string uuid;
-        private string vCenter;
         private string _token;
         private List<string> _metricsToFilter = new List<string> { "cpu|usage_average", "mem|usage_average" };
         private Dictionary<string, string> propertyValues = new Dictionary<string, string>();
@@ -29,10 +26,10 @@ namespace vmpedia
 
         protected async void Page_Load(object sender, EventArgs e)
         {
-            hostID = Request.QueryString["id"];
-            vCenter = Request.QueryString["vcenter"];
+            string uuid = Request.QueryString["id"];
+            string vcenter = Request.QueryString["vcenter"];
 
-            if (string.IsNullOrEmpty(hostID))
+            if (string.IsNullOrEmpty(uuid))
             {
                 DisplayHostNameError("Eksik URL.", null);
                 return;
@@ -47,15 +44,15 @@ namespace vmpedia
                     return;
                 }
 
-                string vmID = await GetVmIDAsync(hostID);
+                string vmID = await GetVmIDAsync(uuid);
 
                 if (string.IsNullOrEmpty(vmID)) {
                     DisplayHostNameError("vm id bulunamadı", null);
                     return;
                 }
 
-                await FetchVMDataAsync(vmID);
                 await FetchVMMetricsAsync(vmID);
+                await FetchVMDataAsync(vmID);
             }
         }
 
@@ -76,36 +73,24 @@ namespace vmpedia
             }
         }
 
-        private async Task<string> GetVmIDAsync(string vmName)
+        private async Task<string> GetVmIDAsync(string uuid)
         {
-            string getIdUrl = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={hostID}";
-
-            var request = new HttpRequestMessage(HttpMethod.Get, getIdUrl);
-            request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
-
             try
             {
-                using (var response = await _httpClient.SendAsync(request))
-                {
-                    response.EnsureSuccessStatusCode();
-                    string responseText = await response.Content.ReadAsStringAsync();
+                string getIdUrl = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
+                string responseText = await ExecuteRequestAsync(getIdUrl);
+                if (responseText == null) return null;
 
-                    var xmlDoc = new XmlDocument();
-                    xmlDoc.LoadXml(responseText);
-
-                    var nsManager = new XmlNamespaceManager(xmlDoc.NameTable);
-                    nsManager.AddNamespace("ops", OpsNamespace);
-
-                    var identifierNode = xmlDoc.SelectSingleNode("//ops:resource/@identifier", nsManager);
-                    return identifierNode?.Value;
-                }
+                var doc = XDocument.Parse(responseText);
+                return doc.Descendants(XName.Get("resource", OpsNamespace))
+                         .FirstOrDefault()?
+                         .Attribute("identifier")?.Value;
             }
             catch (Exception ex)
             {
-                DisplayHostNameError("Failed to retrieve VM ID.", ex);
+                HandleError("VM ID retrieval failed", ex);
+                return null;
             }
-
-            return null;
         }
 
         private async Task FetchVMDataAsync(string vmID)
@@ -113,7 +98,11 @@ namespace vmpedia
             try
             {
                 var url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
-                using var response = await ExecuteRequestAsync(url);
+                var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
+
+                using var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
                 var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
 
                 var properties = new List<string>
@@ -134,26 +123,31 @@ namespace vmpedia
                     "config|hardware|numSockets"
                 };
 
-                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
-                    .Where(p => p.Attribute("name")?.Value.StartsWith("virtualDisk:") == true &&
-                                (p.Attribute("name")?.Value.EndsWith("|provisioning_type") == true ||
-                                p.Attribute("name")?.Value.EndsWith("|configuredGB") == true ||
-                                p.Attribute("name")?.Value.EndsWith("|label") == true))
-                    .Select(p => p.Attribute("name")?.Value));
+                foreach (var element in doc.Descendants(XName.Get("property", OpsNamespace)))
+                {
+                    string name = element.Attribute("name")?.Value;
+                    if (name?.StartsWith("virtualDisk:") == true &&
+                        (name.EndsWith("|provisioning_type") ||
+                         name.EndsWith("|configuredGB") ||
+                         name.EndsWith("|label")))
+                    {
+                        properties.Add(name);
+                    }
+                    else if (name?.StartsWith("summary|customTag:") == true &&
+                             name.EndsWith("|customTagValue"))
+                    {
+                        properties.Add(name);
+                    }
+                }
 
-                properties.AddRange(doc.Descendants(XName.Get("property", OpsNamespace))
-                    .Where(p => p.Attribute("name")?.Value.StartsWith("summary|customTag:") == true &&
-                                p.Attribute("name")?.Value.EndsWith("|customTagValue") == true)
-                    .Select(p => p.Attribute("name")?.Value));
-
-                foreach (var property in properties)
+                foreach (var prop in properties)
                 {
                     var value = doc.Descendants(XName.Get("property", OpsNamespace))
-                        .FirstOrDefault(p => p.Attribute("name")?.Value == property)?
-                        .Value;
-
-                    propertyValues[property] = value;
+                                   .FirstOrDefault(e => e.Attribute("name")?.Value == prop)?
+                                   .Value;
+                    propertyValues[prop] = value ?? "-";
                 }
+
                 Response.Write("<h2>VM Properties</h2>");
                 Response.Write("<ul>");
                 foreach (var property in propertyValues)
@@ -179,25 +173,6 @@ namespace vmpedia
             catch (Exception ex)
             {
                 DisplayHostNameError("An error occurred while fetching VM metrics.", ex);
-            }
-        }
-
-        private async Task<HttpResponseMessage> ExecuteRequestAsync(string url)
-        {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                    "vRealizeOpsToken", _token);
-
-                var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                return response;
-            }
-            catch (Exception ex)
-            {
-                HandleError("Failed to execute request", ex);
-                return null;
             }
         }
 
