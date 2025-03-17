@@ -2,14 +2,11 @@ using System;
 using System.Net;
 using System.Web;
 using System.Text;
-using System.Linq;
-using System.Web.UI;
-using System.Xml.Linq;
-using System.Net.Http;
-using System.Data.SqlClient;
-using System.Threading.Tasks;
-using System.Web.Configuration;
 using System.Collections.Generic;
+using System.Web.UI;
+using System.Net.Http;
+using System.Web.Configuration;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
 namespace vmpedia
@@ -20,61 +17,98 @@ namespace vmpedia
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
-
         private string _username;
         private string _password;
         private string _token;
 
         static _default()
         {
+            // This should be handled securely, consider not bypassing certificate validation in production
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
 
+        // Avoid async void for event handlers
         protected async void Page_Load(object sender, EventArgs e)
         {
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
 
-            await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=9000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true", "ptekvcs01");
-       
+            try
+            {
+                StringBuilder jsonData = new StringBuilder();
+
+                jsonData.Append(await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true", "ptekvcs01"));
+                jsonData.Append(await CheckTokenAndFetchDataAsync("https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true", "apgaraavcs801"));
+
+                ParseViewData(jsonData.ToString());
+            }
+            catch (Exception ex)
+            {
+                form1.InnerHtml = "An error occurred while loading the page: " + ex.Message;
+            }
         }
 
-        private async Task CheckTokenAndFetchDataAsync(string url, string tokenType)
+        private async Task<string> CheckTokenAndFetchDataAsync(string url, string tokenType)
         {
             var tokenManager = new TokenManager(_httpClient);
             try
             {
                 _token = await tokenManager.GetTokenAsync(tokenType);
-                string jsonData = await GetDataAsync(url);
-                ParseDashboardData(jsonData);
+                int page = 1;
+                StringBuilder jsonDataBuilder = new StringBuilder();
 
+                while (page <= 2)
+                {
+                    string jsonData = await GetDataAsync(url + $"&page={page}");
+                    if (!string.IsNullOrEmpty(jsonData))
+                    {
+                        jsonDataBuilder.Append(jsonData); 
+                    }
+                    page++;
+                }
+
+                return jsonDataBuilder.ToString();
             }
-            catch(Exception ex){
-                form1.InnerHtml = ex.ToString();
+            catch (HttpRequestException httpEx)
+            {
+                form1.InnerHtml = "Error while fetching data: " + httpEx.Message;
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                form1.InnerHtml = "An error occurred: " + ex.Message;
+                return string.Empty;
             }
         }
 
         private async Task<string> GetDataAsync(string url)
         {
-
             var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add("Authorization", $"vRealizeOpsToken {_token}");
 
-            using (var response = await _httpClient.SendAsync(request))
+            try
             {
-                if (response.IsSuccessStatusCode)
+                using (var response = await _httpClient.SendAsync(request))
                 {
-                    return await response.Content.ReadAsStringAsync();
+                    if (response.IsSuccessStatusCode)
+                    {
+                        return await response.Content.ReadAsStringAsync();
+                    }
+                    return string.Empty;
                 }
             }
-            return null;
+            catch (HttpRequestException ex)
+            {
+                return string.Empty;
+            }
         }
-
         private void ParseDashboardData(string jsonData)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
             dynamic data = js.Deserialize<dynamic>(jsonData);
             var tableRows = new List<Dictionary<string, object>>();
+            
+            var excludedKeys = new HashSet<string> { "grandTotal", "groupUUID", "objUUID", "summary" };
 
             foreach (var view in data)
             {
@@ -87,14 +121,22 @@ namespace vmpedia
                         {
                             foreach (var kv in row.Value)
                             {
-                                if (new string[] { "grandTotal", "groupUUID", "objUUID", "summary" }.Any(s=> kv.Key.ToString().Contains(s))) continue;
-                                if(kv.Key=="12")
+                                if (excludedKeys.Contains(kv.Key.ToString())) continue;
+
+                                if (kv.Key == "12")
                                 {
-                                    tableRow[kv.Key] = string.IsNullOrWhiteSpace(kv.Value?.ToString()) ? "" : DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(kv.Value.ToString())).DateTime.ToString("dd/MM/yyyy");
+                                    if (long.TryParse(kv.Value.ToString(), out long unixTimestamp))
+                                    {
+                                        tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
+                                    }
+                                    else
+                                    {
+                                        tableRow[kv.Key] = "";
+                                    }
                                 }
                                 else
                                 {
-                                    tableRow[kv.Key] = string.IsNullOrWhiteSpace(kv.Value?.ToString()) ? "" : kv.Value;
+                                    tableRow[kv.Key] = kv.Value ?? ""; 
                                 }
                             }
                         }
@@ -102,6 +144,7 @@ namespace vmpedia
                     }
                 }
             }
+
             var json = js.Serialize(tableRows);
             var script = $"<script>baseData = {json}; initializeTable(); </script>";
             ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
@@ -111,35 +154,63 @@ namespace vmpedia
         {
             string jsonData = hiddenField.Value;
 
-            if (!string.IsNullOrEmpty(jsonData))
+            if (string.IsNullOrEmpty(jsonData))
             {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
+                Response.Write("No data available.");
+                return;
+            }
+
+            try
+            {
+                JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
                 var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
 
-                if (tableData.Count == 0)
+                if (tableData == null || tableData.Count == 0)
                 {
                     Response.Write("No data available.");
                     return;
                 }
 
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Name;Power State;IPv4;OS;Cluster;VCenter;Datastore Cluster;Include Snapshot;Snapshot Size");
+                // Define your column names here
+                var columnNames = new List<string> { "Name", "Power State", "IPv4", "OS", "Cluster", "VCenter", "Datastore Cluster", "Include Snapshot", "Snapshot Size" };
 
+                StringBuilder csv = new StringBuilder();
+                csv.AppendLine(string.Join(";", columnNames));
+
+                // Safely handle null or empty values for each field
                 foreach (var row in tableData)
                 {
-                    csv.AppendLine($"{row["name"]};{row["ps"]};{row["ip"]};{row["os"]};{row["cl"]};{row["vc"]};{row["ds"]};{row["sb"]};{row["ss"]}");
+                    var values = new List<string>
+                    {
+                        row.["1"],
+                        row.["2"],
+                        row.["3"],
+                        row.["4"],
+                        row.["5"],
+                        row.["6"],
+                        row.["7"],
+                        row.["8"],
+                        row.["9"],
+                        row.["10"],
+                        row.["11"],
+                        row.["12"],
+                        row.["13"]
+                    };
+
+                    csv.AppendLine(string.Join(";", values));
                 }
 
+                // Set up the response for CSV download
                 Response.Clear();
                 Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=Replicated VMs.csv");
+                Response.AddHeader("Content-Disposition", "attachment;filename=Replicated_VMs.csv");
                 Response.Write(csv.ToString());
                 HttpContext.Current.ApplicationInstance.CompleteRequest();
             }
+            catch (Exception ex)
+            {
+                Response.Write($"An error occurred: {ex.Message}");
+            }
         }
-
-
-
     }
 }
