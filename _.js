@@ -1,26 +1,71 @@
 const MAX_PAGE = 10;
 let rowsPerPage = 50;
 let baseData = [];
-
 let currentPage = 1;
 let isAscending = true;
 let filteredData = [];
 
-function sortTableByColumn(columnIndex) {
+const sortableColumnTypes = {
+    "numericColumns": [0, 2],
+    "dateColumns": [1],
+    "textColumns": [3]
+};
+
+function sortTableByColumn(columnIndex, isAscending = true) {
     filteredData.sort((rowA, rowB) => {
-        const valueA = rowA[columns[columnIndex].name].toString().trim();
-        const valueB = rowB[columns[columnIndex].name].toString().trim();
-        if (!isNaN(valueA) && !isNaN(valueB)) {
+        const columnName = columns[columnIndex].name;
+        let valueA = rowA[columnName].toString().trim();
+        let valueB = rowB[columnName].toString().trim();
+
+        if (sortableColumnTypes.numericColumns.includes(columnIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
             return isAscending ? valueA - valueB : valueB - valueA;
         }
-        if (Date.parse(valueA) && Date.parse(valueB)) {
-            return isAscending ? new Date(valueA) - new Date(valueB) : new Date(valueB) - new Date(valueA);
+
+        if (sortableColumnTypes.dateColumns.includes(columnIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; // If invalid date, default to 0
+            valueB = (new Date(valueB)).getTime() || 0; // If invalid date, default to 0
+            return isAscending ? valueA - valueB : valueB - valueA;
         }
+
+        if (sortableColumnTypes.textColumns.includes(columnIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
         return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
     });
-    currentPage = 1;
-    renderTablePage(currentPage, filteredData);
 }
+
+function dynamicSort(dataArray, colIndex) {
+    return dataArray.sort((a, b) => {
+        let valueA = a.toString().trim();
+        let valueB = b.toString().trim();
+
+        if (sortableColumnTypes.numericColumns.includes(colIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
+            return valueA - valueB;
+        }
+
+        if (sortableColumnTypes.dateColumns.includes(colIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; // If invalid date, default to 0
+            valueB = (new Date(valueB)).getTime() || 0; // If invalid date, default to 0
+            return valueA - valueB;
+        }
+
+        if (sortableColumnTypes.textColumns.includes(colIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return valueA - valueB;
+        }
+
+        return valueA.localeCompare(valueB);
+    });
+}
+
 
 function renderTablePage(pageNumber, data) {
     const startIndex = (pageNumber - 1) * rowsPerPage;
@@ -43,7 +88,7 @@ function renderTablePage(pageNumber, data) {
     paginatedData.forEach(row => {
         const tableRow = document.createElement('tr');
         columns.forEach(column => {
-            if (column.dontShow == true) return;
+            if (column.dontShow) return;
             const cell = document.createElement('td');
             cell.textContent = row[column.name];
             tableRow.appendChild(cell);
@@ -81,12 +126,14 @@ function createTableColumns() {
     tableHeader.innerHTML = '';
 
     columns.forEach((column, index) => {
-        if (column.dontShow == true) return;
+        if (column.dontShow) return;
 
         const headerCell = document.createElement('th');
         headerCell.addEventListener('click', () => {
             if (event.target.tagName !== 'TH') return;
-            sortTableByColumn(index);
+            sortTableByColumn(index);      
+            currentPage = 1;
+            renderTablePage(currentPage, filteredData);
             isAscending = !isAscending;
         });
 
@@ -95,6 +142,7 @@ function createTableColumns() {
             tableHeader.appendChild(headerCell);
             return;
         }
+
         headerCell.classList.add('dropdown');
         headerCell.innerHTML = `${column.label}<span class="dropdown-arrow">&#9660;</span>`;
 
@@ -136,22 +184,21 @@ function createTableColumns() {
     });
 }
 
-function createSearchInput() {
-    columns.forEach((column, index) => {
-        if (column.hasSearchBar) {
-            const searchInput = document.createElement('input');
-            searchInput.type = 'text';
-            searchInput.placeholder = `Search ${column.label}`;
-            searchInput.addEventListener('input', () => {
-                applyFilters(null);
-            });
-            document.querySelector('.table-top').prepend(searchInput);
+function filterCheckboxes(input) {
+    const checkboxes = input.parentElement.querySelectorAll(".checkboxes input[type='checkbox']");
+    checkboxes.forEach(checkbox => {
+        const label = checkbox.nextElementSibling;
+        if (label.textContent.toLowerCase().includes(input.value.toLowerCase())) {
+            checkbox.parentElement.style.display = '';
+        } else {
+            checkbox.parentElement.style.display = 'none';
         }
     });
 }
 
 function generateCheckboxesForColumn(dropdownContent, columnIndex) {
     const checkboxesContainer = dropdownContent.querySelector('.checkboxes');
+
     checkboxesContainer.querySelectorAll("div").forEach((div) => {
         const checkbox = div.querySelector("input[type='checkbox']");
         if (!checkbox.checked) {
@@ -159,21 +206,18 @@ function generateCheckboxesForColumn(dropdownContent, columnIndex) {
         }
     });
 
-    const uniqueValues = [...new Set(filteredData.map(row => row[columns[columnIndex].name].toString().trim()))];
-    uniqueValues.sort();
+    const uniqueValues = getUniqueValues(columnIndex);
 
     const fragment = document.createDocumentFragment();
-        
+
     uniqueValues.forEach(value => {
-        if (checkboxesContainer.querySelector(`input[value='${value}']`)) {
-            return;
-        }
+        if (checkboxesContainer.querySelector(input[value='${value}'])) return;
+
         const checkboxContainer = document.createElement("div");
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.value = value;
-
-        checkbox.addEventListener("change", () => checkbox.checked ? applyFilters(dropdownContent) : applyFilters(null));
+        checkbox.addEventListener("change", () => applyFilters(dropdownContent));
 
         const label = document.createElement("label");
         label.textContent = value;
@@ -181,35 +225,40 @@ function generateCheckboxesForColumn(dropdownContent, columnIndex) {
         checkboxContainer.appendChild(checkbox);
         checkboxContainer.appendChild(label);
         checkboxContainer.appendChild(document.createElement("br"));
-        fragment.appendChild(checkboxContainer);
 
-        checkboxesContainer.appendChild(fragment);
+        fragment.appendChild(checkboxContainer);
     });
+
+    checkboxesContainer.appendChild(fragment);
 }
 
+function getUniqueValues(columnIndex) {
+    const uniqueValues = [...new Set(filteredData.map(row => row[columns[columnIndex].name].toString().trim()))];
+    return dynamicSort(uniqueValues,columnIndex);
+}
+
+
+
 function applyFilters(lastSelectedDropdown) {
-    const selectedFilters = Array.from(document.querySelectorAll("th"))
-        .map((column) => {
-            if (column.classList.contains("dropdown")) {
-                const checkboxesContainer = column.querySelector(".checkboxes");
-                if (checkboxesContainer) {
-                    return Array.from(checkboxesContainer.querySelectorAll("input[type='checkbox']:checked"))
-                        .map(checkbox => checkbox.value);
-                }
+    const selectedFilters = Array.from(document.querySelectorAll("th")).map((column) => {
+        if (column.classList.contains("dropdown")) {
+            const checkboxesContainer = column.querySelector(".checkboxes");
+            if (checkboxesContainer) {
+                return Array.from(checkboxesContainer.querySelectorAll("input[type='checkbox']:checked"))
+                    .map(checkbox => checkbox.value);
             }
-            return [];
-        });
+        }
+        return [];
+    });
 
     filteredData = baseData.filter(row => {
-        const matchesFilters = selectedFilters.every((values, columnIndex) => {
+        return selectedFilters.every((values, columnIndex) => {
             if (values.length === 0) return true;
             const columnName = columns[columnIndex].name;
             return values.includes(row[columnName]);
         });
-        return matchesFilters;
     });
 
-   
     columns.forEach((column, index) => {
         if (column.hasSearchBar || column.onlyTH || column.dontShow) return;
 
@@ -241,11 +290,29 @@ function setRowsPerPage(selectedButton) {
     renderTablePage(currentPage, filteredData);
 }
 
+function initializeTable() {
+    filteredData = baseData;
+    createTableColumns();
+    createSearchInput();
+    applyFilters();
+}
+
+function createSearchInput() {
+    columns.forEach((column, index) => {
+        if (column.hasSearchBar) {
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = `Search ${column.label}`;
+            searchInput.addEventListener('input', () => applyFilters(null));
+            document.querySelector('.table-top').prepend(searchInput);
+        }
+    });
+}
+
 document.getElementById('reset-button').addEventListener('click', (event) => {
     event.preventDefault();
     document.querySelectorAll("input[type='checkbox']").forEach(checkbox => checkbox.checked = false);
-    document.querySelectorAll('.hall-button').forEach(button => { if (button.innerText != "All Halls") button.classList.remove('active'); else button.classList.add('active'); });
-
+    document.querySelectorAll('.hall-button').forEach(button => { if (button.innerText !== "All Halls") button.classList.remove('active'); else button.classList.add('active'); });
     document.querySelectorAll("input[type='text']").forEach(input => input.value = '');
     filteredData = baseData;
     currentPage = 1;
@@ -255,26 +322,7 @@ document.getElementById('reset-button').addEventListener('click', (event) => {
 document.getElementById('export-button').addEventListener('click', () => {
     event.preventDefault();
     const hdnInput = document.getElementById('hiddenField');
-    var jsondata = JSON.stringify(filteredData);
+    const jsondata = JSON.stringify(filteredData);
     hdnInput.value = jsondata;
     document.getElementById('hiddenButton').click();
 });
-
-function filterCheckboxes(input) {
-    const checkboxes = input.parentElement.querySelectorAll(".checkboxes input[type='checkbox']");
-    checkboxes.forEach(checkbox => {
-        const label = checkbox.nextElementSibling;
-        if (label.textContent.toLowerCase().includes(input.value.toLowerCase())) {
-            checkbox.parentElement.style.display = '';
-        } else {
-            checkbox.parentElement.style.display = 'none';
-        }
-    });
-}
-
-function initializeTable() {
-    filteredData = baseData;
-    createTableColumns();
-    createSearchInput();
-    applyFilters();
-}
