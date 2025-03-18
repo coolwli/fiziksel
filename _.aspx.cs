@@ -32,7 +32,7 @@ namespace vmpedia
             if (string.IsNullOrEmpty(uuid))
             {
                 form1.InnerHtml = "";
-                DisplayError("Eksik URL.");
+                DisplayError("Eksik URL.",null);
                 return;
             }
 
@@ -42,14 +42,14 @@ namespace vmpedia
 
                 if (string.IsNullOrEmpty(_token))
                 {
-                    DisplayError("Token alınamadı. Daha sonra");
+                    DisplayError("Token alınamadı. Daha sonra", null);
                     return;
                 }
 
                 string clusterID = await GetClusterIDAsync(uuid);
                 if (string.IsNullOrEmpty(clusterID))
                 {
-                    DisplayError("Cluster ID bulunamadı");
+                    DisplayError("Cluster ID bulunamadı", null);
                     return;
                 }
 
@@ -201,15 +201,25 @@ namespace vmpedia
                     var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
                     var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
-                    foreach (var resource in xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName)))
-                    {
+                    var resourceNames = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
+                        .Where(res => res.Descendants(XName.Get("resourceKindKey", ns.NamespaceName)).Any(kk => kk.Value == "HostSystem"))
+                        .Select(res => res.Element(XName.Get("name", ns.NamespaceName))?.Value).ToList();
+                    propertyValues["vmhosts"] = string.Join(", ", resourceNames);
 
-                        var host= resource.Element(XName.Get("resourceKey", ns.NamespaceName))
-                                      .Element(XName.Get("name", ns.NamespaceName))
-                                      .Value;
-                        Response.Write(resource);
-                        
-                    }
+                    /*var resourceData = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
+                                     .Where(resource => resource
+                                         .Descendants(XName.Get("resourceKindKey", ns.NamespaceName))
+                                         .Any(kk => kk.Value == "HostSystem"))
+                                     .Select(resource => new
+                                     {
+                                         name = resource.Element(XName.Get("name", ns.NamespaceName))?.Value,
+                                         uuid = resource.Descendants(XName.Get("resourceIdentifiers", ns.NamespaceName))
+                                                         .Descendants(XName.Get("identifierType", ns.NamespaceName))
+                                                         .FirstOrDefault(identifier => identifier.Element(XName.Get("name", ns.NamespaceName))?.Value == "VMEntityObjectID")
+                                                         ?.Element(XName.Get("value", ns.NamespaceName))?.Value
+                                     })
+                                     .Where(data => !string.IsNullOrEmpty(data.name) && !string.IsNullOrEmpty(data.uuid))
+                                     .ToList();*/
                 }
             }
             catch (Exception ex)
@@ -390,9 +400,9 @@ namespace vmpedia
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
-        private void DisplayError(string message, Exception ex = null)
+        private void DisplayError(string message, Exception ex)
         {
-            string fullErrorMessage = string.IsNullOrEmpty(ex.ToString()) ? message : $"{message}. Details: {ex?.ToString()}";
+            string fullErrorMessage = string.IsNullOrEmpty(ex?.ToString()) ? message : $"{message}. Details: {ex?.ToString()}";
             Response.Write($"<h3>Error: {fullErrorMessage}</h3>");
         }
     }
@@ -400,71 +410,3 @@ namespace vmpedia
 
 
 
-"resourceList": [
-        {
-            "creationTime": 1704787099275,
-            "resourceKey": {
-                "name": "gbesxph356.fw.garanti.com.tr",
-                "adapterKindKey": "VMWARE",
-                "resourceKindKey": "HostSystem",
-                "resourceIdentifiers": [
-                    {
-                        "identifierType": {
-                            "name": "isPingEnabled",
-                            "dataType": "STRING",
-                            "isPartOfUniqueness": false
-                        },
-                        "value": ""
-                    },
-                    {
-                        "identifierType": {
-                            "name": "VMEntityName",
-                            "dataType": "STRING",
-                            "isPartOfUniqueness": false
-                        },
-                        "value": "gbesxph356.fw.garanti.com.tr"
-                    },
-                    {
-                        "identifierType": {
-                            "name": "VMEntityObjectID",
-                            "dataType": "STRING",
-                            "isPartOfUniqueness": true
-                        },
-                        "value": "host-2156331"
-                    },
-                    {
-                        "identifierType": {
-                            "name": "VMEntityVCID",
-                            "dataType": "STRING",
-                            "isPartOfUniqueness": true
-                        },
-                        "value": "fc918808-7583-4b85-ac5d-e8fb4390f363"
-                    }
-                ]
-            },
-            "resourceStatusStates": [],
-            "dtEnabled": true,
-            "badges": [
-                {
-                    "type": "HEALTH",
-                    "color": "RED",
-                    "score": 25.0
-                },
-                {
-                    "type": "EFFICIENCY",
-                    "color": "GREEN",
-                    "score": 100.0
-                },
-                {
-                    "type": "COMPLIANCE",
-                    "color": "GREY",
-                    "score": -1.0
-                },
-                {
-                    "type": "RISK",
-                    "color": "GREEN",
-                    "score": 0.0
-                },
-                {
-                    "type": "TIME_REMAINING",
-         
