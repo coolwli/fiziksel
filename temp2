@@ -10,16 +10,16 @@ using System.Threading.Tasks;
 
 namespace vmpedia
 {
-    public partial class vmscreen : System.Web.UI.Page
+    public partial class clusterscreen : System.Web.UI.Page
     {
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         private string _token;
         private string vRopsServer;
-        private List<string> _metricsToFilter = new List<string> { "cpu|usage_average", "mem|usage_average" };
-        private Dictionary<string, string> propertyValues = new Dictionary<string, string>();
+        private readonly List<string> _metricsToFilter = new List<string> { "cpu|capacity_usagepct_average", "mem|usage_average" };
+        private readonly Dictionary<string, string> propertyValues = new Dictionary<string, string>();
 
-        static vmscreen()
+        static clusterscreen()
         {
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
@@ -32,7 +32,7 @@ namespace vmpedia
             if (string.IsNullOrEmpty(uuid))
             {
                 form1.InnerHtml = "";
-                DisplayError("Eksik URL.");
+                DisplayError("Eksik URL.", null);
                 return;
             }
 
@@ -42,25 +42,18 @@ namespace vmpedia
 
                 if (string.IsNullOrEmpty(_token))
                 {
-                    DisplayError("Token alınamadı. Daha sonra");
+                    DisplayError("Token alınamadı. Daha sonra", null);
                     return;
                 }
 
-                string vmID = await GetVmIDAsync(uuid);
-                if (string.IsNullOrEmpty(vmID))
+                string clusterID = await GetClusterIDAsync(uuid);
+                if (string.IsNullOrEmpty(clusterID))
                 {
-                    DisplayError("VM ID bulunamadı");
+                    DisplayError("Cluster ID bulunamadı", null);
                     return;
                 }
 
-                await DiscoverDiskKeysAsync(vmID);
-
-                var fetchDataTask = Task.WhenAll(
-                    FetchVMMetricsAsync(vmID),
-                    FetchVMDataAsync(vmID)
-                );
-
-                await fetchDataTask;
+                await FetchClusterDataAsync(clusterID);
             }
         }
 
@@ -72,9 +65,14 @@ namespace vmpedia
 
         private string GetVropsServer(string vCenter)
         {
-            return (vCenter == "apgaraavcs801" || vCenter == "apgartksvcs801" || vCenter == "ptekvcsd01")
-                ? "https://apgaravrops801.fw.garanti.com.tr"
-                : "https://ptekvrops01.fw.garanti.com.tr";
+            var vCenterServers = new Dictionary<string, string>
+            {
+                { "apgaraavcs801", "https://apgaravrops801.fw.garanti.com.tr" },
+                { "apgartksvcs801", "https://apgaravrops801.fw.garanti.com.tr" },
+                { "ptekvcsd01", "https://apgaravrops801.fw.garanti.com.tr" }
+            };
+
+            return vCenterServers.ContainsKey(vCenter) ? vCenterServers[vCenter] : "https://ptekvrops01.fw.garanti.com.tr";
         }
 
         private async Task EnsureTokenAsync(string vCenter)
@@ -90,19 +88,16 @@ namespace vmpedia
             }
         }
 
-        private async Task<string> GetVmIDAsync(string uuid)
+        private async Task<string> GetClusterIDAsync(string uuid)
         {
-            string url = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
-            var request = new HttpRequestMessage(HttpMethod.Get, url)
-            {
-                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
-            };
+            string url = $"{vRopsServer}/suite-api/api/resources?resourceKind=ClusterComputeResource&name={uuid}";
+            var request = CreateHttpRequest(HttpMethod.Get, url);
+
             try
             {
                 using (var response = await _httpClient.SendAsync(request))
                 {
                     response.EnsureSuccessStatusCode();
-
                     var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
                     return doc.Descendants(XName.Get("resource", OpsNamespace))
                               .FirstOrDefault()?
@@ -116,22 +111,30 @@ namespace vmpedia
             }
         }
 
-        private async Task FetchVMDataAsync(string vmID)
+        private async Task FetchClusterDataAsync(string clusterID)
         {
-            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/properties";
-            var request = new HttpRequestMessage(HttpMethod.Get, url)
-            {
-                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
-            };
+            var fetchDataTask = Task.WhenAll(
+                FetchClusterPropertiesAsync(clusterID),
+                FetchClusterRelationshipsAsync(clusterID),
+                FetchClusterStatsAsync(clusterID),
+                FetchClusterMetricsAsync(clusterID)
+            );
+
+            await fetchDataTask;
+        }
+
+        private async Task FetchClusterPropertiesAsync(string clusterID)
+        {
+            string url = $"{vRopsServer}/suite-api/api/resources/{clusterID}/properties";
+            var request = CreateHttpRequest(HttpMethod.Get, url);
 
             try
             {
                 using (var response = await _httpClient.SendAsync(request))
                 {
                     response.EnsureSuccessStatusCode();
-
                     var doc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-                    var properties = GetVMProperties(doc);
+                    var properties = GetClusterProperties(doc);
 
                     foreach (var prop in properties)
                     {
@@ -141,36 +144,25 @@ namespace vmpedia
 
                         propertyValues[prop] = value;
                     }
-
-                    DisplayVMProperties();
                 }
-
             }
             catch (Exception ex)
             {
-                DisplayError("VM data retrieval failed", ex);
+                DisplayError("Cluster data retrieval failed", ex);
             }
         }
 
-        private List<string> GetVMProperties(XDocument doc)
+        private List<string> GetClusterProperties(XDocument doc)
         {
             var properties = new List<string>
             {
-                "summary|guest|ipAddress", "summary|runtime|powerState", "summary|parentVcenter", "summary|parentCluster",
-                "summary|parentHost", "summary|parentDatacenter", "summary|guest|fullName", "summary|parentFolder",
-                "config|hardware|numCpu", "config|createDate", "config|memoryAllocation|shares|shares", "config|hardware|diskSpace",
-                "summary|guest|toolsVersion", "config|hardware|numSockets"
+                "summary|parentDatacenter", "summary|parentVcenter"
             };
 
             foreach (var element in doc.Descendants(XName.Get("property", OpsNamespace)))
             {
                 string name = element.Attribute("name")?.Value;
-                if (name?.StartsWith("virtualDisk:") == true &&
-                    (name.EndsWith("|provisioning_type") || name.EndsWith("|configuredGB") || name.EndsWith("|label")))
-                {
-                    properties.Add(name);
-                }
-                else if (name?.StartsWith("summary|customTag:") == true && name.EndsWith("|customTagValue"))
+                if (name?.StartsWith("summary|customTag:") == true && name.EndsWith("|customTagValue"))
                 {
                     properties.Add(name);
                 }
@@ -179,64 +171,64 @@ namespace vmpedia
             return properties;
         }
 
-        private void DisplayVMProperties()
-        {
-            Response.Write("<h2>VM Properties</h2>");
-            Response.Write("<ul>");
-            foreach (var property in propertyValues)
-            {
-                Response.Write($"<li>{property.Key}: {property.Value}</li>");
-            }
-            Response.Write("</ul>");
-        }
-
-        private async Task FetchVMMetricsAsync(string vmID)
+        private async Task FetchClusterMetricsAsync(string clusterID)
         {
             try
             {
-                var metricsData = await FetchMetricsAsync(vmID);
+                var metricsData = await FetchMetricsAsync(clusterID);
                 SendUsageDataToClient(metricsData.Item1, metricsData.Item2, propertyValues);
             }
             catch (Exception ex)
             {
-                DisplayError("VM metrics retrieval failed", ex);
+                DisplayError("Cluster metrics retrieval failed", ex);
             }
         }
 
-        private async Task DiscoverDiskKeysAsync(string vmID)
+        private async Task FetchClusterRelationshipsAsync(string clusterID)
         {
-            string url = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats/latest";
-            var request = new HttpRequestMessage(HttpMethod.Get, url)
-            {
-                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
-            };
+            string url = $"{vRopsServer}/suite-api/api/resources/{clusterID}/relationships";
+            var request = CreateHttpRequest(HttpMethod.Get, url);
 
             try
             {
                 using (var response = await _httpClient.SendAsync(request))
                 {
                     response.EnsureSuccessStatusCode();
+                    var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+                    var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
+                    var resourceNames = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
+                        .Where(res => res.Descendants(XName.Get("resourceKindKey", ns.NamespaceName)).Any(kk => kk.Value == "HostSystem"))
+                        .Select(res => res.Element(XName.Get("name", ns.NamespaceName))?.Value).ToList();
+                    propertyValues["vmhosts"] = string.Join(", ", resourceNames);
+                }
+            }
+            catch (Exception ex)
+            {
+                DisplayError("Metrics discovery failed", ex);
+            }
+        }
+
+        private async Task FetchClusterStatsAsync(string clusterID)
+        {
+            string url = $"{vRopsServer}/suite-api/api/resources/{clusterID}/stats/latest";
+            var request = CreateHttpRequest(HttpMethod.Get, url);
+
+            try
+            {
+                using (var response = await _httpClient.SendAsync(request))
+                {
+                    response.EnsureSuccessStatusCode();
                     var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
                     var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
 
                     foreach (var stat in xmlDoc.Descendants(XName.Get("stat", ns.NamespaceName)))
                     {
                         var key = stat.Element(XName.Get("statKey", ns.NamespaceName))
-                                      .Element(XName.Get("key", ns.NamespaceName))
-                                      .Value;
+                                        .Element(XName.Get("key", ns.NamespaceName))
+                                        .Value;
 
-                        if (key.StartsWith("guestfilesystem") && key.EndsWith("|percentage"))
-                        {
-                            _metricsToFilter.Add(key);
-                        }
-
-                        else if (key == "guestfilesystem|usage_total")
-                        {
-                            propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
-                        }
-
-                        else if (key == "guestfilesystem|capacity_total")
+                        if (key == "summary|number_running_vcpus" || key == "summary|number_running_hosts" || key == "summary|number_running_vms")
                         {
                             propertyValues[key] = stat.Element(XName.Get("data", ns.NamespaceName)).Value;
                         }
@@ -249,7 +241,7 @@ namespace vmpedia
             }
         }
 
-        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string vmID)
+        private async Task<Tuple<Dictionary<string, double[]>, DateTime[]>> FetchMetricsAsync(string clusterID)
         {
             long startTimeMillis = new DateTimeOffset(DateTime.Now.AddDays(-365)).ToUnixTimeMilliseconds();
             long endTimeMillis = new DateTimeOffset(DateTime.Now).ToUnixTimeMilliseconds();
@@ -260,7 +252,7 @@ namespace vmpedia
             {
                 var fetchTasks = _metricsToFilter.Select(async metric =>
                 {
-                    string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{vmID}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
+                    string metricsUrl = $"{vRopsServer}/suite-api/api/resources/{clusterID}/stats?statKey={metric}&begin={startTimeMillis}&end={endTimeMillis}&intervalQuantifier=10&intervalType=MINUTES&rollUpType=AVG";
                     var data = await FetchMetricsDataAsync(metricsUrl);
 
                     var parsedData = ParseMetricsData(data, metric, ref timestamps);
@@ -282,10 +274,7 @@ namespace vmpedia
 
         private async Task<string> FetchMetricsDataAsync(string url)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, url)
-            {
-                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
-            };
+            var request = CreateHttpRequest(HttpMethod.Get, url);
 
             try
             {
@@ -360,7 +349,7 @@ namespace vmpedia
                 else
                 {
                     string key = metric.Key.Substring(0, 3);
-                    string dataArray = string.join(",", metric.Value.Select(v => v.ToString("F2")));
+                    string dataArray = string.Join(",", metric.Value.Select(v => v.ToString("F2")));
                     scriptBuilder.AppendLine($"let {key}Datas = [{dataArray}];");
                 }
             }
@@ -372,14 +361,21 @@ namespace vmpedia
             }
             scriptBuilder.AppendLine("};");
 
-            scriptBuilder.AppendLine("fetchDisk();");
             ClientScript.RegisterStartupScript(this.GetType(), "usageDataScript", scriptBuilder.ToString(), true);
         }
 
-        private void DisplayError(string message, Exception ex = null)
+        private void DisplayError(string message, Exception ex)
         {
-            string fullErrorMessage = string.IsNullOrEmpty(ex?.Message) ? message : $"{message}. Details: {ex?.Message}";
+            string fullErrorMessage = string.IsNullOrEmpty(ex?.ToString()) ? message : $"{message}. Details: {ex?.ToString()}";
             Response.Write($"<h3>Error: {fullErrorMessage}</h3>");
+        }
+
+        private HttpRequestMessage CreateHttpRequest(HttpMethod method, string url)
+        {
+            return new HttpRequestMessage(method, url)
+            {
+                Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+            };
         }
     }
 }
