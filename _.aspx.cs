@@ -31,29 +31,27 @@ namespace vmpedia
 
             try
             {
-                var jsonData = new StringBuilder();
+                var tableRows = new List<Dictionary<string, object>>();
 
                 var urls = new List<string>
                 {
-                    "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"//,
-                    //"https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+                    "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
                 };
 
-                var tasks = new List<Task<string>>();
+                var tasks = new List<Task>();
 
                 foreach (var url in urls)
                 {
-                    tasks.Add(CheckTokenAndFetchDataAsync(url)); 
+                    tasks.Add(FetchAndParseDataAsync(url, tableRows));
                 }
 
-                var results = await Task.WhenAll(tasks);
+                await Task.WhenAll(tasks);
 
-                foreach (var result in results)
-                {
-                    jsonData.Append(result);
-                }
-
-                ParseDashboardData(jsonData.ToString());
+                // JSON verisini serialize edip, client tarafına göndereceğiz
+                var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                var json = js.Serialize(tableRows);
+                var script = $"<script>baseData = {json}; initializeTable(); </script>";
+                ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
             }
             catch (Exception ex)
             {
@@ -61,7 +59,7 @@ namespace vmpedia
             }
         }
 
-        private async Task<string> CheckTokenAndFetchDataAsync(string url)
+        private async Task FetchAndParseDataAsync(string url, List<Dictionary<string, object>> tableRows)
         {
             var tokenManager = new TokenManager(_httpClient);
 
@@ -77,21 +75,61 @@ namespace vmpedia
                 }
 
                 var pageResults = await Task.WhenAll(tasks);
-                var jsonDataBuilder = new StringBuilder();
+
                 foreach (var pageData in pageResults)
                 {
                     if (!string.IsNullOrEmpty(pageData))
                     {
-                        jsonDataBuilder.Append(pageData);
+                        ParseAndAddRowsToList(pageData, tableRows);
                     }
                 }
-
-                return jsonDataBuilder.ToString();
             }
             catch (Exception ex)
             {
                 form1.InnerHtml = "An error occurred: " + ex.ToString();
-                return string.Empty;
+            }
+        }
+
+        private void ParseAndAddRowsToList(string jsonData, List<Dictionary<string, object>> tableRows)
+        {
+            var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+            dynamic data = js.Deserialize<dynamic>(jsonData);
+
+            var excludedKeys = new HashSet<string> { "grandTotal", "groupUUID", "objUUID", "summary" };
+
+            foreach (var view in data)
+            {
+                foreach (var elements in view.Value)
+                {
+                    foreach (var rows in elements["rows"])
+                    {
+                        var tableRow = new Dictionary<string, object>();
+                        foreach (var row in rows)
+                        {
+                            foreach (var kv in row.Value)
+                            {
+                                if (excludedKeys.Contains(kv.Key.ToString())) continue;
+
+                                if (kv.Value == null)
+                                {
+                                    tableRow[kv.Key] = "";
+                                }
+                                else if (kv.Key == "12") // Example for specific parsing (date handling)
+                                {
+                                    if (long.TryParse(kv.Value.ToString(), out long unixTimestamp))
+                                    {
+                                        tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
+                                    }
+                                }
+                                else
+                                {
+                                    tableRow[kv.Key] = kv.Value.ToString();
+                                }
+                            }
+                        }
+                        tableRows.Add(tableRow);
+                    }
+                }
             }
         }
 
@@ -119,7 +157,6 @@ namespace vmpedia
                     if (response.IsSuccessStatusCode)
                     {
                         return await response.Content.ReadAsStringAsync();
-
                     }
                     return string.Empty;
                 }
@@ -128,54 +165,6 @@ namespace vmpedia
             {
                 return string.Empty;
             }
-        }
-
-        private void ParseDashboardData(string jsonData)
-        {
-            var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-            dynamic data = js.Deserialize<dynamic>(jsonData);
-            var tableRows = new List<Dictionary<string, object>>();
-
-            var excludedKeys = new HashSet<string> { "grandTotal", "groupUUID", "objUUID", "summary" };
-
-            foreach (var view in data)
-            {
-                foreach (var elements in view.Value)
-                {
-                    foreach (var rows in elements["rows"])
-                    {
-                        var tableRow = new Dictionary<string, object>();
-                        foreach (var row in rows)
-                        {
-                            foreach (var kv in row.Value)
-                            {
-                                if (excludedKeys.Contains(kv.Key.ToString())) continue;
-
-                                if (kv.Value == null)
-                                {
-                                    tableRow[kv.Key] = "";
-                                }
-                                else if (kv.Key == "12")
-                                {
-                                    if (long.TryParse(kv.Value.ToString(), out long unixTimestamp))
-                                    {
-                                        tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
-                                    }
-                                }
-                                else
-                                {
-                                    tableRow[kv.Key] = kv.Value.ToString();
-                                }
-                            }
-                        }
-                        tableRows.Add(tableRow);
-                    }
-                }
-            }
-
-            var json = js.Serialize(tableRows);
-            var script = $"<script>baseData = {json}; initializeTable(); </script>";
-            ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
         }
 
         protected void hiddenButton_Click(object sender, EventArgs e)
