@@ -1,6 +1,5 @@
 using System;
 using System.Net;
-using System.Web;
 using System.Text;
 using System.Collections.Generic;
 using System.Web.UI;
@@ -15,7 +14,6 @@ namespace vmpedia
     {
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private string _username;
         private string _password;
@@ -23,11 +21,9 @@ namespace vmpedia
 
         static _default()
         {
-            // This should be handled securely, consider not bypassing certificate validation in production
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
         }
 
-        // Avoid async void for event handlers
         protected async void Page_Load(object sender, EventArgs e)
         {
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
@@ -35,12 +31,29 @@ namespace vmpedia
 
             try
             {
-                StringBuilder jsonData = new StringBuilder();
+                var jsonData = new StringBuilder();
 
-                jsonData.Append(await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true", "ptekvcs01"));
-                jsonData.Append(await CheckTokenAndFetchDataAsync("https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true", "apgaraavcs801"));
+                var urls = new List<string>
+                {
+                    "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true",
+                    "https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+                };
 
-                ParseViewData(jsonData.ToString());
+                var tasks = new List<Task<string>>();
+
+                foreach (var url in urls)
+                {
+                    tasks.Add(CheckTokenAndFetchDataAsync(url)); // Token tipini URL'ye göre belirleyeceğiz
+                }
+
+                var results = await Task.WhenAll(tasks);
+
+                foreach (var result in results)
+                {
+                    jsonData.Append(result);
+                }
+
+                ParseDashboardData(jsonData.ToString());
             }
             catch (Exception ex)
             {
@@ -48,36 +61,56 @@ namespace vmpedia
             }
         }
 
-        private async Task<string> CheckTokenAndFetchDataAsync(string url, string tokenType)
+        private async Task<string> CheckTokenAndFetchDataAsync(string url)
         {
             var tokenManager = new TokenManager(_httpClient);
+
             try
             {
+                // Token tipi URL'ye göre belirlenecek
+                string tokenType = GetTokenTypeFromUrl(url);
                 _token = await tokenManager.GetTokenAsync(tokenType);
-                int page = 1;
-                StringBuilder jsonDataBuilder = new StringBuilder();
 
-                while (page <= 2)
+                var tasks = new List<Task<string>>();
+                for (int page = 1; page <= 2; page++)
                 {
-                    string jsonData = await GetDataAsync(url + $"&page={page}");
-                    if (!string.IsNullOrEmpty(jsonData))
+                    tasks.Add(GetDataAsync(url + $"&page={page}"));
+                }
+
+                var pageResults = await Task.WhenAll(tasks);
+                var jsonDataBuilder = new StringBuilder();
+
+                foreach (var pageData in pageResults)
+                {
+                    if (!string.IsNullOrEmpty(pageData))
                     {
-                        jsonDataBuilder.Append(jsonData); 
+                        jsonDataBuilder.Append(pageData);
                     }
-                    page++;
                 }
 
                 return jsonDataBuilder.ToString();
-            }
-            catch (HttpRequestException httpEx)
-            {
-                form1.InnerHtml = "Error while fetching data: " + httpEx.Message;
-                return string.Empty;
             }
             catch (Exception ex)
             {
                 form1.InnerHtml = "An error occurred: " + ex.Message;
                 return string.Empty;
+            }
+        }
+
+        private string GetTokenTypeFromUrl(string url)
+        {
+            // URL'ye göre token tipi belirleme işlemi
+            if (url.Contains("ptekvrops01"))
+            {
+                return "ptekvcs01"; // örnek token tipi
+            }
+            else if (url.Contains("apgarvrops201"))
+            {
+                return "apgaraavcs801"; // diğer token tipi
+            }
+            else
+            {
+                return "defaultToken"; // Varsayılan token tipi
             }
         }
 
@@ -97,14 +130,15 @@ namespace vmpedia
                     return string.Empty;
                 }
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException)
             {
                 return string.Empty;
             }
         }
+
         private void ParseDashboardData(string jsonData)
         {
-            var js = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue };
+            var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
             dynamic data = js.Deserialize<dynamic>(jsonData);
             var tableRows = new List<Dictionary<string, object>>();
             
@@ -123,20 +157,18 @@ namespace vmpedia
                             {
                                 if (excludedKeys.Contains(kv.Key.ToString())) continue;
 
-                                if (kv.Key == "12")
+                                // Null kontrolü ekleyelim
+                                if (kv.Value == null)
                                 {
-                                    if (long.TryParse(kv.Value.ToString(), out long unixTimestamp))
-                                    {
-                                        tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
-                                    }
-                                    else
-                                    {
-                                        tableRow[kv.Key] = "";
-                                    }
+                                    tableRow[kv.Key] = "";
+                                }
+                                else if (kv.Key == "12" && long.TryParse(kv.Value.ToString(), out long unixTimestamp))
+                                {
+                                    tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
                                 }
                                 else
                                 {
-                                    tableRow[kv.Key] = kv.Value ?? ""; 
+                                    tableRow[kv.Key] = kv.Value.ToString();
                                 }
                             }
                         }
@@ -162,7 +194,7 @@ namespace vmpedia
 
             try
             {
-                JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
                 var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
 
                 if (tableData == null || tableData.Count == 0)
@@ -171,36 +203,33 @@ namespace vmpedia
                     return;
                 }
 
-                // Define your column names here
                 var columnNames = new List<string> { "Name", "Power State", "IPv4", "OS", "Cluster", "VCenter", "Datastore Cluster", "Include Snapshot", "Snapshot Size" };
 
-                StringBuilder csv = new StringBuilder();
+                var csv = new StringBuilder();
                 csv.AppendLine(string.Join(";", columnNames));
 
-                // Safely handle null or empty values for each field
                 foreach (var row in tableData)
                 {
                     var values = new List<string>
                     {
-                        row.["1"],
-                        row.["2"],
-                        row.["3"],
-                        row.["4"],
-                        row.["5"],
-                        row.["6"],
-                        row.["7"],
-                        row.["8"],
-                        row.["9"],
-                        row.["10"],
-                        row.["11"],
-                        row.["12"],
-                        row.["13"]
+                        row["1"]?.ToString(),
+                        row["2"]?.ToString(),
+                        row["3"]?.ToString(),
+                        row["4"]?.ToString(),
+                        row["5"]?.ToString(),
+                        row["6"]?.ToString(),
+                        row["7"]?.ToString(),
+                        row["8"]?.ToString(),
+                        row["9"]?.ToString(),
+                        row["10"]?.ToString(),
+                        row["11"]?.ToString(),
+                        row["12"]?.ToString(),
+                        row["13"]?.ToString()
                     };
 
                     csv.AppendLine(string.Join(";", values));
                 }
 
-                // Set up the response for CSV download
                 Response.Clear();
                 Response.ContentType = "text/csv";
                 Response.AddHeader("Content-Disposition", "attachment;filename=Replicated_VMs.csv");
