@@ -1,4 +1,22 @@
-r resourceData = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
+private async Task FetchClusterRelationshipsAsync(string clusterID)
+{
+    string url = $"{vRopsServer}/suite-api/api/resources/{clusterID}/relationships";
+    var request = new HttpRequestMessage(HttpMethod.Get, url)
+    {
+        Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
+    };
+
+    try
+    {
+        using (var response = await _httpClient.SendAsync(request))
+        {
+            response.EnsureSuccessStatusCode();
+
+            var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
+            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
+
+            // Sadece resourceKindKey'i "HostSystem" olan kaynakları alıyoruz
+            var resourceData = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
                                      .Where(resource => resource
                                          .Descendants(XName.Get("resourceKindKey", ns.NamespaceName))
                                          .Any(kindKey => kindKey.Value == "HostSystem"))
@@ -12,3 +30,16 @@ r resourceData = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
                                      })
                                      .Where(data => !string.IsNullOrEmpty(data.Name) && !string.IsNullOrEmpty(data.Uuid))
                                      .ToList();
+
+            // resourceData'daki Name ve Uuid'leri birleştiriyoruz
+            var combinedNamesAndUuids = string.Join(", ", resourceData.Select(data => $"{data.Name} (UUID: {data.Uuid})"));
+
+            // Birleşmiş string'i ekrana yazdırabiliriz veya başka bir işlem yapabiliriz.
+            Response.Write($"HostSystem Resource Names and UUIDs: {combinedNamesAndUuids}");
+        }
+    }
+    catch (Exception ex)
+    {
+        DisplayError("Metrics discovery failed", ex);
+    }
+}
