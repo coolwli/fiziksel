@@ -35,15 +35,15 @@ namespace vmpedia
 
                 var urls = new List<string>
                 {
-                    "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true",
-                    "https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+                    "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"//,
+                    //"https://apgarvrops201.fw.garanti.com.tr/suite-api/internal/views/51f11b22-4019-45db-b5a5-512b40b0f130/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&pageSize=1000&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
                 };
 
                 var tasks = new List<Task<string>>();
 
                 foreach (var url in urls)
                 {
-                    tasks.Add(CheckTokenAndFetchDataAsync(url)); // Token tipini URL'ye göre belirleyeceğiz
+                    tasks.Add(CheckTokenAndFetchDataAsync(url)); 
                 }
 
                 var results = await Task.WhenAll(tasks);
@@ -57,7 +57,7 @@ namespace vmpedia
             }
             catch (Exception ex)
             {
-                form1.InnerHtml = "An error occurred while loading the page: " + ex.Message;
+                form1.InnerHtml = "An error occurred while loading the page: " + ex.ToString();
             }
         }
 
@@ -67,19 +67,17 @@ namespace vmpedia
 
             try
             {
-                // Token tipi URL'ye göre belirlenecek
                 string tokenType = GetTokenTypeFromUrl(url);
                 _token = await tokenManager.GetTokenAsync(tokenType);
 
                 var tasks = new List<Task<string>>();
-                for (int page = 1; page <= 2; page++)
+                for (int page = 0; page <= 2; page++)
                 {
                     tasks.Add(GetDataAsync(url + $"&page={page}"));
                 }
 
                 var pageResults = await Task.WhenAll(tasks);
                 var jsonDataBuilder = new StringBuilder();
-
                 foreach (var pageData in pageResults)
                 {
                     if (!string.IsNullOrEmpty(pageData))
@@ -92,25 +90,20 @@ namespace vmpedia
             }
             catch (Exception ex)
             {
-                form1.InnerHtml = "An error occurred: " + ex.Message;
+                form1.InnerHtml = "An error occurred: " + ex.ToString();
                 return string.Empty;
             }
         }
 
         private string GetTokenTypeFromUrl(string url)
         {
-            // URL'ye göre token tipi belirleme işlemi
             if (url.Contains("ptekvrops01"))
             {
-                return "ptekvcs01"; // örnek token tipi
-            }
-            else if (url.Contains("apgarvrops201"))
-            {
-                return "apgaraavcs801"; // diğer token tipi
+                return "pendik"; 
             }
             else
             {
-                return "defaultToken"; // Varsayılan token tipi
+                return "ankara"; 
             }
         }
 
@@ -126,6 +119,7 @@ namespace vmpedia
                     if (response.IsSuccessStatusCode)
                     {
                         return await response.Content.ReadAsStringAsync();
+
                     }
                     return string.Empty;
                 }
@@ -141,7 +135,7 @@ namespace vmpedia
             var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
             dynamic data = js.Deserialize<dynamic>(jsonData);
             var tableRows = new List<Dictionary<string, object>>();
-            
+
             var excludedKeys = new HashSet<string> { "grandTotal", "groupUUID", "objUUID", "summary" };
 
             foreach (var view in data)
@@ -157,14 +151,16 @@ namespace vmpedia
                             {
                                 if (excludedKeys.Contains(kv.Key.ToString())) continue;
 
-                                // Null kontrolü ekleyelim
                                 if (kv.Value == null)
                                 {
                                     tableRow[kv.Key] = "";
                                 }
-                                else if (kv.Key == "12" && long.TryParse(kv.Value.ToString(), out long unixTimestamp))
+                                else if (kv.Key == "12")
                                 {
-                                    tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
+                                    if (long.TryParse(kv.Value.ToString(), out long unixTimestamp))
+                                    {
+                                        tableRow[kv.Key] = DateTimeOffset.FromUnixTimeMilliseconds(unixTimestamp).DateTime.ToString("dd/MM/yyyy");
+                                    }
                                 }
                                 else
                                 {
@@ -234,11 +230,10 @@ namespace vmpedia
                 Response.ContentType = "text/csv";
                 Response.AddHeader("Content-Disposition", "attachment;filename=Replicated_VMs.csv");
                 Response.Write(csv.ToString());
-                HttpContext.Current.ApplicationInstance.CompleteRequest();
             }
             catch (Exception ex)
             {
-                Response.Write($"An error occurred: {ex.Message}");
+                Response.Write($"An error occurred: {ex.ToString()}");
             }
         }
     }
