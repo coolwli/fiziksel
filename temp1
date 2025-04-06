@@ -1,45 +1,82 @@
-private async Task FetchClusterRelationshipsAsync(string clusterID)
+void LoadServices(Excel.Worksheet ws)
 {
-    string url = $"{vRopsServer}/suite-api/api/resources/{clusterID}/relationships";
-    var request = new HttpRequestMessage(HttpMethod.Get, url)
-    {
-        Headers = { { "Authorization", $"vRealizeOpsToken {_token}" } }
-    };
+    Excel.Range range = ws.UsedRange;
+    var groupedServices = new Dictionary<string, List<HtmlGenericControl>>();
 
-    try
+    // Excel'den verileri alırken, satır başlıklarının boş olma durumuna dikkat edilmelidir.
+    for (int i = 2; i <= range.Rows.Count; i++)  // 2. satırdan başlıyoruz çünkü 1. satır başlık olabilir
     {
-        using (var response = await _httpClient.SendAsync(request))
+        var serviceName = range.Cells[i, 1]?.Text?.ToString();
+        var serviceDesc = range.Cells[i, 2]?.Text?.ToString();
+        var serviceLink = range.Cells[i, 3]?.Text?.ToString();
+        var category = range.Cells[i, 4]?.Text?.ToString();
+        var meta = range.Cells[i, 5]?.Text?.ToString();
+
+        if (string.IsNullOrEmpty(serviceName) || string.IsNullOrEmpty(serviceLink)) continue; // Boş verileri atla
+
+        // Meta kısmında sadece "Public" değerini kullanıyoruz
+        var metaText = meta?.Equals("Public", StringComparison.OrdinalIgnoreCase) == true ? "Public" : string.Empty;
+
+        if (!groupedServices.ContainsKey(category))
         {
-            response.EnsureSuccessStatusCode();
-
-            var xmlDoc = XDocument.Parse(await response.Content.ReadAsStringAsync());
-            var ns = xmlDoc.Root.GetNamespaceOfPrefix("ops");
-
-            // Sadece resourceKindKey'i "HostSystem" olan kaynakları alıyoruz
-            var resourceData = xmlDoc.Descendants(XName.Get("resourceKey", ns.NamespaceName))
-                                     .Where(resource => resource
-                                         .Descendants(XName.Get("resourceKindKey", ns.NamespaceName))
-                                         .Any(kindKey => kindKey.Value == "HostSystem"))
-                                     .Select(resource => new
-                                     {
-                                         Name = resource.Element(XName.Get("name", ns.NamespaceName))?.Value,
-                                         Uuid = resource.Descendants(XName.Get("resourceIdentifiers", ns.NamespaceName))
-                                                         .Descendants(XName.Get("identifierType", ns.NamespaceName))
-                                                         .FirstOrDefault(identifier => identifier.Element(XName.Get("name", ns.NamespaceName))?.Value == "VMEntityObjectID")
-                                                         ?.Element(XName.Get("value", ns.NamespaceName))?.Value
-                                     })
-                                     .Where(data => !string.IsNullOrEmpty(data.Name) && !string.IsNullOrEmpty(data.Uuid))
-                                     .ToList();
-
-            // resourceData'daki Name ve Uuid'leri birleştiriyoruz
-            var combinedNamesAndUuids = string.Join(", ", resourceData.Select(data => $"{data.Name} (UUID: {data.Uuid})"));
-
-            // Birleşmiş string'i ekrana yazdırabiliriz veya başka bir işlem yapabiliriz.
-            Response.Write($"HostSystem Resource Names and UUIDs: {combinedNamesAndUuids}");
+            groupedServices[category] = new List<HtmlGenericControl>();
         }
+
+        // Servis için HTML elemanlarını oluşturuyoruz
+        var serviceDiv = CreateServiceDiv(serviceName, serviceDesc, serviceLink, metaText);
+        groupedServices[category].Add(serviceDiv);
     }
-    catch (Exception ex)
+
+    // Kategorilere göre HTML div'lerini oluşturuyoruz
+    foreach (var category in groupedServices)
     {
-        DisplayError("Metrics discovery failed", ex);
+        var categoryDiv = new HtmlGenericControl("section");
+        categoryDiv.Attributes.Add("class", "serv-group");
+
+        var categoryTitle = new HtmlGenericControl("header");
+        categoryTitle.Attributes.Add("class", "serv-group-title");
+        categoryTitle.InnerText = category.Key;  // Kategori adı
+
+        categoryDiv.Controls.Add(categoryTitle);
+
+        // O kategoriye ait servisleri ekleyelim
+        foreach (var serviceItem in category.Value)
+        {
+            categoryDiv.Controls.Add(serviceItem);
+        }
+
+        services.Controls.Add(categoryDiv);  // Son olarak, kategori div'ini sayfadaki placeholder'a ekleyelim
     }
+
+    // Excel nesnelerini serbest bırakıyoruz
+    System.Runtime.InteropServices.Marshal.ReleaseComObject(ws);
+}
+
+HtmlGenericControl CreateServiceDiv(string serviceName, string serviceDesc, string serviceLink, string metaText)
+{
+    var serviceDiv = new HtmlGenericControl("article");
+    serviceDiv.Attributes.Add("class", "serv-item");
+
+    var h2 = new HtmlGenericControl("h2");
+    h2.Attributes.Add("class", "serv-title");
+    h2.InnerText = serviceName;
+
+    var spanMeta = new HtmlGenericControl("span");
+    spanMeta.Attributes.Add("class", "serv-meta");
+    spanMeta.InnerText = metaText;  // Sadece "Public" ya da boş olabilir
+
+    var p = new HtmlGenericControl("p");
+    p.Attributes.Add("class", "serv-desc");
+    p.InnerText = serviceDesc;
+
+    var aLink = new HtmlGenericControl("a");
+    aLink.Attributes.Add("href", serviceLink);
+    aLink.InnerText = "Link"; // Bağlantıyı göstermek için yazı ekliyoruz
+
+    h2.Controls.Add(spanMeta); // Meta'yı başlıkla birleştir
+    serviceDiv.Controls.Add(h2);
+    serviceDiv.Controls.Add(p);
+    serviceDiv.Controls.Add(aLink);
+
+    return serviceDiv;
 }
