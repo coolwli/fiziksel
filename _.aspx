@@ -1,103 +1,152 @@
-    <form id="form1" runat="server" onkeypress="return preventEnter(event)">
-        <asp:ScriptManager ID="ScriptManager1" runat="server"></asp:ScriptManager>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>servsitory List</title>
+    <style>
+      body {
+        background-color: #f0f0f0;
+        color: #333;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 0;
+      }
 
-        <header>
-            <div class="header">
-                <div id="logo" role="link" aria-label="Anasayfa" onclick="window.location.href='/'"></div>
-                <h1 class="baslik" id="baslik" runat="server">CloudUnited Servisler İçin Yönetim Paneli</h1>
-            </div>
-        </header>
+      .header {
+        background-color: #343436;
+        color: white;
+        padding: 8px;
+        font-size: 24px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
 
-        <main class="container">
-            <h2>Web Config Dosyasındaki Yetkili Kişiler</h2>
+      .header a {
+        color: white;
+        text-decoration: none;
+      }
 
-            <asp:UpdatePanel ID="UpdatePanel1" runat="server">
-                <ContentTemplate>
-                    <div class="form-row">
-                        <label for="ddlConfigFiles">Config Dosyasını Seçin:</label>
-                        <asp:DropDownList 
-                            ID="ddlConfigFiles" 
-                            runat="server" 
-                            AutoPostBack="true" 
-                            OnSelectedIndexChanged="ddlConfigFiles_SelectedIndexChanged" 
-                            aria-label="Config dosyasını seçin">
-                            <asp:ListItem Text="Bir config dosyası seçin" Value="" />
-                        </asp:DropDownList>
-                    </div>
+      #page-name {
+        color: #5e5ce6;
+      }
 
-                    <div class="table-container">
-                        <asp:GridView 
-                            ID="gvAuthorizedUsers" 
-                            runat="server" 
-                            AutoGenerateColumns="False" 
-                            OnRowCommand="gvAuthorizedUsers_RowCommand" 
-                            CssClass="table" 
-                            EmptyDataText="Hiç kullanıcı yok">
-                            <Columns>
-                                <asp:BoundField DataField="UserName" HeaderText="Kullanıcı Adı" SortExpression="UserName" />
-                                <asp:TemplateField HeaderText="İşlem">
-                                    <ItemTemplate>
-                                        <asp:Button 
-                                            ID="btnRemove" 
-                                            runat="server" 
-                                            Text="Kaldır" 
-                                            CommandName="Remove" 
-                                            CommandArgument='<%# Eval("UserName") %>' 
-                                            CssClass="btn-remove" 
-                                            OnClientClick="return confirmDelete();" 
-                                            aria-label="Kullanıcıyı kaldır" />
-                                    </ItemTemplate>
-                                </asp:TemplateField>
-                            </Columns>
-                        </asp:GridView>
-                    </div>
+      .container {
+        max-width: 1200px;
+        margin: 40px auto;
+        padding: 20px;
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
 
-                    <br />
-                    <div class="form-row">
-                        <asp:TextBox 
-                            ID="txtUserName" 
-                            runat="server" 
-                            placeholder="Kullanıcı Adı Girin" 
-                            aria-label="Kullanıcı Adı" />
-                        <asp:Button 
-                            ID="btnAddUser" 
-                            runat="server" 
-                            Text="Kullanıcı Ekle" 
-                            CssClass="button" 
-                            OnClick="btnAddUser_Click" 
-                            aria-label="Kullanıcı ekle" />
-                    </div>
-                </ContentTemplate>
-                <Triggers>
-                    <asp:AsyncPostBackTrigger ControlID="btnAddUser" EventName="Click" />
-                </Triggers>
-            </asp:UpdatePanel>
+      .serv-group {
+        flex: 1;
+        min-width: 300px;
+        padding: 20px;
+        border-radius: 8px;
+        background-color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
 
-            <p class="footer">Kullanıcı adı kısmına ‘ * ’ yazmak herkesin erişimine izin verir...</p>
-            <div id="errorMessage" class="error-message" runat="server"></div>
-        </main>
-        
-        <footer>
-            <p class="footer">© 2024 - Cloud United Team</p>
-        </footer>
+      .serv-group-title {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #196fd1;
+        text-align: center;
+      }
 
-        <script>
-            // Enter tuşuna basıldığında formun gönderilmesini engelleme
-            function preventEnter(event) {
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    return false;
-                }
-            }
+      .serv-item {
+        padding: 15px 0;
+        border-bottom: 1px solid #ddd;
+      }
 
-            // Kaldır butonuna tıklanmadan önce onay istemek
-            function confirmDelete() {
-                return confirm("Bu kullanıcıyı kaldırmak istediğinizden emin misiniz?");
-            }
+      .serv-item:last-child {
+        border-bottom: none;
+      }
 
-            // Logo tıklama olayıyla anasayfaya yönlendirme
-            document.getElementById('logo').addEventListener('click', function () {
-                window.location.href = '/';
-            });
-        </script>
-    </form>
+      .serv-title {
+        font-size: 20px;
+        font-weight: bold;
+        margin: 0;
+      }
+
+      .serv-meta {
+        font-size: 14px;
+        color: #666;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="header">
+      <a href="/">cloudmosaic</a>
+      <span id="page-name">servsitory</span>
+    </div>
+
+    <div class="container">
+      <div class="serv-group">
+        <div class="serv-group-title">Frontend Projectsğ</div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            UI Framework <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            Responsive hsl(240, 1.9%, 20.8%)
+            <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+      </div>
+      <div class="serv-group">
+        <div class="serv-group-title">Backend Projects</div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            API Server <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            Database Manager <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+      </div>
+      <div class="serv-group">
+        <div class="serv-group-title">Configuration & Utilities</div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            System Configs <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+        <div class="serv-item">
+          <h2 class="serv-title">
+            Automation Scripts <span class="serv-meta">(Public)</span>
+          </h2>
+        </div>
+      </div>
+    </div>
+    <script>
+      const colorPalette = [
+        "#EDBB00",
+        "#0071EB",
+        "#ff3037",
+        "#32d158",
+        "#48C9B0",
+        "#0071e3",
+        "#3498DB",
+        "#9B59B6",
+        "#E74C3C",
+        "#2ECC71",
+        "#32d158",
+        "#63e6e2",
+        "#40c8e0",
+        "#64d2ff",
+        "#009aff",
+        "#5e5ce6",
+        "#bf5af2",
+      ];
+    </script>
+  </body>
+</html>
