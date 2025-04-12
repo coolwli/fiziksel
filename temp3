@@ -1,7 +1,39 @@
-                        if (!string.IsNullOrEmpty(line))
-                        {
-                            string[] columns = line.Split(',')
-                                .Select(col => col.Replace("\"", "").Trim())
-                                .ToArray();
-                            rows.Add(columns);
-                        }
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arkaplan + Düz Renk</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: url("bg.png");
+        background-size: 100% auto;
+        background-repeat: no-repeat;
+      }
+
+      .icerik {
+        padding: 100px 20px;
+        min-height: 2000px;
+      }
+
+      .baslik {
+        text-align: center;
+        color: white;
+        padding-top: 100px;
+        font-size: 2em;
+        text-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="baslik">Hoş Geldiniz</div>
+
+    <div class="icerik">
+      <p>Bu alanlar sayfa uzadıkça düz renk oluyor. Üstte sadece görsel var.</p>
+      <p>İçeriği buraya istediğin gibi ekleyebilirsin.</p>
+      <!-- Daha fazla içerik -->
+    </div>
+  </body>
+</html>
