@@ -1,82 +1,19 @@
-void LoadServices(Excel.Worksheet ws)
-{
-    Excel.Range range = ws.UsedRange;
-    var groupedServices = new Dictionary<string, List<HtmlGenericControl>>();
+You are a systems performance and capacity optimization expert.
 
-    // Excel'den verileri alırken, satır başlıklarının boş olma durumuna dikkat edilmelidir.
-    for (int i = 2; i <= range.Rows.Count; i++)  // 2. satırdan başlıyoruz çünkü 1. satır başlık olabilir
-    {
-        var serviceName = range.Cells[i, 1]?.Text?.ToString();
-        var serviceDesc = range.Cells[i, 2]?.Text?.ToString();
-        var serviceLink = range.Cells[i, 3]?.Text?.ToString();
-        var category = range.Cells[i, 4]?.Text?.ToString();
-        var meta = range.Cells[i, 5]?.Text?.ToString();
+You will receive a JSON array containing virtual machine (VM) resource usage data. Each item includes CPU and memory allocation, along with average usage, maximum usage, and 95th/99th percentile values over the past 3 months.
 
-        if (string.IsNullOrEmpty(serviceName) || string.IsNullOrEmpty(serviceLink)) continue; // Boş verileri atla
+Your task is to evaluate each VM and return:
+	1.	A ReclaimScore for both CPU and memory (scale: 0 to 100), indicating how much over-provisioning exists. Higher scores mean more reclaimable capacity.
+	2.	If the score is above 80, suggest new allocation values:
+	•	CPU: Suggested value should be a rounded even number slightly higher than the 99th percentile CPU usage.
+	•	Memory: Suggested value should be a rounded even number, slightly above the 99th percentile memory usage, with a minimum of 4 GB.
+	3.	If the score is 80 or below, return the current allocated values as the suggested values.
 
-        // Meta kısmında sadece "Public" değerini kullanıyoruz
-        var metaText = meta?.Equals("Public", StringComparison.OrdinalIgnoreCase) == true ? "Public" : string.Empty;
+Ensure your recommendations are realistic and reasonably conservative to avoid performance degradation during usage spikes.
 
-        if (!groupedServices.ContainsKey(category))
-        {
-            groupedServices[category] = new List<HtmlGenericControl>();
-        }
-
-        // Servis için HTML elemanlarını oluşturuyoruz
-        var serviceDiv = CreateServiceDiv(serviceName, serviceDesc, serviceLink, metaText);
-        groupedServices[category].Add(serviceDiv);
-    }
-
-    // Kategorilere göre HTML div'lerini oluşturuyoruz
-    foreach (var category in groupedServices)
-    {
-        var categoryDiv = new HtmlGenericControl("section");
-        categoryDiv.Attributes.Add("class", "serv-group");
-
-        var categoryTitle = new HtmlGenericControl("header");
-        categoryTitle.Attributes.Add("class", "serv-group-title");
-        categoryTitle.InnerText = category.Key;  // Kategori adı
-
-        categoryDiv.Controls.Add(categoryTitle);
-
-        // O kategoriye ait servisleri ekleyelim
-        foreach (var serviceItem in category.Value)
-        {
-            categoryDiv.Controls.Add(serviceItem);
-        }
-
-        services.Controls.Add(categoryDiv);  // Son olarak, kategori div'ini sayfadaki placeholder'a ekleyelim
-    }
-
-    // Excel nesnelerini serbest bırakıyoruz
-    System.Runtime.InteropServices.Marshal.ReleaseComObject(ws);
-}
-
-HtmlGenericControl CreateServiceDiv(string serviceName, string serviceDesc, string serviceLink, string metaText)
-{
-    var serviceDiv = new HtmlGenericControl("article");
-    serviceDiv.Attributes.Add("class", "serv-item");
-
-    var h2 = new HtmlGenericControl("h2");
-    h2.Attributes.Add("class", "serv-title");
-    h2.InnerText = serviceName;
-
-    var spanMeta = new HtmlGenericControl("span");
-    spanMeta.Attributes.Add("class", "serv-meta");
-    spanMeta.InnerText = metaText;  // Sadece "Public" ya da boş olabilir
-
-    var p = new HtmlGenericControl("p");
-    p.Attributes.Add("class", "serv-desc");
-    p.InnerText = serviceDesc;
-
-    var aLink = new HtmlGenericControl("a");
-    aLink.Attributes.Add("href", serviceLink);
-    aLink.InnerText = "Link"; // Bağlantıyı göstermek için yazı ekliyoruz
-
-    h2.Controls.Add(spanMeta); // Meta'yı başlıkla birleştir
-    serviceDiv.Controls.Add(h2);
-    serviceDiv.Controls.Add(p);
-    serviceDiv.Controls.Add(aLink);
-
-    return serviceDiv;
-}
+Respond strictly in JSON format with the following fields for each VM:
+	•	VMName
+	•	ReclaimScoreCPU
+	•	SuggestedCPU
+	•	ReclaimScoreMemory
+	•	SuggestedMemory
