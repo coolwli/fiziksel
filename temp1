@@ -1,18 +1,76 @@
-You are a systems performance and capacity optimization expert.
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dinamik Hiyerarşik Tablo</title>
+    <style>
+      /* Mevcut CSS içeriği */
+    </style>
+  </head>
+  <body>
+    <h1>Dinamik Hiyerarşik Tablo</h1>
 
-You will be provided with a JSON array containing resource usage data for multiple virtual machines (VMs). Each item includes the VM name, allocated CPU and memory, and historical usage statistics (average, maximum, and 95th/99th percentiles) from the past 3 months.
+    <table id="hierarchy-table">
+      <thead>
+        <tr id="table-header"></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
 
-Your task is to assess the data and determine for each VM:
-	•	VMName
-	•	ReclaimScoreCPU: A value from 0 to 100 reflecting how much CPU capacity is potentially over-provisioned.
-	•	SuggestedCPU:
-	•	If ReclaimScoreCPU is above 80, suggest a new allocation that is reasonable and conservative, slightly above typical peak usage.
-	•	Otherwise, return the current CPU allocation.
-	•	ReclaimScoreMemory: A value from 0 to 100 reflecting how much memory is potentially over-provisioned.
-	•	SuggestedMemory:
-	•	If ReclaimScoreMemory is above 80, suggest a new memory allocation slightly above typical peak usage, rounded to an even number and with a minimum of 4 GB.
-	•	Otherwise, return the current memory allocation.
+    <div id="details" class="details-panel">
+      <div class="details-title" id="details-title">Detay</div>
+      <div class="details-content" id="details-content">
+        Tıklanan satıra ait açıklama burada görünecek.
+      </div>
+    </div>
 
-You are free to use your own logic to evaluate the metrics and make recommendations. Your suggestions should be realistic and cautious to prevent performance issues during usage spikes.
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        fetch("HierarchyTable.aspx")
+          .then((response) => response.json())
+          .then((data) => {
+            const { latestData, historicData } = data;
 
-Respond strictly in JSON format. Do not include any explanations or commentary.
+            const tableHeadRow = document.getElementById("table-header");
+            const tableBody = document.querySelector("#hierarchy-table tbody");
+            const detailTitle = document.getElementById("details-title");
+            const detailContent = document.getElementById("details-content");
+
+            const columnHeaders = ["name", "amount", "created_at"];
+            columnHeaders.forEach((key) => {
+              const th = document.createElement("th");
+              th.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+              tableHeadRow.appendChild(th);
+            });
+
+            function createTableRow(item, depth = 0) {
+              const row = document.createElement("tr");
+              row.classList.add(`indent-${depth}`);
+
+              columnHeaders.forEach((key) => {
+                const cell = document.createElement("td");
+                cell.textContent = item[key] !== undefined ? item[key] : "";
+                row.appendChild(cell);
+              });
+
+              row.addEventListener("click", () => {
+                document
+                  .querySelectorAll("tbody tr")
+                  .forEach((r) => r.classList.remove("active"));
+                row.classList.add("active");
+
+                detailTitle.textContent = `Detay: ${item.name || "Bilinmiyor"}`;
+                detailContent.textContent = columnHeaders
+                  .map((key) => `${key}: ${item[key] ?? "-"}`)
+                  .join("\n");
+              });
+
+              tableBody.appendChild(row);
+            }
+
+            latestData.forEach((item) => createTableRow(item));
+          });
+      });
+    </script>
+  </body>
+</html>
