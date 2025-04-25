@@ -1,5 +1,5 @@
-## Ignore SSL Certificates
-add-type @"
+# --- SSL Sertifika doğrulamasını atla ---
+Add-Type @"
     using System.Net;
     using System.Security.Cryptography.X509Certificates;
     public class TrustAllCertsPolicy : ICertificatePolicy {
@@ -12,116 +12,116 @@ add-type @"
 "@
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-$token = (F:\Ali\powershell\getVropsToken.ps1 -tokenType "pendik")
+# --- Fonksiyonlar ---
 
-if ($token -eq $null) {
-    return "Token is null"
+function Get-VropsToken($type) {
+    try {
+        return & "F:\Ali\powershell\getVropsToken.ps1" -tokenType $type
+    } catch {
+        Write-Error "Token alınamadı: $type - $_"
+        return $null
+    }
 }
 
-$headers = @{
-    "Content-Type"  = "application/json"
-    "Authorization" = "vRealizeOpsToken $token"
-}
+function Get-VropsData($token, $url, $location) {
+    $headers = @{
+        "Content-Type"  = "application/json"
+        "Authorization" = "vRealizeOpsToken $token"
+    }
 
-$reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    try {
+        $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -ContentType "application/json"
+    } catch {
+        Write-Error "Veri çekme hatası ($location): $_"
+        return @()
+    }
 
-$nameMap = @{}
+    $dataMap = @{}
 
-foreach ($row in $reportsResponse.viewsData.rows) {
-    $name      = $row.cells.2
-    $cpuModel  = $row.cells.4
-    $vcenter   = $row.cells.1
-    $cpuCore   = [int]$row.cells.3
+    foreach ($row in $response.viewsData.rows) {
+        $name     = $row.cells[2]
+        $cpuModel = $row.cells[4]
+        $vcenter  = $row.cells[1]
+        $cpuCore  = [int]$row.cells[3]
 
-    if (-not $nameMap.ContainsKey($name)) {
-        $nameMap[$name] = [PSCustomObject]@{
-            name       = $name
-            vcenter    = $vcenter
-            location = "Pendik"
-            cpu_core   = 0
-            intelCount = 0
-            amdCount   = 0
-            
+        if (-not $dataMap.ContainsKey($name)) {
+            $dataMap[$name] = [PSCustomObject]@{
+                name       = $name
+                vcenter    = $vcenter
+                location   = $location
+                cpu_core   = 0
+                intelCount = 0
+                amdCount   = 0
+            }
+        }
+
+        if ($cpuModel -imatch "intel") {
+            $dataMap[$name].intelCount++
+            $dataMap[$name].cpu_core += $cpuCore
+        } elseif ($cpuModel -imatch "amd") {
+            $dataMap[$name].amdCount++
+            $dataMap[$name].cpu_core += $cpuCore
         }
     }
 
-    if ($cpuModel -imatch "intel") {
-        $nameMap[$name].intelCount++
-        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
-    }
-    elseif ($cpuModel -imatch "amd") {
-        $nameMap[$name].amdCount++
-        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
-
-    }
+    return $dataMap.Values
 }
 
-$token = (F:\Ali\powershell\getVropsToken.ps1 -tokenType "ankara")
+function Insert-CPUDataToSQL($dataList) {
+    $connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+    $sqlConnection = New-Object System.Data.SqlClient.SqlConnection
+    $sqlConnection.ConnectionString = $connectionString
+    $sqlConnection.Open()
 
-if ($token -eq $null) {
-    return "Token is null"
-}
+    $tarih = Get-Date -Format "yyyy-MM-dd"
 
-$headers = @{
-    "Content-Type"  = "application/json"
-    "Authorization" = "vRealizeOpsToken $token"
-}
-
-$reportsUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
-
-foreach ($row in $reportsResponse.viewsData.rows) {
-    $name      = $row.cells.2
-    $cpuModel  = $row.cells.4
-    $vcenter   = $row.cells.1
-    $cpuCore   = [int]$row.cells.3
-
-    if (-not $nameMap.ContainsKey($name)) {
-        $nameMap[$name] = [PSCustomObject]@{
-            name       = $name
-            vcenter    = $vcenter
-            location = "Ankara"
-            cpu_core   = 0
-            intelCount = 0
-            amdCount   = 0
-        }
-    }
-
-    if ($cpuModel -imatch "intel") {
-        $nameMap[$name].intelCount++
-        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
-    }
-    elseif ($cpuModel -imatch "amd") {
-        $nameMap[$name].amdCount++
-        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
-
-    }
-}
-
-
-$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
-$sqlConnection = New-Object System.Data.SqlClient.SqlConnection
-$sqlConnection.ConnectionString = $connectionString
-$sqlConnection.Open()
-
-$tarih = Get-Date -Format "yyyy-MM-dd"
-
-foreach ($item in $nameMap.Values) {
-    $sqlCommand = $sqlConnection.CreateCommand()
-    $sqlCommand.CommandText = @"
-INSERT INTO CPU_Models_Historic (name, vcenter,location, cpu_core, intel_count, amd_count, tarih)
+    foreach ($item in $dataList) {
+        $sqlCommand = $sqlConnection.CreateCommand()
+        $sqlCommand.CommandText = @"
+INSERT INTO CPU_Models_Historic (name, vcenter, location, cpu_core, intel_count, amd_count, tarih)
 VALUES (@name, @vcenter, @location, @cpu_core, @intelCount, @amdCount, @tarih)
 "@
-    $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@vcenter", $item.vcenter) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@location", $item.location) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@vcenter", $item.vcenter) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@location", $item.location) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
 
-    $sqlCommand.ExecuteNonQuery()
+        try {
+            $sqlCommand.ExecuteNonQuery() | Out-Null
+            Write-Output "Veri eklendi: $($item.name) - $($item.location)"
+        } catch {
+            Write-Error "SQL ekleme hatası ($($item.name)): $_"
+        }
+    }
+
+    $sqlConnection.Close()
 }
 
-$sqlConnection.Close()
+# --- Ana İşlem Akışı ---
+
+# Pendik
+$pendikToken = Get-VropsToken -type "pendik"
+$pendikUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+$pendikData = @()
+if ($pendikToken) {
+    $pendikData = Get-VropsData -token $pendikToken -url $pendikUrl -location "Pendik"
+}
+
+# Ankara
+$ankaraToken = Get-VropsToken -type "ankara"
+$ankaraUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+$ankaraData = @()
+if ($ankaraToken) {
+    $ankaraData = Get-VropsData -token $ankaraToken -url $ankaraUrl -location "Ankara"
+}
+
+# Verileri birleştir ve SQL'e yaz
+$totalData = $pendikData + $ankaraData
+if ($totalData.Count -gt 0) {
+    Insert-CPUDataToSQL -dataList $totalData
+} else {
+    Write-Warning "Eklenecek veri bulunamadı."
+}
