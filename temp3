@@ -1,39 +1,40 @@
-<!DOCTYPE html>
-<html lang="tr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Arkaplan + Düz Renk</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background: url("bg.png");
-        background-size: 100% auto;
-        background-repeat: no-repeat;
-      }
+## Ignore SSL Certificates
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
+        }
+    }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-      .icerik {
-        padding: 100px 20px;
-        min-height: 2000px;
-      }
+$token=(F:\Ali\powershell\getVropsToken.ps1 -tokenType "pendik")
 
-      .baslik {
-        text-align: center;
-        color: white;
-        padding-top: 100px;
-        font-size: 2em;
-        text-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
-      }
-    </style>
-  </head>
-  <body>
-    <div class="baslik">Hoş Geldiniz</div>
+if($token -eq $null){
+    return "token is null"
+}
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
 
-    <div class="icerik">
-      <p>Bu alanlar sayfa uzadıkça düz renk oluyor. Üstte sadece görsel var.</p>
-      <p>İçeriği buraya istediğin gibi ekleyebilirsin.</p>
-      <!-- Daha fazla içerik -->
-    </div>
-  </body>
-</html>
+
+$reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+
+$rows = @()
+foreach ($row in $reportsResponse.viewsData.rows) {
+  
+    $rows += [PSCustomObject]@{
+        name         = $row.cells.2
+        cpu_model  = $row.cells.4
+        vcenter      = $row.cells.1
+        cpu_core   = $row.cells.3
+    }
+
+}
