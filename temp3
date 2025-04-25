@@ -1,13 +1,4 @@
-CREATE TABLE sunucu_cpu_istatistikleri (
-    name NVARCHAR(255) NOT NULL,
-    vcenter NVARCHAR(255) NOT NULL,
-    cpu_core NVARCHAR(50),
-    intel_count INT NOT NULL,
-    amd_count INT NOT NULL,
-    tarih DATE NOT NULL
-);
-
-
+## Ignore SSL Certificates
 add-type @"
     using System.Net;
     using System.Security.Cryptography.X509Certificates;
@@ -32,55 +23,103 @@ $headers = @{
     "Authorization" = "vRealizeOpsToken $token"
 }
 
-$reportsUrl = "view link"
-
+$reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
 $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
 
 $nameMap = @{}
-$tarih = Get-Date -Format "yyyy-MM-dd"
 
 foreach ($row in $reportsResponse.viewsData.rows) {
-    $name      = $row.cells[2]
-    $cpuModel  = $row.cells[4]
-    $vcenter   = $row.cells[1]
-    $cpuCore   = $row.cells[3]
+    $name      = $row.cells.2
+    $cpuModel  = $row.cells.4
+    $vcenter   = $row.cells.1
+    $cpuCore   = [int]$row.cells.3
 
     if (-not $nameMap.ContainsKey($name)) {
         $nameMap[$name] = [PSCustomObject]@{
             name       = $name
             vcenter    = $vcenter
-            cpu_core   = $cpuCore
+            location = "Pendik"
+            cpu_core   = 0
             intelCount = 0
             amdCount   = 0
-            tarih      = $tarih
+            
         }
     }
 
     if ($cpuModel -imatch "intel") {
         $nameMap[$name].intelCount++
+        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
     }
     elseif ($cpuModel -imatch "amd") {
         $nameMap[$name].amdCount++
+        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
+
     }
 }
 
-$connectionString = "Server=YOUR_SQL_SERVER;Database=YOUR_DATABASE;Integrated Security=True"
+$token = (F:\Ali\powershell\getVropsToken.ps1 -tokenType "ankara")
+
+if ($token -eq $null) {
+    return "Token is null"
+}
+
+$headers = @{
+    "Content-Type"  = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
+
+$reportsUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+
+foreach ($row in $reportsResponse.viewsData.rows) {
+    $name      = $row.cells.2
+    $cpuModel  = $row.cells.4
+    $vcenter   = $row.cells.1
+    $cpuCore   = [int]$row.cells.3
+
+    if (-not $nameMap.ContainsKey($name)) {
+        $nameMap[$name] = [PSCustomObject]@{
+            name       = $name
+            vcenter    = $vcenter
+            location = "Ankara"
+            cpu_core   = 0
+            intelCount = 0
+            amdCount   = 0
+        }
+    }
+
+    if ($cpuModel -imatch "intel") {
+        $nameMap[$name].intelCount++
+        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
+    }
+    elseif ($cpuModel -imatch "amd") {
+        $nameMap[$name].amdCount++
+        $nameMap[$name].cpu_core=$nameMap[$name].cpu_core+$cpuCore
+
+    }
+}
+
+
+$connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
 $sqlConnection = New-Object System.Data.SqlClient.SqlConnection
 $sqlConnection.ConnectionString = $connectionString
 $sqlConnection.Open()
 
+$tarih = Get-Date -Format "yyyy-MM-dd"
+
 foreach ($item in $nameMap.Values) {
     $sqlCommand = $sqlConnection.CreateCommand()
     $sqlCommand.CommandText = @"
-INSERT INTO sunucu_cpu_istatistikleri (name, vcenter, cpu_core, intel_count, amd_count, tarih)
-VALUES (@name, @vcenter, @cpu_core, @intelCount, @amdCount, @tarih)
+INSERT INTO CPU_Models_Historic (name, vcenter,location, cpu_core, intel_count, amd_count, tarih)
+VALUES (@name, @vcenter, @location, @cpu_core, @intelCount, @amdCount, @tarih)
 "@
     $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
     $sqlCommand.Parameters.AddWithValue("@vcenter", $item.vcenter) | Out-Null
+    $sqlCommand.Parameters.AddWithValue("@location", $item.location) | Out-Null
     $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
     $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
     $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
-    $sqlCommand.Parameters.AddWithValue("@tarih", $item.tarih) | Out-Null
+    $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
 
     $sqlCommand.ExecuteNonQuery()
 }
