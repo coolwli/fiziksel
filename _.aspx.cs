@@ -1,91 +1,63 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Collections.Generic;
-using System.Web.UI;
+using System.Data.SqlClient;
 using System.Web.Script.Serialization;
-using System.Web.UI.WebControls;
 
-namespace winwin
+public partial class HierarchyTable : System.Web.UI.Page
 {
-    public partial class _default : Page
+    protected void Page_Load(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        if (!IsPostBack)
         {
-            string folderPath = @"C:\Temp\Winwin\AdminRemote";
+            string jsonData = GetJsonDataFromDatabase();
+            Response.Write(jsonData);
+        }
+    }
 
-            try
+    private string GetJsonDataFromDatabase()
+    {
+        string connectionString = "YourConnectionStringHere";
+        string query = @"SELECT name, amount, created_at 
+                         FROM your_table 
+                         ORDER BY name, created_at DESC";
+
+        var groupedData = new Dictionary<string, List<Dictionary<string, object>>>();
+        var latestData = new List<Dictionary<string, object>>();
+
+        using (SqlConnection connection = new SqlConnection(connectionString))
+        {
+            connection.Open();
+            SqlCommand command = new SqlCommand(query, connection);
+            SqlDataReader reader = command.ExecuteReader();
+
+            while (reader.Read())
             {
-                var csvFiles = Directory.GetFiles(folderPath, "*.csv");
+                string name = reader["name"].ToString();
+                int amount = Convert.ToInt32(reader["amount"]);
+                DateTime createdAt = Convert.ToDateTime(reader["created_at"]);
 
-                if (csvFiles.Length == 0)
+                var rowData = new Dictionary<string, object>
                 {
-                    Response.Write("CSV dosyası bulunamadı.");
-                    return;
-                }
+                    { "name", name },
+                    { "amount", amount },
+                    { "created_at", createdAt }
+                };
 
-                string latestFile = csvFiles.OrderByDescending(f => new FileInfo(f).CreationTime).First();
-                List<string[]> rows = new List<string[]>();
+                // Add to grouped data for historic purposes
+                if (!groupedData.ContainsKey(name))
+                    groupedData[name] = new List<Dictionary<string, object>>();
 
-                using (StreamReader reader = new StreamReader(latestFile))
+                groupedData[name].Add(rowData);
+
+                // For latest entry, only keep the newest row per name
+                if (!latestData.Exists(x => x["name"].ToString() == name))
                 {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
-                    {
-                        if (!string.IsNullOrEmpty(line))
-                        {
-                            string[] cells = line.Split('+').Select(c => c.Trim()).ToArray();
-                            if (cells[0] == "Admin")
-                            {
-                                string[] cell = { cells[1], cells[3] };
-                                rows.Add(cell);
-                            }
-                        }
-                    }
+                    latestData.Add(rowData);
                 }
-                JavaScriptSerializer serializer = new JavaScriptSerializer();
-                serializer.MaxJsonLength = Int32.MaxValue;
-                string json = serializer.Serialize(rows);
-                string script = $"<script> data = {json};initializeTable();</script>";
-                ClientScript.RegisterStartupScript(this.GetType(), "initializeData", script);
-            }
-            catch (Exception ex)
-            {
-                Response.Write("Hata: " + ex.Message);
             }
         }
-        protected void hiddenButton_Click(object sender, EventArgs e)
-        {
-            string jsonData = hiddenField.Value;
 
-            if (!string.IsNullOrEmpty(jsonData))
-            {
-                JavaScriptSerializer js = new JavaScriptSerializer();
-                js.MaxJsonLength = int.MaxValue;
-                var tableData = js.Deserialize<List<string[]>>(jsonData);
-
-                if (tableData.Count == 0)
-                {
-                    Response.Write("No data available.");
-                    return;
-                }
-
-                StringBuilder csv = new StringBuilder();
-                csv.AppendLine("Host;User");
-
-                foreach (var row in tableData)
-                {
-                    csv.AppendLine($"{row[0]};{row[1]}");
-
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("content-disposition", "attachment;filename=administrators.csv");
-                Response.Write(csv.ToString());
-                Response.End();
-            }
-        }
+        var jsonSerializer = new JavaScriptSerializer();
+        return jsonSerializer.Serialize(new { latestData, historicData = groupedData });
     }
 }
