@@ -1,88 +1,115 @@
-<asp:ScriptManager ID="ScriptManager1" runat="server" />
-<asp:UpdatePanel ID="UpdatePanel1" runat="server">
-    <ContentTemplate>
-        <asp:Panel ID="Panel1" runat="server">
-            <asp:Label ID="lblServerName" runat="server" Text="Sunucu Adı: " />
-            <asp:TextBox ID="txtServerName" runat="server" />
-
-            <asp:Label ID="lblServerType" runat="server" Text=" Sunucu Tipi: " />
-            <asp:DropDownList ID="ddlServerType" runat="server">
-                <asp:ListItem Text="Windows" Value="Windows" />
-                <asp:ListItem Text="Linux" Value="Linux" />
-                <asp:ListItem Text="Appliance" Value="Appliance" />
-                <asp:ListItem Text="ESXi" Value="ESXi" />
-            </asp:DropDownList>
-
-            <asp:Button ID="btnRunScript" runat="server" Text="İlişkilendir" OnClick="btnRunScript_Click"
-                OnClientClick="return confirm('Emin misiniz?');" />
-            <br />
-            <asp:Label ID="lblResult" runat="server" ForeColor="Blue" />
-        </asp:Panel>
-    </ContentTemplate>
-</asp:UpdatePanel>
-
-
-
-
-using System;
-using System.Diagnostics;
-
-public partial class Default : System.Web.UI.Page
-{
-    protected void btnRunScript_Click(object sender, EventArgs e)
-    {
-        string serverName = txtServerName.Text.Trim();
-        string serverType = ddlServerType.SelectedValue;
-
-        if (string.IsNullOrEmpty(serverName))
-        {
-            lblResult.Text = "⚠️ Sunucu adı boş olamaz!";
-            lblResult.ForeColor = System.Drawing.Color.Red;
-            return;
+# --- SSL Sertifika doğrulamasını atla ---
+Add-Type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
         }
-
-        string resultText;
-        bool success = RunPowerShellScript(serverName, serverType, out resultText);
-
-        lblResult.ForeColor = success ? System.Drawing.Color.Green : System.Drawing.Color.Red;
-        lblResult.Text = success ? $"✅ İşlem başarılı: {resultText}" : $"❌ Hata: {resultText}";
     }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-    private bool RunPowerShellScript(string serverName, string serverType, out string resultOutput)
-    {
-        resultOutput = "";
-        try
-        {
-            var scriptPath = Server.MapPath("~/Scripts/RelationScript.ps1");
-            var psi = new ProcessStartInfo()
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -ServerName \"{serverName}\" -ServerType \"{serverType}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
 
-            using (var process = Process.Start(psi))
-            {
-                resultOutput = process.StandardOutput.ReadToEnd().Trim();
-                string error = process.StandardError.ReadToEnd().Trim();
-                process.WaitForExit();
-
-                if (process.ExitCode == 0)
-                    return true;
-                else
-                {
-                    resultOutput += Environment.NewLine + error;
-                    return false;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            resultOutput = ex.Message;
-            return false;
-        }
+function Get-VropsToken($type) {
+    try {
+        return & "F:\Ali\powershell\getVropsToken.ps1" -tokenType $type
+    } catch {
+        Write-Error "Token alınamadı: $type - $_"
+        return $null
     }
 }
+
+function Get-VropsData($token, $url, $location) {
+    $headers = @{
+        "Content-Type"  = "application/json"
+        "Authorization" = "vRealizeOpsToken $token"
+    }
+
+    try {
+        $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -ContentType "application/json"
+    } catch {
+        Write-Error "Veri çekme hatası ($location): $_"
+        return @()
+    }
+
+    $dataMap = @{}
+    foreach ($row in $response.viewsData.rows) {
+        $name     = $row.cells.2
+        $cpuModel = $row.cells.4
+        $vcenter  = $row.cells.1
+        $cpuCore  = [int]$row.cells.3
+
+        if (-not $dataMap.ContainsKey($name)) {
+            $dataMap[$name] = [PSCustomObject]@{
+                name       = $name
+                vcenter    = $vcenter
+                location   = $location
+                cpu_core   = 0
+                intelCount = 0
+                amdCount   = 0
+            }
+        }
+
+        if ($cpuModel -imatch "intel") {
+            $dataMap[$name].intelCount++
+            $dataMap[$name].cpu_core += $cpuCore
+        } elseif ($cpuModel -imatch "amd") {
+            $dataMap[$name].amdCount++
+            $dataMap[$name].cpu_core += $cpuCore
+        }
+    }
+    return $dataMap.Values
+}
+
+function Insert-CPUDataToSQL($dataList) {
+    $connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
+    $sqlConnection = New-Object System.Data.SqlClient.SqlConnection
+    $sqlConnection.ConnectionString = $connectionString
+    $sqlConnection.Open()
+
+    $tarih = Get-Date -Format "yyyy-MM-dd"
+
+    foreach ($item in $dataList) {
+        $sqlCommand = $sqlConnection.CreateCommand()
+        $sqlCommand.CommandText = @"
+INSERT INTO CPU_Models_Historic (name, vcenter, location, cpu_core, intel_count, amd_count, tarih)
+VALUES (@name, @vcenter, @location, @cpu_core, @intelCount, @amdCount, @tarih)
+"@
+        $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@vcenter", $item.vcenter) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@location", $item.location) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
+        
+        $sqlCommand.ExecuteNonQuery() | Out-Null
+    }
+
+    $sqlConnection.Close()
+}
+
+
+# Pendik
+$pendikToken = Get-VropsToken -type "pendik"
+$pendikUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+$pendikData = @()
+if ($pendikToken) {
+    $pendikData = Get-VropsData -token $pendikToken -url $pendikUrl -location "Pendik"
+}
+
+# Ankara
+$ankaraToken = Get-VropsToken -type "ankara"
+$ankaraUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+$ankaraData = @()
+if ($ankaraToken) {
+    $ankaraData = Get-VropsData -token $ankaraToken -url $ankaraUrl -location "Ankara"
+}
+
+# Verileri birleştir ve SQL'e yaz
+$totalData = $pendikData + $ankaraData
+
+Insert-CPUDataToSQL -dataList $totalData
