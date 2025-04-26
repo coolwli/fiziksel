@@ -1,1 +1,78 @@
+param (
+    [string]$ServerName,
+    [string]$ServerType
+)
+
+$ErrorActionPreference = "Stop"
+
+try {
+    $SCKSuri = 'http://jarviskscservices'
+    $Searchuri = '/api/Scks/SearchConfiguration'
+    $IPuri = '/api/Scks/GetConfigurationBy/'
+    $Relationuri = '/api/Scks/CreateRelationBetweenSIs'
+    $reluri = ($SCKSuri + $Relationuri)
+    $headers = @{
+        Accept = 'application/json'
+        'Content-Type' = 'application/json'
+    }
+    $IPType = '74'
+    $userId = '155246'
+
+    switch ($ServerType) {
+        "Windows"   { $ServerTypeID = 36 }
+        "Linux"     { $ServerTypeID = 513 }
+        "Appliance" { $ServerTypeID = 46 }
+        "ESXi"      { $ServerTypeID = 503 }
+        default     { throw "Invalid ServerType: $ServerType" }
+    }
+
+    # VM Configuration ID
+    $vmparameters = @{
+        Method = 'GET'
+        Uri = ($SCKSuri + $Searchuri)
+        Body =  @{
+                ConfigurationName = $ServerName
+                TypeNumber = $ServerTypeID
+            }
+    }
+    $VMconfID = Invoke-RestMethod @vmparameters -Headers $headers
+    $VMconfID = $VMconfID.configurationIDField
+
+    # IP Attribute
+    $IPattr = Invoke-RestMethod -Uri ($SCKSuri + $IPuri + $VMconfID) -Method Get -Headers $headers
+    $IPattr = $IPattr.bConfigurationAttributeRelationsField | Where-Object { $_.nameTextField -eq "IP" }
+    $IPattr = $IPattr.valueTextField
+
+    # IP Configuration ID
+    $ipparameters = @{
+        Method = 'GET'
+        Uri = ($SCKSuri + $Searchuri)
+        Body =  @{
+                ConfigurationName = $IPattr
+                TypeNumber = $IPType
+            }
+    }
+    $IPconfID = Invoke-RestMethod @ipparameters -Headers $headers
+    $IPconfID = $IPconfID | Where-Object { $_.nameTextField -eq $IPattr }
+    $IPconfID = $IPconfID.configurationIDField
+
+    # Create Relation
+    $reladdpar =  @{
+        "deletedSI" = @(0)
+        "SIId" = $VMconfID
+        "RelatedSIId" = @($IPconfID)
+        "RelationType" = 5
+        "RelationRole" = ""
+        "userId" = $userId
+    }
+
+    $ReladdResult = Invoke-RestMethod -Uri $reluri -Method POST -Headers $headers -Body ($reladdpar | ConvertTo-Json -Compress)
+
+    Write-Host "Success: $ReladdResult"
+    exit 0
+}
+catch {
+    Write-Error "Error: $_"
+    exit 1
+}
 
