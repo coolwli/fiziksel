@@ -1,1 +1,146 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Diagnostics;
+
+namespace SIRelationsSCKS
+{
+    public partial class _default : System.Web.UI.Page
+    {
+        protected void Page_Load(object sender, EventArgs e)
+        {
+            string scrPath = @"F:\Ali\powershell\cloudunited\sunucu_iliskilendirme_web.ps1";
+
+            ProcessStartInfo psi = new ProcessStartInfo()
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-ExecutionPolicy Bypass -NoProfile -File \"{scrPath}\" -name \"ali\"",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            ProcessStartInfo psi2 = new ProcessStartInfo()
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-ExecutionPolicy Bypass -NoProfile -File \"{scrPath}\" -name \"pendik\"",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (Process p = new Process())
+            {
+                p.StartInfo = psi;
+                p.Start();
+
+                string output = p.StandardOutput.ReadToEnd();
+                string err = p.StandardError.ReadToEnd();
+                p.WaitForExit();
+
+                if(string.IsNullOrEmpty(err))
+                    Response.Write(output);
+                else
+                    Response.Write(err);
+
+            }
+            using (Process p = new Process())
+            {
+                p.StartInfo = psi2;
+                p.Start();
+
+                string output = p.StandardOutput.ReadToEnd();
+                string err = p.StandardError.ReadToEnd();
+                p.WaitForExit();
+
+                if (string.IsNullOrEmpty(err))
+                    Response.Write(output);
+                else
+                    Response.Write(err);
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+$SCKSuri = 'http://jarviskscservices'
+$Searchuri = '/api/Scks/SearchConfiguration'
+$IPuri = '/api/Scks/GetConfigurationBy/'
+$Relationuri = '/api/Scks/CreateRelationBetweenSIs'
+$reluri = ($SCKSuri + $Relationuri)
+$headers = @{
+    Accept = 'application/json'
+    'Content-Type' = 'application/json'
+}
+$IPType = '74'
+$userId = '155246'
+$ServerName = Read-Host "Please enter VM name"
+$ServerType = Read-Host "[Windows/Linux/Appliance/ESXi]"
+if($ServerType -eq "Windows"){
+    $ServerTypeID = 36
+}
+if($ServerType -eq "Linux"){
+    $ServerTypeID = 513
+}
+if($ServerType -eq "Appliance"){
+    $ServerTypeID = 46
+}
+if($ServerType -eq "ESXi"){
+    $ServerTypeID = 503
+}
+Clear-Variable ServerType
+## Sunucu SI id bilgisinin çekilmesi
+$vmparameters = @{
+    Method = 'GET'
+    Uri = ($SCKSuri + $Searchuri)
+    Body =  @{
+            ConfigurationName = $ServerName
+            TypeNumber = $ServerTypeID
+        }
+    }
+    $VMconfID = Invoke-RestMethod @vmparameters -Headers $headers
+    $VMconfID = $VMconfID.configurationIDField
+Write-Host "Sunucu SI ID: $VMconfID"
+## IP Attribute bilgisinin çekilmesi
+    $IPattr = Invoke-RestMethod -Uri ($SCKSuri + $IPuri + $VMconfID) -Method Get -Headers $headers
+    $IPattr = $IPattr.bConfigurationAttributeRelationsField | where { $_.nameTextField -eq "IP" }
+    $IPattr = $IPattr.valueTextField
+Write-Host "Sunucu IP Attribute: $IPattr"
+## IP SI idsinin çekilmesi
+$ipparameters = @{
+    Method = 'GET'
+    Uri = ($SCKSuri + $Searchuri)
+    Body =  @{
+            ConfigurationName = $IPattr
+            TypeNumber = $IPType
+        }
+    }
+    $IPconfID = Invoke-RestMethod @ipparameters -Headers $headers
+    $IPconfID = $IPconfID | where { $_.nameTextField -eq $IPattr }
+    $IPconfID = $IPconfID.configurationIDField
+Write-Host "Sunucu IP ID: $IPconfID"
+###IP İlişkisi eklenmesi
+$reladdpar =  @{
+    "deletedSI" = @(0)
+    "SIId" = $VMconfID
+    "RelatedSIId" = @($IPconfID)
+    "RelationType" = 5
+    "RelationRole" = ""
+    "userId" = $userId
+  }
+$ReladdResult = Invoke-RestMethod -Uri $reluri -Method POST -Headers $headers -Body ($reladdpar | ConvertTo-Json -Compress)
+Write-Host "Sunucu&IP SI İlişkisi Eklenmesi Durumu: $ReladdResult"
+
+
 
