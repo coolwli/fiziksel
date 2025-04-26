@@ -6,7 +6,7 @@
     <style>
       body {
         font-family: "Segoe UI", sans-serif;
-        background-color: #f8f9fa;
+        background-color: #f4f6f8;
         margin: 40px;
         color: #333;
       }
@@ -47,7 +47,6 @@
         border-radius: 8px;
         background-color: #ffffff;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        display: block;
       }
 
       .details-title {
@@ -62,28 +61,34 @@
       }
 
       .indent-0 {
-        background-color: #e9ecef;
+        background-color: #f6f6f6;
       }
+
       .indent-1 {
-        background-color: #f8f9fa;
+        background-color: #eaeaea;
       }
+
       .indent-2 {
-        background-color: #e9ecef;
+        background-color: #dedede;
       }
+
       tbody tr:hover {
-        background-color: #ccd6f0;
+        background-color: #cfcfcf;
       }
-      .active {
-        background-color: #b3c7f9 !important;
+
+      tbody tr.active {
+        background-color: #bdbdbd !important;
         font-weight: bold;
       }
 
       .indent-0 td:first-child {
         padding-left: 10px;
       }
+
       .indent-1 td:first-child {
         padding-left: 40px;
       }
+
       .indent-2 td:first-child {
         padding-left: 100px;
       }
@@ -94,7 +99,12 @@
 
     <table id="hierarchy-table">
       <thead>
-        <tr id="table-header"></tr>
+        <tr>
+          <th style="width: 55%">Ad</th>
+          <th style="width: 15%">Intel CPU</th>
+          <th style="width: 15%">AMD CPU</th>
+          <th style="width: 15%">Toplam Core</th>
+        </tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -107,90 +117,159 @@
     </div>
 
     <script>
-      const tableHeadRow = document.getElementById("table-header");
-      const tableBody = document.querySelector("#hierarchy-table tbody");
-      const detailTitle = document.getElementById("details-title");
-      const detailContent = document.getElementById("details-content");
+      const baseData = [];
 
-      const tableData = [
-        {
-          name: "Toplam",
-          amount: 100,
-          type: "Genel",
-          children: [
-            {
-              name: "A",
-              amount: 30,
-              type: "Kategori",
-              children: [
-                { name: "A1", amount: 15, type: "Alt Kategori" },
-                { name: "A2", amount: 2, type: "Alt Kategori" },
-                { name: "A3", amount: 13, type: "Alt Kategori" },
-              ],
-            },
-            {
-              name: "B",
-              amount: 70,
-              type: "Kategori",
-              children: [
-                { name: "B1", amount: 40, type: "Alt Kategori" },
-                { name: "B2", amount: 30, type: "Alt Kategori" },
-              ],
-            },
-          ],
-        },
-      ];
-
-      function extractHeaders(obj, headerSet = new Set()) {
-        Object.keys(obj).forEach((key) => {
-          if (key !== "children") headerSet.add(key);
-          if (key === "children" && Array.isArray(obj.children)) {
-            obj.children.forEach((child) => extractHeaders(child, headerSet));
+      const getLatestData = (data) => {
+        const map = {};
+        data.forEach((item) => {
+          if (
+            !map[item.name] ||
+            new Date(item.tarih) > new Date(map[item.name].tarih)
+          ) {
+            map[item.name] = item;
           }
         });
-        return Array.from(headerSet);
-      }
+        return Object.values(map);
+      };
 
-      const columnHeaders = extractHeaders(tableData[0]);
-      columnHeaders.forEach((key) => {
-        const th = document.createElement("th");
-        th.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-        tableHeadRow.appendChild(th);
-      });
+      const buildHierarchy = (data) => {
+        const result = [];
+        const total = { intel: 0, amd: 0, core: 0 };
 
-      function createTableRow(item, depth = 0) {
-        const row = document.createElement("tr");
-        row.classList.add(`indent-${depth}`);
+        const grouped = {};
+        data.forEach(
+          ({ name, vcenter, location, intel_count, amd_count, cpu_core }) => {
+            grouped[location] = grouped[location] || {};
+            grouped[location][vcenter] = grouped[location][vcenter] || [];
+            grouped[location][vcenter].push({
+              name,
+              intel: intel_count,
+              amd: amd_count,
+              core: cpu_core,
+            });
+          }
+        );
 
-        columnHeaders.forEach((key) => {
-          const cell = document.createElement("td");
-          cell.textContent = item[key] !== undefined ? item[key] : "";
-          row.appendChild(cell);
-        });
+        for (const [location, vcenters] of Object.entries(grouped)) {
+          let locIntel = 0,
+            locAmd = 0,
+            locCore = 0;
 
-        row.addEventListener("click", () => {
-          document
-            .querySelectorAll("tbody tr")
-            .forEach((r) => r.classList.remove("active"));
-          row.classList.add("active");
+          for (const [vcenter, servers] of Object.entries(vcenters)) {
+            let vcIntel = 0,
+              vcAmd = 0,
+              vcCore = 0;
 
-          detailTitle.textContent = `Detay: ${item.name || "Bilinmiyor"}`;
-          detailContent.textContent = columnHeaders
-            .map((key) => `${key}: ${item[key] ?? "-"}`)
-            .join("\n");
-        });
+            servers.forEach(({ name, intel, amd, core }) => {
+              result.push({
+                name,
+                intel,
+                amd,
+                core,
+                level: 2,
+                parent: vcenter,
+              });
+              vcIntel += intel;
+              vcAmd += amd;
+              vcCore += core;
+            });
 
-        tableBody.appendChild(row);
+            result.push({
+              name: vcenter,
+              intel: vcIntel,
+              amd: vcAmd,
+              core: vcCore,
+              level: 1,
+              parent: location,
+            });
+            locIntel += vcIntel;
+            locAmd += vcAmd;
+            locCore += vcCore;
+          }
 
-        if (Array.isArray(item.children)) {
-          item.children.forEach((child) => createTableRow(child, depth + 1));
+          result.push({
+            name: location,
+            intel: locIntel,
+            amd: locAmd,
+            core: locCore,
+            level: 0,
+            parent: "TÜMÜ",
+          });
+          total.intel += locIntel;
+          total.amd += locAmd;
+          total.core += locCore;
         }
+
+        result.push({ name: "TÜMÜ", ...total, level: 0, parent: null });
+        return result.reverse();
+      };
+
+      const tbody = document.querySelector("#hierarchy-table tbody");
+      const detailsTitle = document.getElementById("details-title");
+      const detailsContent = document.getElementById("details-content");
+
+      function renderTable(rows) {
+        tbody.innerHTML = "";
+
+        rows.forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.className = `indent-${row.level}`;
+          tr.dataset.level = row.level;
+          tr.dataset.parent = row.parent;
+          tr.dataset.name = row.name;
+          tr.style.display = row.level <= 1 ? "table-row" : "none";
+
+          tr.innerHTML = `
+          <td>${row.name}</td>
+          <td>${row.intel}</td>
+          <td>${row.amd}</td>
+          <td>${row.core}</td>
+        `;
+
+          tr.addEventListener("click", () => handleRowClick(tr, rows));
+          tbody.appendChild(tr);
+        });
       }
 
-      tableData.forEach((item) => createTableRow(item));
+      function handleRowClick(clickedRow, rows) {
+        const clickedName = clickedRow.dataset.name;
 
-      if (tableBody.rows.length > 0) {
-        tableBody.querySelector("tr").click();
+        tbody.querySelectorAll("tr").forEach((row) => {
+          const isChildOfClicked = row.dataset.parent === clickedName;
+          const isSameLevel = row.dataset.parent === clickedRow.dataset.parent;
+
+          row.classList.remove("active");
+          row.style.display =
+            isChildOfClicked || isSameLevel || row.dataset.level < 2
+              ? "table-row"
+              : "none";
+        });
+
+        clickedRow.classList.add("active");
+        updateDetails(clickedRow);
+      }
+
+      const uniqueData = getLatestData(baseData);
+      const tableData = buildHierarchy(uniqueData);
+
+      renderTable(tableData);
+      document.querySelector("tbody tr").click();
+
+      //when a row is clicked
+      function updateDetails(row) {
+        const name = row.cells[0].innerText;
+        const intel = row.cells[1].innerText;
+        const amd = row.cells[2].innerText;
+        const core = row.cells[3].innerText;
+
+        detailsTitle.textContent = `${name} Detayları`;
+        detailsContent.innerHTML = `
+              <ul>
+                <li><strong>Intel CPU:</strong> ${intel}</li>
+                <li><strong>AMD CPU:</strong> ${amd}</li>
+                <li><strong>Toplam Core:</strong> ${core}</li>
+              </ul>
+            `;
       }
     </script>
   </body>
