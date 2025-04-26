@@ -1,146 +1,88 @@
+<asp:ScriptManager ID="ScriptManager1" runat="server" />
+<asp:UpdatePanel ID="UpdatePanel1" runat="server">
+    <ContentTemplate>
+        <asp:Panel ID="Panel1" runat="server">
+            <asp:Label ID="lblServerName" runat="server" Text="Sunucu Adı: " />
+            <asp:TextBox ID="txtServerName" runat="server" />
+
+            <asp:Label ID="lblServerType" runat="server" Text=" Sunucu Tipi: " />
+            <asp:DropDownList ID="ddlServerType" runat="server">
+                <asp:ListItem Text="Windows" Value="Windows" />
+                <asp:ListItem Text="Linux" Value="Linux" />
+                <asp:ListItem Text="Appliance" Value="Appliance" />
+                <asp:ListItem Text="ESXi" Value="ESXi" />
+            </asp:DropDownList>
+
+            <asp:Button ID="btnRunScript" runat="server" Text="İlişkilendir" OnClick="btnRunScript_Click"
+                OnClientClick="return confirm('Emin misiniz?');" />
+            <br />
+            <asp:Label ID="lblResult" runat="server" ForeColor="Blue" />
+        </asp:Panel>
+    </ContentTemplate>
+</asp:UpdatePanel>
+
+
+
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-using System.Web.UI;
-using System.Web.UI.WebControls;
 using System.Diagnostics;
 
-namespace SIRelationsSCKS
+public partial class Default : System.Web.UI.Page
 {
-    public partial class _default : System.Web.UI.Page
+    protected void btnRunScript_Click(object sender, EventArgs e)
     {
-        protected void Page_Load(object sender, EventArgs e)
+        string serverName = txtServerName.Text.Trim();
+        string serverType = ddlServerType.SelectedValue;
+
+        if (string.IsNullOrEmpty(serverName))
         {
-            string scrPath = @"F:\Ali\powershell\cloudunited\sunucu_iliskilendirme_web.ps1";
+            lblResult.Text = "⚠️ Sunucu adı boş olamaz!";
+            lblResult.ForeColor = System.Drawing.Color.Red;
+            return;
+        }
 
-            ProcessStartInfo psi = new ProcessStartInfo()
+        string resultText;
+        bool success = RunPowerShellScript(serverName, serverType, out resultText);
+
+        lblResult.ForeColor = success ? System.Drawing.Color.Green : System.Drawing.Color.Red;
+        lblResult.Text = success ? $"✅ İşlem başarılı: {resultText}" : $"❌ Hata: {resultText}";
+    }
+
+    private bool RunPowerShellScript(string serverName, string serverType, out string resultOutput)
+    {
+        resultOutput = "";
+        try
+        {
+            var scriptPath = Server.MapPath("~/Scripts/RelationScript.ps1");
+            var psi = new ProcessStartInfo()
             {
                 FileName = "powershell.exe",
-                Arguments = $"-ExecutionPolicy Bypass -NoProfile -File \"{scrPath}\" -name \"ali\"",
-                RedirectStandardError = true,
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -ServerName \"{serverName}\" -ServerType \"{serverType}\"",
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            ProcessStartInfo psi2 = new ProcessStartInfo()
+            using (var process = Process.Start(psi))
             {
-                FileName = "powershell.exe",
-                Arguments = $"-ExecutionPolicy Bypass -NoProfile -File \"{scrPath}\" -name \"pendik\"",
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                resultOutput = process.StandardOutput.ReadToEnd().Trim();
+                string error = process.StandardError.ReadToEnd().Trim();
+                process.WaitForExit();
 
-            using (Process p = new Process())
-            {
-                p.StartInfo = psi;
-                p.Start();
-
-                string output = p.StandardOutput.ReadToEnd();
-                string err = p.StandardError.ReadToEnd();
-                p.WaitForExit();
-
-                if(string.IsNullOrEmpty(err))
-                    Response.Write(output);
+                if (process.ExitCode == 0)
+                    return true;
                 else
-                    Response.Write(err);
-
-            }
-            using (Process p = new Process())
-            {
-                p.StartInfo = psi2;
-                p.Start();
-
-                string output = p.StandardOutput.ReadToEnd();
-                string err = p.StandardError.ReadToEnd();
-                p.WaitForExit();
-
-                if (string.IsNullOrEmpty(err))
-                    Response.Write(output);
-                else
-                    Response.Write(err);
+                {
+                    resultOutput += Environment.NewLine + error;
+                    return false;
+                }
             }
         }
-    }
-}
-
-
-
-
-
-
-
-
-$SCKSuri = 'http://jarviskscservices'
-$Searchuri = '/api/Scks/SearchConfiguration'
-$IPuri = '/api/Scks/GetConfigurationBy/'
-$Relationuri = '/api/Scks/CreateRelationBetweenSIs'
-$reluri = ($SCKSuri + $Relationuri)
-$headers = @{
-    Accept = 'application/json'
-    'Content-Type' = 'application/json'
-}
-$IPType = '74'
-$userId = '155246'
-$ServerName = Read-Host "Please enter VM name"
-$ServerType = Read-Host "[Windows/Linux/Appliance/ESXi]"
-if($ServerType -eq "Windows"){
-    $ServerTypeID = 36
-}
-if($ServerType -eq "Linux"){
-    $ServerTypeID = 513
-}
-if($ServerType -eq "Appliance"){
-    $ServerTypeID = 46
-}
-if($ServerType -eq "ESXi"){
-    $ServerTypeID = 503
-}
-Clear-Variable ServerType
-## Sunucu SI id bilgisinin çekilmesi
-$vmparameters = @{
-    Method = 'GET'
-    Uri = ($SCKSuri + $Searchuri)
-    Body =  @{
-            ConfigurationName = $ServerName
-            TypeNumber = $ServerTypeID
+        catch (Exception ex)
+        {
+            resultOutput = ex.Message;
+            return false;
         }
     }
-    $VMconfID = Invoke-RestMethod @vmparameters -Headers $headers
-    $VMconfID = $VMconfID.configurationIDField
-Write-Host "Sunucu SI ID: $VMconfID"
-## IP Attribute bilgisinin çekilmesi
-    $IPattr = Invoke-RestMethod -Uri ($SCKSuri + $IPuri + $VMconfID) -Method Get -Headers $headers
-    $IPattr = $IPattr.bConfigurationAttributeRelationsField | where { $_.nameTextField -eq "IP" }
-    $IPattr = $IPattr.valueTextField
-Write-Host "Sunucu IP Attribute: $IPattr"
-## IP SI idsinin çekilmesi
-$ipparameters = @{
-    Method = 'GET'
-    Uri = ($SCKSuri + $Searchuri)
-    Body =  @{
-            ConfigurationName = $IPattr
-            TypeNumber = $IPType
-        }
-    }
-    $IPconfID = Invoke-RestMethod @ipparameters -Headers $headers
-    $IPconfID = $IPconfID | where { $_.nameTextField -eq $IPattr }
-    $IPconfID = $IPconfID.configurationIDField
-Write-Host "Sunucu IP ID: $IPconfID"
-###IP İlişkisi eklenmesi
-$reladdpar =  @{
-    "deletedSI" = @(0)
-    "SIId" = $VMconfID
-    "RelatedSIId" = @($IPconfID)
-    "RelationType" = 5
-    "RelationRole" = ""
-    "userId" = $userId
-  }
-$ReladdResult = Invoke-RestMethod -Uri $reluri -Method POST -Headers $headers -Body ($reladdpar | ConvertTo-Json -Compress)
-Write-Host "Sunucu&IP SI İlişkisi Eklenmesi Durumu: $ReladdResult"
-
-
-
+}
