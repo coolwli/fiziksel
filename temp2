@@ -1,1 +1,131 @@
+const datasets = [
+  {
+    name: "apgarvcs",
+    vcenter: "apgarvcs",
+    location: "Pendik",
+    cpu_core: 1184,
+    intel_count: 22,
+    amd_count: 0,
+    tarih: "4/25/2025",
+  },
+  {
+    name: "apgarvcs-1",
+    vcenter: "apgarvcs",
+    location: "Pendik",
+    cpu_core: 184,
+    intel_count: 22,
+    amd_count: 0,
+    tarih: "4/25/2025",
+  },
+  {
+    name: "apgarvcs-2",
+    vcenter: "apgarvcs",
+    location: "Pendik",
+    cpu_core: 14,
+    intel_count: 22,
+    amd_count: 2,
+    tarih: "4/25/2025",
+  },
+  {
+    name: "apgarvcs-3",
+    vcenter: "apgarvcs",
+    location: "Ankara",
+    cpu_core: 118,
+    intel_count: 42,
+    amd_count: 0,
+    tarih: "4/25/2025",
+  },
+  {
+    name: "apgarvcs-4",
+    vcenter: "ptekvcs",
+    location: "Pendik",
+    cpu_core: 84,
+    intel_count: 12,
+    amd_count: 1,
+    tarih: "4/25/2025",
+  },
+  {
+    name: "apgarvcs-4",
+    vcenter: "ptekvcs",
+    location: "Pendik",
+    cpu_core: 84,
+    intel_count: 22,
+    amd_count: 1,
+    tarih: "4/24/2025",
+  },
+];
+
+function buildHierarchy(data) {
+  const result = [];
+  const total = { intel: 0, amd: 0, core: 0 };
+
+  const grouped = {};
+  data.forEach(
+    ({ name, vcenter, location, intel_count, amd_count, cpu_core }) => {
+      grouped[location] = grouped[location] || {};
+      grouped[location][vcenter] = grouped[location][vcenter] || [];
+      grouped[location][vcenter].push({
+        name,
+        intel: intel_count,
+        amd: amd_count,
+        core: cpu_core,
+      });
+    }
+  );
+
+  for (const [location, vcenters] of Object.entries(grouped)) {
+    let locIntel = 0,
+      locAmd = 0,
+      locCore = 0;
+
+    for (const [vcenter, servers] of Object.entries(vcenters)) {
+      let vcIntel = 0,
+        vcAmd = 0,
+        vcCore = 0;
+
+      servers.forEach(({ name, intel, amd, core }) => {
+        result.push({
+          name,
+          intel,
+          amd,
+          core,
+          level: 2,
+          parent: vcenter,
+        });
+        vcIntel += intel;
+        vcAmd += amd;
+        vcCore += core;
+      });
+
+      result.push({
+        name: vcenter,
+        intel: vcIntel,
+        amd: vcAmd,
+        core: vcCore,
+        level: 1,
+        parent: location,
+      });
+      locIntel += vcIntel;
+      locAmd += vcAmd;
+      locCore += vcCore;
+    }
+
+    result.push({
+      name: location,
+      intel: locIntel,
+      amd: locAmd,
+      core: locCore,
+      level: 0,
+      parent: "TÜMÜ",
+    });
+    total.intel += locIntel;
+    total.amd += locAmd;
+    total.core += locCore;
+  }
+
+  result.push({ name: "TÜMÜ", ...total, level: 0, parent: null });
+  return result.reverse();
+}
+
+initialize(datasets);
 
