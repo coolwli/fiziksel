@@ -12,7 +12,6 @@ Add-Type @"
 "@
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-
 function Get-VropsToken($type) {
     try {
         return & "F:\Ali\powershell\getVropsToken.ps1" -tokenType $type
@@ -37,10 +36,10 @@ function Get-VropsData($token, $url, $location) {
 
     $dataMap = @{}
     foreach ($row in $response.viewsData.rows) {
-        $name     = $row.cells.2
-        $cpuModel = $row.cells.4
-        $vcenter  = $row.cells.1
-        $cpuCore  = [int]$row.cells.3
+        $name     = $row.cells[2]
+        $cpuModel = $row.cells[4]
+        $vcenter  = $row.cells[1]
+        $cpuCore  = [int]$row.cells[3]
 
         if (-not $dataMap.ContainsKey($name)) {
             $dataMap[$name] = [PSCustomObject]@{
@@ -64,6 +63,84 @@ function Get-VropsData($token, $url, $location) {
     return $dataMap.Values
 }
 
+function Build-HierarchicalCPUData($allData) {
+    $grouped = $allData | Group-Object -Property location
+
+    $finalList = @()
+    $totalIntel = 0
+    $totalAMD   = 0
+    $totalCore  = 0
+
+    foreach ($locGroup in $grouped) {
+        $location = $locGroup.Name
+        $locItems = $locGroup.Group
+
+        $locationIntel = 0
+        $locationAMD   = 0
+        $locationCore  = 0
+
+        $vcenterGroups = $locItems | Group-Object -Property vcenter
+        foreach ($vcGroup in $vcenterGroups) {
+            $vcenter = $vcGroup.Name
+            $vcItems = $vcGroup.Group
+
+            $vcenterIntel = 0
+            $vcenterAMD   = 0
+            $vcenterCore  = 0
+
+            foreach ($host in $vcItems) {
+                $finalList += [PSCustomObject]@{
+                    name        = $host.name
+                    cpu_core    = $host.cpu_core
+                    intelCount  = $host.intelCount
+                    amdCount    = $host.amdCount
+                    parent      = "$vcenter"
+                }
+
+                $vcenterIntel += $host.intelCount
+                $vcenterAMD   += $host.amdCount
+                $vcenterCore  += $host.cpu_core
+            }
+
+            $finalList += [PSCustomObject]@{
+                name        = "$vcenter"
+                cpu_core    = $vcenterCore
+                intelCount  = $vcenterIntel
+                amdCount    = $vcenterAMD
+                parent      = $location
+            }
+
+            $locationIntel += $vcenterIntel
+            $locationAMD   += $vcenterAMD
+            $locationCore  += $vcenterCore
+        }
+
+        $finalList += [PSCustomObject]@{
+            name        = $location
+            cpu_core    = $locationCore
+            intelCount  = $locationIntel
+            amdCount    = $locationAMD
+            parent      = "All"
+        }
+
+        $totalIntel += $locationIntel
+        $totalAMD   += $locationAMD
+        $totalCore  += $locationCore
+    }
+
+    $finalList = @(
+        [PSCustomObject]@{
+            name        = "All"
+            cpu_core    = $totalCore
+            intelCount  = $totalIntel
+            amdCount    = $totalAMD
+            parent      = $null
+        }
+    ) + $finalList
+
+    return $finalList
+}
+
 function Insert-CPUDataToSQL($dataList) {
     $connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
     $sqlConnection = New-Object System.Data.SqlClient.SqlConnection
@@ -75,25 +152,23 @@ function Insert-CPUDataToSQL($dataList) {
     foreach ($item in $dataList) {
         $sqlCommand = $sqlConnection.CreateCommand()
         $sqlCommand.CommandText = @"
-INSERT INTO CPU_Models_Historic (name, vcenter, location, cpu_core, intel_count, amd_count, tarih)
-VALUES (@name, @vcenter, @location, @cpu_core, @intelCount, @amdCount, @tarih)
+INSERT INTO CPU_Models_Historic (name, cpu_core, intel_count, amd_count, tarih, parent)
+VALUES (@name, @cpu_core, @intelCount, @amdCount, @tarih, @parent)
 "@
         $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@vcenter", $item.vcenter) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@location", $item.location) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
-        
+        $sqlCommand.Parameters.AddWithValue("@parent", $item.parent) | Out-Null
+
         $sqlCommand.ExecuteNonQuery() | Out-Null
     }
 
     $sqlConnection.Close()
 }
 
-
-# Pendik
+# --- Pendik ---
 $pendikToken = Get-VropsToken -type "pendik"
 $pendikUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
 $pendikData = @()
@@ -101,7 +176,7 @@ if ($pendikToken) {
     $pendikData = Get-VropsData -token $pendikToken -url $pendikUrl -location "Pendik"
 }
 
-# Ankara
+# --- Ankara ---
 $ankaraToken = Get-VropsToken -type "ankara"
 $ankaraUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
 $ankaraData = @()
@@ -109,7 +184,7 @@ if ($ankaraToken) {
     $ankaraData = Get-VropsData -token $ankaraToken -url $ankaraUrl -location "Ankara"
 }
 
-# Verileri birleştir ve SQL'e yaz
+# --- Verileri birleştir, yapıyı kur ve SQL'e yaz ---
 $totalData = $pendikData + $ankaraData
-
-Insert-CPUDataToSQL -dataList $totalData
+$structuredData = Build-HierarchicalCPUData -allData $totalData
+Insert-CPUDataToSQL -dataList $structuredData
