@@ -2,28 +2,22 @@
 $apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB" # Azure OpenAI API anahtarınızı buraya ekleyin
 $endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-4.1-bulutaltyapi/chat/completions?api-version=2025-01-01-preview" # Endpoint URL'nizi buraya ekleyin
  
-# Install ImportExcel module if not already installed
-# Install-Module -Name ImportExcel -Scope CurrentUser
- 
-Import-Module ImportExcel
- 
-# XLSX dosyasını oku
-$xlsxFilePath = "./reclaim_api_test.xlsx"
-$csvData = Import-Excel -Path $xlsxFilePath
- 
-# Excel içeriğini string olarak formatla
-$csvData = $csvData | ConvertTo-Csv -NoTypeInformation
- 
- 
+# CSV dosyasını oku
+$csvFilePath = "./reclaim_api_test.csv"
+$data = Import-Csv -Path $csvFilePath
+
+# Batch ayarları
 $batchSize = 1000
 $allResults = @()
  
  
 for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
-    $endIndex = if (($i + $batchSize - 1) -lt $csvData.Count) { $i + $batchSize - 1 } else { $csvData.Count - 1 }
-    $batch = $csvData[$i..$endIndex]
-    $batchContent = $batch | ForEach-Object { ($_ | ConvertTo-Csv -NoTypeInformation ) } | Out-String
- 
+    $endIndex = if (($i + $batchSize - 1) -lt $data.Count) { $i + $batchSize - 1 } else { $data.Count - 1 }
+    $batch = $data[$i..$endIndex]
+
+    # Batch'i JSON'a çevir
+    $batchJson = $batch | ConvertTo-Json -Depth 10
+
     
     # Prompt'u oluştur
     $prompt = @"
@@ -40,9 +34,9 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
         8.	95th percentile memory usage (%)
         9.	99th percentile memory usage (%)
 
-    Your task is to analyze each VM and return optimized resource recommendations and reclaim overallocated resources while ensuring the vm remains comfortable and performant, even during using spikes. 
+    Your task is to analyze each VM in the dataset and provide optimized resource recommendations. The goal is to safely reclaim overallocated resources without compromising performance, even during usage spikes.
 
-    For each VM, generate the following fields:
+    For each VM in $batchContent, generate the following fields:
         •	VMName: Same as input
         •	CurrentCPU: Same as input
         •	ReclaimScoreCPU: A number from 0 to 100 indicating CPU overallocation
@@ -57,12 +51,11 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
         •	Do not reduce resources below peak (95th percentile) usage
         •	Be conservative in recommendations
 
-    Output format: Return results in a JSON array. Do not include calculations or explanations.
+    Output format: Return results in a JSON array. Do not include others.
 
-    Dataset will be provided in variable: $batchContent.
 "@
     
-    # JSON body hazırla
+    # JSON body oluştur
     $body = @{
         messages = @(
             @{
@@ -74,28 +67,27 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
                 content = $prompt
             }
         )
-    # max_tokens = 10000
         temperature = 0.7
     } | ConvertTo-Json -Depth 10
-    
+
     # HTTP başlıkları
     $headers = @{
         "Content-Type" = "application/json"
         "api-key" = $apiKey
     }
-    
-    # API'ye isteği gönder
+
+    # API'ye gönder
     try {
         $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
         $answer = $response.choices[0].message.content
         $allResults += $answer
-        Write-Host "Batch $($i / $batchSize + 1) işlendi."  + $answer
+        Write-Host "Batch $($i / $batchSize + 1) işlendi." 
     } catch {
         Write-Host "Hata oluştu: $($_.Exception.Message)"
     }
+
     Start-Sleep -Seconds 2
 }
 
-
-# Sonuçları bir dosyaya kaydet
+# Sonuçları bir dosyaya yaz
 $allResults | Set-Content -Path ".\all_results.json"
