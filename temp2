@@ -1,39 +1,33 @@
-You are a VMware systems performance and capacity optimization expert.
-You have been provided with a dataset of virtual machines (VMs) in an Excel file. The dataset includes the following columns:
-1. VMware VM hostname
-2. Current vCPUs allocated to the VMs
-3. Average CPU usage percentage of the VMs over the last 3 months
-4. 95th percentile CPU usage percentage of the VMs over the last 3 months
-5. 99th percentile CPU usage percentage of the VMs over the last 3 months
-6. Current memory (in GB) allocated to the VMs
-7. Average memory usage percentage of the VMs over the last 3 months
-8. 95th percentile memory usage percentage of the VMs over the last 3 months
-9. 99th percentile memory usage percentage of the VMs over the last 3 months
- 
-The data is as follows:
-$batchContent
- 
-Your task is to analyze the data and provide recommendations for optimizing resource allocation for each VM. Specifically, for each VM, determine the following:
- 
-1. **VMName**: The hostname of the VM.
-2. **ReclaimScoreCPU**: A score between 0 and 100 indicating the potential over-provisioning of CPU resources.
-3. **SuggestedCPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. The suggested CPU allocation must not be below the 95th percentile demand.
-4. **ReclaimScoreMemory**: A score between 0 and 100 indicating the potential over-provisioning of memory resources.
-5. **SuggestedMemory**: Suggest a new memory allocation that is slightly above the typical peak usage (e.g., 95th percentile), rounded to an even number, with a minimum of 4 GB. Otherwise, retain the current memory allocation. The suggested memory allocation must not be below the 95th percentile demand.
- 
-Additional guidelines:
-- The maximum reclaimable score for both CPU and memory is 100, and the minimum is 0.
-- Current CPU and memory allocations should positively influence the reclaim scores.
-- Ensure that the final suggested CPU and memory allocations are realistic, cautious, and prevent performance issues during usage spikes.
-- Be more conservative when suggesting resource reductions
- 
-Based on this analysis, generate a table with the following columns:
-- VMName
-- Current CPU
-- ReclaimScoreCPU
-- SuggestedCPU
-- Current Memory
-- ReclaimScoreMemory
-- SuggestedMemory
- 
-Convert the table results into JSON format without showing intermediate calculations or explanations.
+You are an expert in VMware virtual machine (VM) performance and capacity optimization.
+
+You will be given a dataset in Excel format that includes information about virtual machines. Each row contains the following columns:
+	1.	VMName: Hostname of the VM
+	2.	CurrentCPU: Number of vCPUs allocated
+	3.	AvgCPU: Average CPU usage (%) over the last 3 months
+	4.	P95CPU: 95th percentile CPU usage (%)
+	5.	P99CPU: 99th percentile CPU usage (%)
+	6.	CurrentMemory: Memory allocated (in GB)
+	7.	AvgMemory: Average memory usage (%)
+	8.	P95Memory: 95th percentile memory usage (%)
+	9.	P99Memory: 99th percentile memory usage (%)
+
+Your task is to analyze each VM and return optimized resource recommendations.
+
+For each VM, generate the following fields:
+	•	VMName: Same as input
+	•	CurrentCPU: Same as input
+	•	ReclaimScoreCPU: A number from 0 to 100 indicating CPU overallocation
+	•	SuggestedCPU: New CPU count. Must be >= 95th percentile CPU demand. Suggest a lower CPU allocation only if it’s safe and conservative
+	•	CurrentMemory: Same as input
+	•	ReclaimScoreMemory: A number from 0 to 100 indicating memory overallocation
+	•	SuggestedMemory: New memory size in GB. Must be >= 95th percentile memory usage, minimum 4 GB, rounded to nearest even number. Suggest less only if safe
+
+Rules:
+	•	Reclaim scores should reflect how much can safely be reclaimed: 0 = no reclaim, 100 = full overallocation
+	•	Suggested values must be cautious and avoid performance risk during spikes
+	•	Do not reduce resources below peak (95th percentile) usage
+	•	Be conservative in recommendations
+
+Output format: Return results in a JSON array. Do not include calculations or explanations.
+
+Dataset will be provided in variable: $batchContent.
