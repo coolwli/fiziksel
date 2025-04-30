@@ -1,190 +1,101 @@
-# --- SSL Sertifika doğrulamasını atla ---
-Add-Type @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-    public class TrustAllCertsPolicy : ICertificatePolicy {
-        public bool CheckValidationResult(
-            ServicePoint srvPoint, X509Certificate certificate,
-            WebRequest request, int certificateProblem) {
-            return true;
-        }
-    }
+ 
+$apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB" # Azure OpenAI API anahtarınızı buraya ekleyin
+$endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-4.1-bulutaltyapi/chat/completions?api-version=2025-01-01-preview" # Endpoint URL'nizi buraya ekleyin
+ 
+# Install ImportExcel module if not already installed
+# Install-Module -Name ImportExcel -Scope CurrentUser
+ 
+Import-Module ImportExcel
+ 
+# XLSX dosyasını oku
+$xlsxFilePath = "./reclaim_api_test.xlsx"
+$csvData = Import-Excel -Path $xlsxFilePath
+ 
+# Excel içeriğini string olarak formatla
+$csvData = $csvData | ConvertTo-Csv -NoTypeInformation
+ 
+ 
+$batchSize = 1000
+$allResults = @()
+ 
+ 
+for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
+    $endIndex = if (($i + $batchSize - 1) -lt $csvData.Count) { $i + $batchSize - 1 } else { $csvData.Count - 1 }
+    $batch = $csvData[$i..$endIndex]
+    $batchContent = $batch | ForEach-Object { ($_ | ConvertTo-Csv -NoTypeInformation ) } | Out-String
+ 
+    
+    # Prompt'u oluştur
+    $prompt = @"
+    You are an expert in VMware virtual machine (VM) performance and capacity optimization.
+
+    You will be given a dataset in Excel format that includes information about virtual machines. Each row contains the following columns:
+        1.	Hostname of the VM
+        2.	Number of vCPUs allocated
+        3.	Average CPU usage (%) over the last 3 months
+        4.	95th percentile CPU usage (%)
+        5.	99th percentile CPU usage (%)
+        6.	Memory allocated (in GB)
+        7.	Average memory usage (%)
+        8.	95th percentile memory usage (%)
+        9.	99th percentile memory usage (%)
+
+    Your task is to analyze each VM and return optimized resource recommendations and reclaim overallocated resources while ensuring the vm remains comfortable and performant, even during using spikes. 
+
+    For each VM, generate the following fields:
+        •	VMName: Same as input
+        •	CurrentCPU: Same as input
+        •	ReclaimScoreCPU: A number from 0 to 100 indicating CPU overallocation
+        •	SuggestedCPU: New CPU count. Must be >= 95th percentile CPU demand. Suggest a lower CPU allocation only if it’s safe and conservative
+        •	CurrentMemory: Same as input
+        •	ReclaimScoreMemory: A number from 0 to 100 indicating memory overallocation
+        •	SuggestedMemory: New memory size in GB. Must be >= 95th percentile memory usage, minimum 4 GB, rounded to nearest even number. Suggest less only if safe
+
+    Rules:
+        •	Reclaim scores should reflect how much can safely be reclaimed: 0 = no reclaim, 100 = full overallocation
+        •	Suggested values must be cautious and avoid performance risk during spikes
+        •	Do not reduce resources below peak (95th percentile) usage
+        •	Be conservative in recommendations
+
+    Output format: Return results in a JSON array. Do not include calculations or explanations.
+
+    Dataset will be provided in variable: $batchContent.
 "@
-[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-
-function Get-VropsToken($type) {
-    try {
-        return & "F:\Ali\powershell\getVropsToken.ps1" -tokenType $type
-    } catch {
-        Write-Error "Token alınamadı: $type - $_"
-        return $null
-    }
-}
-
-function Get-VropsData($token, $url, $location) {
+    
+    # JSON body hazırla
+    $body = @{
+        messages = @(
+            @{
+                role = "system"
+                content = "You are an expert in VMware virtual machine (VM) performance and capacity optimization."
+            },
+            @{
+                role = "user"
+                content = $prompt
+            }
+        )
+    # max_tokens = 10000
+        temperature = 0.7
+    } | ConvertTo-Json -Depth 10
+    
+    # HTTP başlıkları
     $headers = @{
-        "Content-Type"  = "application/json"
-        "Authorization" = "vRealizeOpsToken $token"
+        "Content-Type" = "application/json"
+        "api-key" = $apiKey
     }
-
+    
+    # API'ye isteği gönder
     try {
-        $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -ContentType "application/json"
+        $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
+        $answer = $response.choices[0].message.content
+        $allResults += $answer
+        Write-Host "Batch $($i / $batchSize + 1) işlendi."  + $answer
     } catch {
-        Write-Error "Veri çekme hatası ($location): $_"
-        return @()
+        Write-Host "Hata oluştu: $($_.Exception.Message)"
     }
-
-    $dataMap = @{}
-    foreach ($row in $response.viewsData.rows) {
-        $name     = $row.cells[2]
-        $cpuModel = $row.cells[4]
-        $vcenter  = $row.cells[1]
-        $cpuCore  = [int]$row.cells[3]
-
-        if (-not $dataMap.ContainsKey($name)) {
-            $dataMap[$name] = [PSCustomObject]@{
-                name       = $name
-                vcenter    = $vcenter
-                location   = $location
-                cpu_core   = 0
-                intelCount = 0
-                amdCount   = 0
-            }
-        }
-
-        if ($cpuModel -imatch "intel") {
-            $dataMap[$name].intelCount++
-            $dataMap[$name].cpu_core += $cpuCore
-        } elseif ($cpuModel -imatch "amd") {
-            $dataMap[$name].amdCount++
-            $dataMap[$name].cpu_core += $cpuCore
-        }
-    }
-    return $dataMap.Values
+    Start-Sleep -Seconds 2
 }
 
-function Build-HierarchicalCPUData($allData) {
-    $grouped = $allData | Group-Object -Property location
 
-    $finalList = @()
-    $totalIntel = 0
-    $totalAMD   = 0
-    $totalCore  = 0
-
-    foreach ($locGroup in $grouped) {
-        $location = $locGroup.Name
-        $locItems = $locGroup.Group
-
-        $locationIntel = 0
-        $locationAMD   = 0
-        $locationCore  = 0
-
-        $vcenterGroups = $locItems | Group-Object -Property vcenter
-        foreach ($vcGroup in $vcenterGroups) {
-            $vcenter = $vcGroup.Name
-            $vcItems = $vcGroup.Group
-
-            $vcenterIntel = 0
-            $vcenterAMD   = 0
-            $vcenterCore  = 0
-
-            foreach ($host in $vcItems) {
-                $finalList += [PSCustomObject]@{
-                    name        = $host.name
-                    cpu_core    = $host.cpu_core
-                    intelCount  = $host.intelCount
-                    amdCount    = $host.amdCount
-                    parent      = "$vcenter"
-                }
-
-                $vcenterIntel += $host.intelCount
-                $vcenterAMD   += $host.amdCount
-                $vcenterCore  += $host.cpu_core
-            }
-
-            $finalList += [PSCustomObject]@{
-                name        = "$vcenter"
-                cpu_core    = $vcenterCore
-                intelCount  = $vcenterIntel
-                amdCount    = $vcenterAMD
-                parent      = $location
-            }
-
-            $locationIntel += $vcenterIntel
-            $locationAMD   += $vcenterAMD
-            $locationCore  += $vcenterCore
-        }
-
-        $finalList += [PSCustomObject]@{
-            name        = $location
-            cpu_core    = $locationCore
-            intelCount  = $locationIntel
-            amdCount    = $locationAMD
-            parent      = "All"
-        }
-
-        $totalIntel += $locationIntel
-        $totalAMD   += $locationAMD
-        $totalCore  += $locationCore
-    }
-
-    $finalList = @(
-        [PSCustomObject]@{
-            name        = "All"
-            cpu_core    = $totalCore
-            intelCount  = $totalIntel
-            amdCount    = $totalAMD
-            parent      = $null
-        }
-    ) + $finalList
-
-    return $finalList
-}
-
-function Insert-CPUDataToSQL($dataList) {
-    $connectionString = "Data Source=TEKSCR1\SQLEXPRESS;Database=CloudUnited;Integrated Security=True"
-    $sqlConnection = New-Object System.Data.SqlClient.SqlConnection
-    $sqlConnection.ConnectionString = $connectionString
-    $sqlConnection.Open()
-
-    $tarih = Get-Date -Format "yyyy-MM-dd"
-
-    foreach ($item in $dataList) {
-        $sqlCommand = $sqlConnection.CreateCommand()
-        $sqlCommand.CommandText = @"
-INSERT INTO CPU_Models_Historic (name, cpu_core, intel_count, amd_count, tarih, parent)
-VALUES (@name, @cpu_core, @intelCount, @amdCount, @tarih, @parent)
-"@
-        $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@cpu_core", $item.cpu_core) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@intelCount", $item.intelCount) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
-        $sqlCommand.Parameters.AddWithValue("@parent", $item.parent) | Out-Null
-
-        $sqlCommand.ExecuteNonQuery() | Out-Null
-    }
-
-    $sqlConnection.Close()
-}
-
-# --- Pendik ---
-$pendikToken = Get-VropsToken -type "pendik"
-$pendikUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-$pendikData = @()
-if ($pendikToken) {
-    $pendikData = Get-VropsData -token $pendikToken -url $pendikUrl -location "Pendik"
-}
-
-# --- Ankara ---
-$ankaraToken = Get-VropsToken -type "ankara"
-$ankaraUrl = "https://apgaravrops801.fw.garanti.com.tr/suite-api/internal/views/d33a28bd-6179-47b8-b330-db494cbbf934/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
-$ankaraData = @()
-if ($ankaraToken) {
-    $ankaraData = Get-VropsData -token $ankaraToken -url $ankaraUrl -location "Ankara"
-}
-
-# --- Verileri birleştir, yapıyı kur ve SQL'e yaz ---
-$totalData = $pendikData + $ankaraData
-$structuredData = Build-HierarchicalCPUData -allData $totalData
-Insert-CPUDataToSQL -dataList $structuredData
+# Sonuçları bir dosyaya kaydet
+$allResults | Set-Content -Path ".\all_results.json"
