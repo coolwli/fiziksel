@@ -36,30 +36,34 @@ function Get-VropsData($token, $url, $location) {
 
     $dataMap = @{}
     foreach ($row in $response.viewsData.rows) {
-        $name     = $row.cells.2
-        $cpuModel = $row.cells.4
-        $vcenter  = $row.cells.1
-        $cpuCore  = [int]$row.cells.3
-        $cpuSocket= [int]$row.cells.5 #this part is new
+        $name      = $row.cells[2]
+        $cpuModel  = $row.cells[4]
+        $vcenter   = $row.cells[1]
+        $cpuCore   = [int]$row.cells[3]
+        $cpuSocket = [int]$row.cells[5]
 
         if (-not $dataMap.ContainsKey($name)) {
             $dataMap[$name] = [PSCustomObject]@{
-                name       = $name
-                vcenter    = $vcenter
-                location   = $location
-                intel_core   = 0
-                intelCount = 0
-                amd_core   = 0
-                amdCount   = 0
+                name        = $name
+                vcenter     = $vcenter
+                location    = $location
+                intel_core  = 0
+                intelCount  = 0
+                intelSocket = 0
+                amd_core    = 0
+                amdCount    = 0
+                amdSocket   = 0
             }
         }
 
         if ($cpuModel -imatch "intel") {
             $dataMap[$name].intelCount++
-            $dataMap[$name].intel_core += $cpuCore
+            $dataMap[$name].intel_core  += $cpuCore
+            $dataMap[$name].intelSocket += $cpuSocket
         } elseif ($cpuModel -imatch "amd") {
             $dataMap[$name].amdCount++
-            $dataMap[$name].amd_core += $cpuCore
+            $dataMap[$name].amd_core  += $cpuCore
+            $dataMap[$name].amdSocket += $cpuSocket
         }
     }
     return $dataMap.Values
@@ -69,84 +73,95 @@ function Build-HierarchicalCPUData($allData) {
     $grouped = $allData | Group-Object -Property location
 
     $finalList = @()
-    $totalIntel = 0
-    $totalAMD   = 0
-    $totalIntelCore  = 0
-    $totalAmdCore  = 0
+    $totalIntel = 0; $totalAMD = 0
+    $totalIntelCore = 0; $totalAmdCore = 0
+    $totalIntelSocket = 0; $totalAmdSocket = 0
 
     foreach ($locGroup in $grouped) {
         $location = $locGroup.Name
         $locItems = $locGroup.Group
 
-        $locationIntel = 0
-        $locationAMD   = 0
-        $locationAmdCore  = 0
-        $locationIntelCore  = 0
+        $locationIntel = 0; $locationAMD = 0
+        $locationIntelCore = 0; $locationAmdCore = 0
+        $locationIntelSocket = 0; $locationAmdSocket = 0
 
         $vcenterGroups = $locItems | Group-Object -Property vcenter
         foreach ($vcGroup in $vcenterGroups) {
             $vcenter = $vcGroup.Name
             $vcItems = $vcGroup.Group
 
-            $vcenterIntel = 0
-            $vcenterAMD   = 0
-            $vcenterIntelCore  = 0
-            $vcenterAmdCore  = 0
+            $vcenterIntel = 0; $vcenterAMD = 0
+            $vcenterIntelCore = 0; $vcenterAmdCore = 0
+            $vcenterIntelSocket = 0; $vcenterAmdSocket = 0
 
             foreach ($cl in $vcItems) {
                 $finalList += [PSCustomObject]@{
-                    name        = $cl.name
-                    intel_core    = $cl.intel_core
-                    amd_core    = $cl.amd_core
-                    intelCount  = $cl.intelCount
-                    amdCount    = $cl.amdCount
-                    parent      = "$vcenter"
+                    name         = $cl.name
+                    intel_core   = $cl.intel_core
+                    amd_core     = $cl.amd_core
+                    intelCount   = $cl.intelCount
+                    amdCount     = $cl.amdCount
+                    intelSocket  = $cl.intelSocket
+                    amdSocket    = $cl.amdSocket
+                    parent       = $vcenter
                 }
 
-                $vcenterIntel += $cl.intelCount
-                $vcenterAMD   += $cl.amdCount
-                $vcenterIntelCore  += $cl.intel_core
-                $vcenterAmdCore  += $cl.amd_core
+                $vcenterIntel       += $cl.intelCount
+                $vcenterAMD         += $cl.amdCount
+                $vcenterIntelCore   += $cl.intel_core
+                $vcenterAmdCore     += $cl.amd_core
+                $vcenterIntelSocket += $cl.intelSocket
+                $vcenterAmdSocket   += $cl.amdSocket
             }
 
             $finalList += [PSCustomObject]@{
-                name        = "$vcenter"
-                intel_core    = $vcenterIntelCore
-                amd_core    = $vcenterAmdCore
-                intelCount  = $vcenterIntel
-                amdCount    = $vcenterAMD
-                parent      = $location
+                name         = $vcenter
+                intel_core   = $vcenterIntelCore
+                amd_core     = $vcenterAmdCore
+                intelCount   = $vcenterIntel
+                amdCount     = $vcenterAMD
+                intelSocket  = $vcenterIntelSocket
+                amdSocket    = $vcenterAmdSocket
+                parent       = $location
             }
 
-            $locationIntel += $vcenterIntel
-            $locationAMD   += $vcenterAMD
-            $locationAmdCore  += $vcenterAmdCore
-            $locationIntelCore  += $vcenterIntelCore
+            $locationIntel       += $vcenterIntel
+            $locationAMD         += $vcenterAMD
+            $locationIntelCore   += $vcenterIntelCore
+            $locationAmdCore     += $vcenterAmdCore
+            $locationIntelSocket += $vcenterIntelSocket
+            $locationAmdSocket   += $vcenterAmdSocket
         }
 
         $finalList += [PSCustomObject]@{
-            name        = $location
-            intel_core    = $locationIntelCore
-            amd_core    = $locationAmdCore
-            intelCount  = $locationIntel
-            amdCount    = $locationAMD
-            parent      = "All"
+            name         = $location
+            intel_core   = $locationIntelCore
+            amd_core     = $locationAmdCore
+            intelCount   = $locationIntel
+            amdCount     = $locationAMD
+            intelSocket  = $locationIntelSocket
+            amdSocket    = $locationAmdSocket
+            parent       = "All"
         }
 
-        $totalIntel += $locationIntel
-        $totalAMD   += $locationAMD
-        $totalAmdCore  += $locationAmdCore
-        $totalIntelCore  += $locationIntelCore
+        $totalIntel       += $locationIntel
+        $totalAMD         += $locationAMD
+        $totalIntelCore   += $locationIntelCore
+        $totalAmdCore     += $locationAmdCore
+        $totalIntelSocket += $locationIntelSocket
+        $totalAmdSocket   += $locationAmdSocket
     }
 
     $finalList = @(
         [PSCustomObject]@{
-            name        = "All"
-            intel_core    = $totalIntelCore
-            amd_core    = $totalAmdCore
-            intelCount  = $totalIntel
-            amdCount    = $totalAMD
-            parent      = ""
+            name         = "All"
+            intel_core   = $totalIntelCore
+            amd_core     = $totalAmdCore
+            intelCount   = $totalIntel
+            amdCount     = $totalAMD
+            intelSocket  = $totalIntelSocket
+            amdSocket    = $totalAmdSocket
+            parent       = ""
         }
     ) + $finalList
 
@@ -164,9 +179,13 @@ function Insert-CPUDataToSQL($dataList) {
     foreach ($item in $dataList) {
         $sqlCommand = $sqlConnection.CreateCommand()
         $sqlCommand.CommandText = @"
-INSERT INTO CPU_Models_Historic (name, amd_core, intel_core, intel_count, amd_count, tarih, parent)
-VALUES (@name, @amd_core, @intel_core, @intelCount, @amdCount, @tarih, @parent)
+INSERT INTO CPU_Models_Historic (
+    name, amd_core, intel_core, intel_count, amd_count, tarih, parent, intel_socket, amd_socket
+) VALUES (
+    @name, @amd_core, @intel_core, @intelCount, @amdCount, @tarih, @parent, @intelSocket, @amdSocket
+)
 "@
+
         $sqlCommand.Parameters.AddWithValue("@name", $item.name) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@amd_core", $item.amd_core) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@intel_core", $item.intel_core) | Out-Null
@@ -174,6 +193,8 @@ VALUES (@name, @amd_core, @intel_core, @intelCount, @amdCount, @tarih, @parent)
         $sqlCommand.Parameters.AddWithValue("@amdCount", $item.amdCount) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@tarih", $tarih) | Out-Null
         $sqlCommand.Parameters.AddWithValue("@parent", $item.parent) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@intelSocket", $item.intelSocket) | Out-Null
+        $sqlCommand.Parameters.AddWithValue("@amdSocket", $item.amdSocket) | Out-Null
 
         $sqlCommand.ExecuteNonQuery() | Out-Null
     }
@@ -197,7 +218,7 @@ if ($ankaraToken) {
     $ankaraData = Get-VropsData -token $ankaraToken -url $ankaraUrl -location "Ankara"
 }
 
-# --- Verileri birleştir, yapıyı kur ve SQL'e yaz ---
-$totalData = $pendikData + $ankaraData
+# --- Tüm verileri birleştir, hiyerarşik yapı kur, SQL'e yaz ---
+$totalData     = $pendikData + $ankaraData
 $structuredData = Build-HierarchicalCPUData -allData $totalData
 Insert-CPUDataToSQL -dataList $structuredData
