@@ -1,1 +1,37 @@
+// 1) System mesajı: modeli rolüne yerleştirir, genel hedefi ve tonlamayı belirler.
+{
+  "role": "system",
+  "content": "You are a cloud‑resources optimization assistant. " +
+             "Your job is to analyze VM CPU & memory usage metrics, " +
+             "compute a light‑touch reclaim score, and recommend new vCPU+RAM pairs. " +
+             "Be precise, concise, and follow the rules strictly."
+}
 
+// 2) User mesajı: gerçek veriyi ve kuralları içerir.
+{
+  "role": "user",
+  "content": "
+  Here is the input dataset as JSON array.  
+  For each VM object:
+  - vm_name: string  
+  - vCPU: current vCPU count (integer)  
+  - RAM_GB: current RAM in GB (integer)  
+  - avg_CPU_pct, p95_CPU_pct, p99_CPU_pct: CPU usage percentiles  
+  - avg_RAM_pct, p95_RAM_pct, p99_RAM_pct: RAM usage percentiles  
+
+  Your tasks:
+  1. Compute a **reclaim_score** between 0–100 for each VM.  
+     - Do **not** be over‑aggressive: leave a small safety buffer for spikes.  
+     - Score should reflect how much resource can be reclaimed: higher score → more reclaimable.  
+  2. Propose a **new_vCPU** and **new_RAM_GB** pair for each VM.  
+     - new_RAM_GB minimum is **4** GB.  
+     - Always output an array of two numbers: [new_vCPU, new_RAM_GB].  
+     - Ensure you leave at least ~10 % headroom above the VM’s 99th percentile usage.  
+  3. Output result as JSON array of objects with fields:
+     - vm_name
+     - reclaim_score
+     - new_allocation: [new_vCPU, new_RAM_GB]
+
+  Here’s the input:
+  ```json
+  {{YOUR_VM_DATA}}
