@@ -41,7 +41,7 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
  
         1. **VMName**: The hostname of the VM.
         2. **ReclaimScoreCPU**: A score between 0 and 100 indicating the potential over-provisioning of CPU resources.
-        3. **SuggestedCPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. The suggested CPU allocation must not be below the 95th percentile demand.
+        3. **SuggestedCPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. Suggested CPU allocation must be an even number and not below the 95th percentile demand.
         4. **ReclaimScoreMemory**: A score between 0 and 100 indicating the potential over-provisioning of memory resources.
         5. **SuggestedMemory**: Suggest a new memory allocation that is slightly above the typical peak usage (e.g., 95th percentile), rounded to an even number, with a minimum of 4 GB. Otherwise, retain the current memory allocation. The suggested memory allocation must not be below the 95th percentile demand.
  
