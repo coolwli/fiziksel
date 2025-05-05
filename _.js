@@ -1,133 +1,334 @@
-function getColumnIndex(columnName) {
-    const contentTable = document.getElementById("contentTable");
-    return Array.from(contentTable.rows[0].cells).findIndex(cell => cell.innerText.trim() === columnName);
+const MAX_PAGE = 10;
+let rowsPerPage = 20;
+let baseData = [];
+let currentPage = 1;
+let isAscending = true;
+let filteredData = [];
+
+
+
+function sortTableByColumn(columnIndex) {
+
+    filteredData.sort((rowA, rowB) => {
+        const columnName = columns[columnIndex].name;
+        let valueA = rowA[columnName].toString().trim();
+        let valueB = rowB[columnName].toString().trim();
+
+        if (sortableColumnTypes.numericColumns.includes(columnIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        if (sortableColumnTypes.dateColumns.includes(columnIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; 
+            valueB = (new Date(valueB)).getTime() || 0;
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        if (sortableColumnTypes.textwNumColumns.includes(columnIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+    });
 }
 
-function showContentTable(column,tableId) {
-    const columnIndex = getColumnIndex(column);
-    const table = document.getElementById(tableId);
+function dynamicSort(dataArray, colIndex) {
+    return dataArray.sort((a, b) => {
+        let valueA = a.toString().trim();
+        let valueB = b.toString().trim();
 
-    table.innerHTML = "";
-    const dataCounts = filteredData.reduce((counts, row) => {
-        const cell = row[Object.keys(row)[columnIndex]].trim();
-        counts[cell] = (counts[cell] || 0) + 1;
-        return counts;
-    }, {});
+        if (sortableColumnTypes.numericColumns.includes(colIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
+            return valueA - valueB;
+        }
 
-    Object.entries(dataCounts).forEach(([data, count]) => {
-        const row = table.insertRow();
-        const cell = row.insertCell(0);
-        const countCell = row.insertCell(1);
-        cell.textContent = data;
-        countCell.textContent = count;
+        if (sortableColumnTypes.dateColumns.includes(colIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; 
+            valueB = (new Date(valueB)).getTime() || 0; 
+            return valueA - valueB;
+        }
+
+        if (sortableColumnTypes.textwNumColumns.includes(colIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return valueA - valueB;
+        }
+
+        return valueA.localeCompare(valueB);
     });
+}
+
+
+function renderTablePage(pageNumber, data) {
+    const startIndex = (pageNumber - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedData = data.slice(startIndex, endIndex);
+
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '';
+
+    if (paginatedData.length === 0) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = columns.length;
+        cell.textContent = "No data available";
+        row.appendChild(cell);
+        tableBody.appendChild(row);
+        return;
+    }
+
+    paginatedData.forEach(row => {
+        const tableRow = document.createElement('tr');
+        columns.forEach(column => {
+            if (column.dontShow) return;
+            const cell = document.createElement('td');
+            cell.textContent = row[column.name];
+            tableRow.appendChild(cell);
+        });
+        if (rowClick == true) {
+            tableRow.addEventListener('click', function () {
+                window.location.href = screenName + ".aspx" + "?id=" + row[idNum] + "&vc=" + row[vcNum];
+            });
+        }
+        tableBody.appendChild(tableRow);
+    });
+}
+
+function renderPaginationControls(data) {
+    const totalPages = Math.ceil(data.length / rowsPerPage);
+    const paginationContainer = document.getElementById('pagination');
+    paginationContainer.innerHTML = '';
+
+    let startPage = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
+    let endPage = Math.min(totalPages, currentPage + Math.floor(MAX_PAGE / 2));
+
+    for (let i = startPage; i <= endPage; i++) {
+        const button = document.createElement('button');
+        button.textContent = i;
+        button.className = 'page-link';
+        if (i === currentPage) {
+            button.classList.add('active');
+        }
+        button.addEventListener('click', () => {
+            currentPage = i;
+            renderTablePage(currentPage, data);
+            renderPaginationControls(data);
+        });
+        paginationContainer.appendChild(button);
+    }
+}
+
+function createTableColumns() {
+    const tableHeader = document.getElementById('table-head');
+    tableHeader.innerHTML = '';
+
+    columns.forEach((column, index) => {
+        if (column.dontShow) return;
+
+        const headerCell = document.createElement('th');
+        headerCell.addEventListener('click', () => {
+            if (event.target.tagName !== 'TH') return;
+            sortTableByColumn(index);
+            currentPage = 1;
+            renderTablePage(currentPage, filteredData);
+            isAscending = !isAscending;
+        });
+
+        if (column.hasSearchBar || column.onlyTH) {
+            headerCell.innerHTML = column.label;
+            tableHeader.appendChild(headerCell);
+            return;
+        }
+
+        headerCell.classList.add('dropdown');
+        headerCell.innerHTML = `${column.label}<span class="dropdown-arrow">&#9660;</span>`;
+
+        const dropdownContent = document.createElement('div');
+        dropdownContent.classList.add('dropdown-content');
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search';
+        searchInput.addEventListener('keyup', () => filterCheckboxes(searchInput));
+
+        dropdownContent.appendChild(searchInput);
+
+        const selectAllContainer = document.createElement('div');
+        selectAllContainer.classList.add('select-all-div');
+        const selectAllCheckbox = document.createElement('input');
+        selectAllCheckbox.type = 'checkbox';
+        selectAllCheckbox.addEventListener('change', () => {
+            const checkboxes = dropdownContent.querySelectorAll('.checkboxes div:not([style*="display: none"]) input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = selectAllCheckbox.checked);
+            applyFilters(dropdownContent);
+        });
+        const selectAllLabel = document.createElement('label');
+        selectAllLabel.textContent = 'Select All';
+        selectAllContainer.appendChild(selectAllCheckbox);
+        selectAllContainer.appendChild(selectAllLabel);
+
+        dropdownContent.appendChild(selectAllContainer);
+
+        const checkboxesContainer = document.createElement('div');
+        checkboxesContainer.classList.add('checkboxes');
+        dropdownContent.appendChild(checkboxesContainer);
+
+        dropdownContent.appendChild(document.createElement('br'));
+        headerCell.appendChild(dropdownContent);
+        tableHeader.appendChild(headerCell);
+
+        generateCheckboxesForColumn(dropdownContent, index);
+    });
+}
+
+function filterCheckboxes(input) {
+    const checkboxes = input.parentElement.querySelectorAll(".checkboxes input[type='checkbox']");
+    checkboxes.forEach(checkbox => {
+        const label = checkbox.nextElementSibling;
+        if (label.textContent.toLowerCase().includes(input.value.toLowerCase())) {
+            checkbox.parentElement.style.display = '';
+        } else {
+            checkbox.parentElement.style.display = 'none';
+        }
+    });
+}
+
+function generateCheckboxesForColumn(dropdownContent, columnIndex) {
+    const checkboxesContainer = dropdownContent.querySelector('.checkboxes');
+
+    checkboxesContainer.querySelectorAll("div").forEach((div) => {
+        const checkbox = div.querySelector("input[type='checkbox']");
+        if (!checkbox.checked) {
+            div.remove();
+        }
+    });
+
+    const uniqueValues = getUniqueValues(columnIndex);
+
+    const fragment = document.createDocumentFragment();
+
+    uniqueValues.forEach(value => {
+        if (checkboxesContainer.querySelector(`input[value = '${value}']`)) return;
+
+        const checkboxContainer = document.createElement("div");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = value;
+        checkbox.addEventListener("change", () => applyFilters(dropdownContent));
+
+        const label = document.createElement("label");
+        label.textContent = value;
+
+        checkboxContainer.appendChild(checkbox);
+        checkboxContainer.appendChild(label);
+        checkboxContainer.appendChild(document.createElement("br"));
+
+        fragment.appendChild(checkboxContainer);
+    });
+
+    checkboxesContainer.appendChild(fragment);
+}
+
+function getUniqueValues(columnIndex) {
+    const uniqueValues = [...new Set(filteredData.map(row => row[columns[columnIndex].name].toString().trim()))];
+    return dynamicSort(uniqueValues, columnIndex);
+}
+
+
+
+function applyFilters(lastSelectedDropdown) {
+    const selectedFilters = Array.from(document.querySelectorAll("th")).map((column) => {
+        if (column.classList.contains("dropdown")) {
+            const checkboxesContainer = column.querySelector(".checkboxes");
+            if (checkboxesContainer) {
+                return Array.from(checkboxesContainer.querySelectorAll("input[type='checkbox']:checked"))
+                    .map(checkbox => checkbox.value);
+            }
+        }
+        return [];
+    });
+
+    filteredData = baseData.filter(row => {
+        return selectedFilters.every((values, columnIndex) => {
+            if (values.length === 0) return true;
+            const columnName = columns[columnIndex].name;
+            return values.includes(row[columnName].toString());
+        });
+    });
+
+    columns.forEach((column, index) => {
+        if (column.hasSearchBar || column.onlyTH || column.dontShow) return;
+
+        const headerCell = document.querySelectorAll("th")[index];
+        const dropdownContent = headerCell.querySelector(".dropdown-content");
+
+        if (dropdownContent !== lastSelectedDropdown || selectedFilters.flat().length === 0) {
+            generateCheckboxesForColumn(dropdownContent, index);
+        }
+    });
+
+    currentPage = 1;
+    renderTablePage(currentPage, filteredData);
+    renderPaginationControls(filteredData);
+    updateRowCounter(filteredData);
+}
+
+function updateRowCounter() {
+    document.getElementById('rowCounter').textContent = `${filteredData.length} Rows Listed..`;
 }
 
 function setRowsPerPage(selectedButton) {
     const buttons = document.querySelector(".button-container").querySelectorAll('.button');
     buttons.forEach(button => button.classList.remove('active'));
     selectedButton.classList.add('active');
-    ROWS_PER_PAGE = parseInt(selectedButton.textContent);
-    CURRENT_PAGE = 1;
-    renderPagination();
-    renderPage(CURRENT_PAGE);
+    rowsPerPage = parseInt(selectedButton.textContent);
+    currentPage = 1;
+    renderPaginationControls(filteredData);
+    renderTablePage(currentPage, filteredData);
 }
 
-function searchCheckboxes(searchInput) {
-    const filter = searchInput.value.toUpperCase();
-    const checkboxesDiv = searchInput.parentElement.querySelector(".checkbox-panel");
-    const divs = checkboxesDiv.getElementsByTagName("div");
-    for (let i = 0; i < divs.length; i++) {
-        const label = divs[i].getElementsByTagName("label")[0];
-        const txtValue = label.textContent || label.innerText;
-        divs[i].style.display = txtValue.toUpperCase().indexOf(filter) > -1 ? "" : "none";
-    }
-}
+function initializeTable() {
+    filteredData = baseData;
+    createTableColumns();
+    createSearchInput();
+    applyFilters();
+    sortTableByColumn(0);
+    renderTablePage(currentPage, filteredData);
 
-function calculateTotalValues(columnIndex) {
-    return filteredData.reduce((total, row) => total + (!isNaN(row[Object.keys(row)[columnIndex]]) ? Number(row[Object.keys(row)[columnIndex]]) : 0), 0);
-}
-
-function setCounters() {
-    document.getElementById('row-count').textContent = filteredData.length +" Envanter Listelendi.";
-    document.getElementById('soket-count').textContent = calculateTotalValues(6);
-    document.getElementById('core-count').textContent = calculateTotalValues(7);
-    document.getElementById('cpu-count').textContent = calculateTotalValues(8);
-    document.getElementById('memory-count').textContent = calculateTotalValues(9);
 
 }
 
-function handleDropdownChange() {
-    const selectedColumn = document.getElementById('column-dropdown').value;
-    document.querySelector('.dropdown-panel h5').textContent = selectedColumn;
-    const input = document.querySelector('.dropdown-panel input[type="text"]');
-    const checkboxesDiv = document.querySelector('.dropdown-panel .checkbox-panel');
-    checkboxesDiv.innerHTML = '';
-    input.style.display = selectedColumn === "Select Extra Column" ? "none" : "block";
-    filterTable();
-}
-
-function addOptionsDropdown() {
-    const dropdown = document.getElementById('column-dropdown');
-    dropdown.innerHTML = '';
-    const firstOption = document.createElement('option');
-    firstOption.value = "Select Extra Column";
-    firstOption.textContent = "Select Extra Column";
-    dropdown.appendChild(firstOption);
-
-    const contentTable = document.getElementById('contentTable');
-    contentTable.querySelectorAll('th').forEach(column => {
-        const columnName = column.innerText.trim();
-        const excludedColumns = ["Server", "Vendor", "Model", "Kapsam-BBVA Metrics", "Enviroment", "OS", "HWType", "Company", "DC Location", "Responsible Group","Notes"];
-        if (!excludedColumns.includes(columnName)) {
-            const option = document.createElement('option');
-            option.value = columnName;
-            option.textContent = columnName;
-            dropdown.appendChild(option);
+function createSearchInput() {
+    columns.forEach((column, index) => {
+        if (column.hasSearchBar) {
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = `Search ${column.label}`;
+            searchInput.addEventListener('input', () => applyFilters(null));
+            document.querySelector('.table-top').prepend(searchInput);
         }
     });
 }
 
+document.getElementById('reset-button').addEventListener('click', (event) => {
+    event.preventDefault();
+    document.querySelectorAll("input[type='checkbox']").forEach(checkbox => checkbox.checked = false);
+    document.querySelectorAll('.hall-button').forEach(button => { if (button.innerText !== "All Halls") button.classList.remove('active'); else button.classList.add('active'); });
+    document.querySelectorAll("input[type='text']").forEach(input => input.value = '');
+    filteredData = baseData;
+    currentPage = 1;
+    applyFilters();
+});
 
-function page_load() {
-    document.querySelectorAll("th").forEach((th, index) => {
-        th.addEventListener('click', () => {
-            ascending = !ascending;
-            sortDatas(index);
-        });
-    });
-    document.getElementById('reset-button').addEventListener('click', (event) => {
-        event.preventDefault();
-        document.querySelectorAll("input[type='checkbox']").forEach(checkbox => checkbox.checked = false);
-        document.querySelectorAll("input[type='text']").forEach(input => input.value = "");
-        ascending = true;
-        filterTable();
-        sortDatas(0);
-    });
-    document.getElementById('export-button').addEventListener('click', (event) => {
-        event.preventDefault();
-        const hdnInput = document.getElementById('hiddenField');
-        var jsondata = JSON.stringify(filteredData);
-        hdnInput.value = jsondata;
-        console.log(hdnInput.value);
-
-        hdnInput.value = jsondata;
-        document.getElementById('hiddenButton').click();
-    });
-    document.getElementById('column-dropdown').addEventListener('change', handleDropdownChange);
-
-    document.getElementById('server-search').addEventListener('keyup', function () {
-        filterTable();
-        /*
-        searchedData = filteredData.filter(row => row.Server.toString().trim().toUpperCase().includes(this.value.toUpperCase()));
-        renderPage(CURRENT_PAGE, searchedData);*/
-    });
-    document.querySelectorAll('.search-input').forEach(input => {
-        input.addEventListener('keyup', () => {
-            searchCheckboxes(input);
-        });
-    });
-    showContentTable("Vendor", "vendor-table");
-    showContentTable("HWType", "hwtype-table");
-
-}
+document.getElementById('export-button').addEventListener('click', () => {
+    event.preventDefault();
+    const hdnInput = document.getElementById('hiddenField');
+    const jsondata = JSON.stringify(filteredData);
+    hdnInput.value = jsondata;
+    document.getElementById('hiddenButton').click();
+});
