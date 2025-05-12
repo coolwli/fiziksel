@@ -1,17 +1,18 @@
+
  
-$apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB" # Azure OpenAI API anahtarınızı buraya ekleyin
+$apiKey = "" # Azure OpenAI API anahtarınızı buraya ekleyin
 $endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-4.1-bulutaltyapi/chat/completions?api-version=2025-01-01-preview" # Endpoint URL'nizi buraya ekleyin
  
 # CSV dosyasını oku
-$csvFilePath = "./reclaim_api_test.csv"
+$csvFilePath = "C:\Users\AliCanda\Documents\calismalar\reclaim_api_test.csv"
 $data = Import-Csv -Path $csvFilePath
 
 # Batch ayarları
-$batchSize = 1000
+$batchSize = 50
 $allResults = @()
  
  
-for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
+for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
     $endIndex = if (($i + $batchSize - 1) -lt $data.Count) { $i + $batchSize - 1 } else { $data.Count - 1 }
     $batch = $data[$i..$endIndex]
 
@@ -21,38 +22,47 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
     
     # Prompt'u oluştur
     $prompt = @"
-    You are an expert in VMware virtual machine (VM) performance and capacity optimization.
-
-    You will be given a dataset in Excel format that includes information about virtual machines. Each row contains the following columns:
-        1.	Hostname of the VM
-        2.	Number of vCPUs allocated
-        3.	Average CPU usage (%) over the last 3 months
-        4.	95th percentile CPU usage (%)
-        5.	99th percentile CPU usage (%)
-        6.	Memory allocated (in GB)
-        7.	Average memory usage (%)
-        8.	95th percentile memory usage (%)
-        9.	99th percentile memory usage (%)
-
-    Your task is to analyze each VM in the dataset and provide optimized resource recommendations. The goal is to safely reclaim overallocated resources without compromising performance, even during usage spikes.
-
-    For each VM in $batchContent, generate the following fields:
-        •	VMName: Same as input
-        •	CurrentCPU: Same as input
-        •	ReclaimScoreCPU: A number from 0 to 100 indicating CPU overallocation
-        •	SuggestedCPU: New CPU count. Must be >= 95th percentile CPU demand. Suggest a lower CPU allocation only if it’s safe and conservative
-        •	CurrentMemory: Same as input
-        •	ReclaimScoreMemory: A number from 0 to 100 indicating memory overallocation
-        •	SuggestedMemory: New memory size in GB. Must be >= 95th percentile memory usage, minimum 4 GB, rounded to nearest even number. Suggest less only if safe
-
-    Rules:
-        •	Reclaim scores should reflect how much can safely be reclaimed: 0 = no reclaim, 100 = full overallocation
-        •	Suggested values must be cautious and avoid performance risk during spikes
-        •	Do not reduce resources below peak (95th percentile) usage
-        •	Be conservative in recommendations
-
-    Output format: Return results in a JSON array. Do not include others.
-
+        You are a VMware systems performance and capacity optimization expert.
+        You have been provided with a dataset of virtual machines (VMs) in an json. The dataset includes the following columns:
+        1. VMware VM hostname
+        2. Current vCPUs allocated to the VMs
+        3. Average CPU usage percentage of the VMs over the last 3 months
+        4. 95th percentile CPU usage percentage of the VMs over the last 3 months
+        5. 99th percentile CPU usage percentage of the VMs over the last 3 months
+        6. Current memory (in GB) allocated to the VMs
+        7. Average memory usage percentage of the VMs over the last 3 months
+        8. 95th percentile memory usage percentage of the VMs over the last 3 months
+        9. 99th percentile memory usage percentage of the VMs over the last 3 months
+ 
+        The data is as follows:
+        $batchJson
+ 
+        Your task is to analyze the data and provide recommendations for optimizing resource allocation for each VM. Specifically, for each VM, determine the following:
+ 
+        1. **VMName**: The hostname of the VM.
+        2. **ReclaimScoreCPU**: A score between 0 and 100 indicating the potential over-provisioning of CPU resources.
+        3. **SuggestedCPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. Suggested CPU allocation must be an even number and not below the 95th percentile demand.
+        4. **ReclaimScoreMemory**: A score between 0 and 100 indicating the potential over-provisioning of memory resources.
+        5. **SuggestedMemory**: Suggest a new memory allocation that is slightly above the typical peak usage (e.g., 95th percentile), rounded to an even number, with a minimum of 4 GB. Otherwise, retain the current memory allocation. The suggested memory allocation must not be below the 95th percentile demand.
+ 
+        Additional guidelines:
+        - The maximum reclaimable score for both CPU and memory is 100, and the minimum is 0.
+        - Current CPU and memory allocations should positively influence the reclaim scores.
+        - Ensure that the final suggested CPU and memory allocations are realistic, cautious, and prevent performance issues during usage spikes.
+        - Be more conservative when suggesting resource reductions
+ 
+        Based on this analysis, generate a table with the following columns:
+        - VMName
+        - Current CPU
+        - Average CPU Usage
+        - ReclaimScoreCPU
+        - SuggestedCPU
+        - Current Memory
+        - Average Mem Usage
+        - ReclaimScoreMemory
+        - SuggestedMemory
+ 
+        Convert the table results into JSON format without showing intermediate calculations or explanations. I will use your answer to json data for script! 
 "@
     
     # JSON body oluştur
@@ -60,7 +70,10 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
         messages = @(
             @{
                 role = "system"
-                content = "You are an expert in VMware virtual machine (VM) performance and capacity optimization."
+                content =   "You are a cloud‑resources optimization assistant. " +
+                            "Your job is to analyze VM CPU & memory usage metrics, " +
+                            "compute a light‑touch reclaim score, and recommend new vCPU+RAM pairs. " +
+                            "Be precise, concise, and follow the rules strictly."
             },
             @{
                 role = "user"
@@ -86,8 +99,12 @@ for ($i = 0; $i -lt $csvData.Count; $i += $batchSize) {
         Write-Host "Hata oluştu: $($_.Exception.Message)"
     }
 
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 1
+    break
 }
 
-# Sonuçları bir dosyaya yaz
-$allResults | Set-Content -Path ".\all_results.json"
+# Sonuçları ekrana yazdır
+$allResults | ForEach-Object {
+    $jsonResult = $_ | ConvertFrom-Json
+    $jsonResult | Format-Table -AutoSize
+}
