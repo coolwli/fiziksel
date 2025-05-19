@@ -1,1 +1,19 @@
+Merhaba Ömer abi,
 
+AI destekli reclaim skoru üzerine düşündüğüm yaklaşımı ve planladığım adımları seninle paylaşmak istedim.
+
+Projenin temelinde, VM’lerin CPU ve memory kullanım metriklerine (özellikle yüzdelik değerler ve percentil veriler) bakarak reclaim edilme potansiyellerini gösteren bir skor üretmek yer alıyor. Bu skoru oluştururken AI'dan faydalanmak kritik bir parça olacak çünkü projenin genel vizyonu da AI temelli çalışmalara dayanıyor.
+
+Planladığım yapı şu şekilde:
+
+AI ile formül oluşturma: 3 aylık metric verileriyle, AI desteğiyle açıklanabilir ve profesyonel bir formül geliştirip bu skoru hesaplamak istiyorum. AI burada sadece skor formülünü oluşturmada destek verecek, nihai hesaplama bizde olacak.
+
+vROps Super Metric entegrasyonu: Oluşturduğumuz formülü vROps içinde Super Metric olarak tanımlayıp, ilgili object type’a (VM) bağlayacağız. Sonrasında bu metrik dashboard’lara taşınacak.
+
+PowerShell ile periyodik kontrol: Belirli aralıklarla PowerShell ile bu skoru sorgulayıp, belirli eşik değerinin üzerindeki sunucuları filtreleyeceğiz.
+
+AI ile kaynak önerisi: Filtrelenen sunucuların metrik bilgileri AI'a gönderilerek, onlar için ideal vCPU ve memory önerileri alınacak.
+
+Bu yapıyla birlikte hem projenin AI yönünü aktif kullanmış olacağız hem de otomasyona açık, açıklanabilir ve sürdürülebilir bir sistem kurmuş olacağız.
+
+Vakit bulduğunda üzerinden birlikte geçmek isterim. Görüş ve önerilerin benim için önemli olur.
