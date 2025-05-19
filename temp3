@@ -1,13 +1,1 @@
-EffectiveUsage = (0.4 × AvgUsage) + (0.6 × P95Usage)
 
-BaseScore = (1 - EffectiveUsage) × 100
-
-AdjustmentFactor = 1 + ((Allocated - Min) / MaxAlloc) × 0.3
-
-ReclaimScore = MIN(100, BaseScore × AdjustmentFactor)
-
-///
-SuggestedCPU = MAX(AllocatedCPU, ROUNDUP(P95CPU × AllocatedvCPU / 100, 1))
-
-///
-SuggestedMemory = MAX(AllocatedMemory, ROUNDUP(P95Memory × AllocatedMemory / 100, 1))
