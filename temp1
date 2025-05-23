@@ -1,23 +1,30 @@
 
  
-$apiKey = "" # Azure OpenAI API anahtarınızı buraya ekleyin
+$apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB" # Azure OpenAI API anahtarınızı buraya ekleyin
 $endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-4.1-bulutaltyapi/chat/completions?api-version=2025-01-01-preview" # Endpoint URL'nizi buraya ekleyin
- 
-# CSV dosyasını oku
-$csvFilePath = "C:\Users\AliCanda\Documents\calismalar\reclaim_api_test.csv"
-$data = Import-Csv -Path $csvFilePath
 
-# Batch ayarları
+# Input/Output Configuration
+$csvFilePath = "C:\Users\AliCanda\Documents\calismalar\reclaim_api_test.csv"
+$csvOutputPath = "C:\Users\AliCanda\Documents\calismalar\reclaim_api_output.csv"
+
 $batchSize = 50
+
+# Read CSV data
+$data = Import-Csv -Path $csvFilePath
+Write-Host "Found $($data.Count) records to process" -ForegroundColor Green
+
+
+$columns=$data[0].psobject.Properties.Name[0..8]
+# Initialize results array
 $allResults = @()
  
  
 for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
     $endIndex = if (($i + $batchSize - 1) -lt $data.Count) { $i + $batchSize - 1 } else { $data.Count - 1 }
     $batch = $data[$i..$endIndex]
-
-    # Batch'i JSON'a çevir
-    $batchJson = $batch | ConvertTo-Json -Depth 10
+    
+    $selectedBatch = $batch | Select-Object $columns
+    $batchJson = $selectedBatch | ConvertTo-Json -Depth 10
 
     
     # Prompt'u oluştur
@@ -38,12 +45,20 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
         $batchJson
  
         Your task is to analyze the data and provide recommendations for optimizing resource allocation for each VM. Specifically, for each VM, determine the following:
- 
-        1. **VMName**: The hostname of the VM.
-        2. **ReclaimScoreCPU**: A score between 0 and 100 indicating the potential over-provisioning of CPU resources.
-        3. **SuggestedCPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. Suggested CPU allocation must be an even number and not below the 95th percentile demand.
-        4. **ReclaimScoreMemory**: A score between 0 and 100 indicating the potential over-provisioning of memory resources.
-        5. **SuggestedMemory**: Suggest a new memory allocation that is slightly above the typical peak usage (e.g., 95th percentile), rounded to an even number, with a minimum of 4 GB. Otherwise, retain the current memory allocation. The suggested memory allocation must not be below the 95th percentile demand.
+        Based on this analysis, generate a table with the following columns:
+                - VM Name
+                - Current CPU
+                - Reclaim Score CPU
+                - Suggested CPU
+                - Current Memory
+                - Reclaim Score Memory
+                - Suggested Memory
+
+        1. **VM Name**: The hostname of the VM.
+        2. **Reclaim Score CPU**: A score between 0 and 100 indicating the potential over-provisioning of CPU resources. Avoid assigning high scores.  
+        3. **Suggested CPU**: Suggest a new CPU allocation that is slightly above the typical peak usage (e.g., 95th percentile), ensuring it is reasonable and conservative. Otherwise, retain the current CPU allocation. Suggested CPU allocation must be an even number(minimum 2) and not below the 95th percentile demand.
+        4. **Reclaim Score Memory**: A score between 0 and 100 indicating the potential over-provisioning of memory resources.Avoid assigning high scores.  
+        5. **Suggested Memory**: Suggest a new memory allocation that is slightly above the typical peak usage (e.g., 95th percentile), rounded to an even number, with a minimum of 4 GB. Otherwise, retain the current memory allocation. The suggested memory allocation must not be below the 95th percentile demand.
  
         Additional guidelines:
         - The maximum reclaimable score for both CPU and memory is 100, and the minimum is 0.
@@ -51,18 +66,9 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
         - Ensure that the final suggested CPU and memory allocations are realistic, cautious, and prevent performance issues during usage spikes.
         - Be more conservative when suggesting resource reductions
  
-        Based on this analysis, generate a table with the following columns:
-        - VMName
-        - Current CPU
-        - Average CPU Usage
-        - ReclaimScoreCPU
-        - SuggestedCPU
-        - Current Memory
-        - Average Mem Usage
-        - ReclaimScoreMemory
-        - SuggestedMemory
+      
  
-        Convert the table results into JSON format without showing intermediate calculations or explanations. I will use your answer to json data for script! 
+        Convert the table results into JSON format without anything! 
 "@
     
     # JSON body oluştur
@@ -93,18 +99,49 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
     try {
         $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
         $answer = $response.choices[0].message.content
-        $allResults += $answer
+        if ($answer -like '*`*') {
+            $answer = $answer -replace '[`]', ''
+        }
+
+        # Orijinal batch'i hash tablosuna al
+        $batchHash = @{}
+        foreach ($row in $batch) {
+            $batchHash[$row.'Name'] = $row
+        }
+        $answerjson = $answer | ConvertFrom-Json
+        foreach ($apiResult in $answerjson) {
+            $vmName = $apiResult.'VM Name'
+            $original = $batchHash[$vmName]
+
+            # Ek sütunları ekle
+            $apiResult | Add-Member -NotePropertyName "Summary|UUID" -NotePropertyValue $original.'Summary|UUID'
+            $apiResult | Add-Member -NotePropertyName "Summary|Parent vCenter" -NotePropertyValue $original.'Summary|Parent vCenter'
+
+            $allResults += $apiResult
+        }
         Write-Host "Batch $($i / $batchSize + 1) işlendi." 
     } catch {
         Write-Host "Hata oluştu: $($_.Exception.Message)"
     }
-
-    Start-Sleep -Seconds 1
-    break
 }
 
-# Sonuçları ekrana yazdır
-$allResults | ForEach-Object {
-    $jsonResult = $_ | ConvertFrom-Json
-    $jsonResult | Format-Table -AutoSize
+# Sonuçları tek bir CSV dosyasında birleştir
+$mergedResults = @()
+foreach ($result in $allResults) {
+    $obj = New-Object PSObject
+    $obj | Add-Member -NotePropertyName "VM Name" -NotePropertyValue $result.'VM Name'
+    $obj | Add-Member -NotePropertyName "Current CPU" -NotePropertyValue $result.'Current CPU'
+    $obj | Add-Member -NotePropertyName "Reclaim Score CPU" -NotePropertyValue $result.'Reclaim Score CPU'
+    $obj | Add-Member -NotePropertyName "Suggested CPU" -NotePropertyValue $result.'Suggested CPU'
+    $obj | Add-Member -NotePropertyName "Current Memory" -NotePropertyValue $result.'Current Memory'
+    $obj | Add-Member -NotePropertyName "Reclaim Score Memory" -NotePropertyValue $result.'Reclaim Score Memory'
+    $obj | Add-Member -NotePropertyName "Suggested Memory" -NotePropertyValue $result.'Suggested Memory'
+    $obj | Add-Member -NotePropertyName "Summary|UUID" -NotePropertyValue $result.'Summary|UUID'
+    $obj | Add-Member -NotePropertyName "Summary|Parent vCenter" -NotePropertyValue $result.'Summary|Parent vCenter'
+    $mergedResults += $obj
 }
+
+
+# İlk satırı (başlık) atla ve CSV'ye yaz
+$mergedResults | Export-Csv -Path $csvOutputPath -NoTypeInformation -Encoding UTF8
+Write-Host "Sonuçlar $csvOutputPath dosyasına kaydedildi."
