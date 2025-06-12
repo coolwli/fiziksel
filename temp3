@@ -1,19 +1,52 @@
-Merhaba Ömer abi,
+# ODP.NET DLL'inin yolu
+# Bu yolu, indirdiğiniz Instant Client paketindeki Oracle.ManagedDataAccess.dll'in gerçek yolu ile değiştirin.
+$ODPNetDLLPath = "C:\Oracle\InstantClient_19_3\odp.net\managed\common\Oracle.ManagedDataAccess.dll"
 
-AI destekli reclaim skoru üzerine düşündüğüm yaklaşımı ve planladığım adımları seninle paylaşmak istedim.
+# DLL'i yüklüyoruz
+Add-Type -Path $ODPNetDLLPath
 
-Projenin temelinde, VM’lerin CPU ve memory kullanım metriklerine (özellikle yüzdelik değerler ve percentil veriler) bakarak reclaim edilme potansiyellerini gösteren bir skor üretmek yer alıyor. Bu skoru oluştururken AI'dan faydalanmak kritik bir parça olacak çünkü projenin genel vizyonu da AI temelli çalışmalara dayanıyor.
+# Diğer bağlantı bilgileri ve sorgu kısmı aynı kalır
+$Username = "VERITABANI_KULLANICI_ADI"
+$Password = "VERITABANI_SIFRENIZ"
+$DataSource = "VERITABANI_ADIM" # tnsnames.ora dosyasındaki takma ad
 
-Planladığım yapı şu şekilde:
+try {
+    $conn = New-Object Oracle.ManagedDataAccess.Client.OracleConnection
+    $conn.ConnectionString = "User Id=$Username;Password=$Password;Data Source=$DataSource;"
+    $conn.Open()
+    Write-Host "Oracle veritabanına başarıyla bağlandı!"
 
-AI ile formül oluşturma: 3 aylık metric verileriyle, AI desteğiyle açıklanabilir ve profesyonel bir formül geliştirip bu skoru hesaplamak istiyorum. AI burada sadece skor formülünü oluşturmada destek verecek, nihai hesaplama bizde olacak.
+    $query = "SELECT * FROM SENIN_TABLO_ADIN WHERE ROWNUM <= 10"
+    $cmd = New-Object Oracle.ManagedDataAccess.Client.OracleCommand($query, $conn)
 
-vROps Super Metric entegrasyonu: Oluşturduğumuz formülü vROps içinde Super Metric olarak tanımlayıp, ilgili object type’a (VM) bağlayacağız. Sonrasında bu metrik dashboard’lara taşınacak.
+    $reader = $cmd.ExecuteReader()
 
-PowerShell ile periyodik kontrol: Belirli aralıklarla PowerShell ile bu skoru sorgulayıp, belirli eşik değerinin üzerindeki sunucuları filtreleyeceğiz.
+    $data = @()
+    while ($reader.Read()) {
+        $row = New-Object PSObject
+        for ($i = 0; $i -lt $reader.FieldCount; $i++) {
+            $columnName = $reader.GetName($i)
+            $columnValue = $reader.GetValue($i)
+            $row | Add-Member -MemberType NoteProperty -Name $columnName -Value $columnValue
+        }
+        $data += $row
+    }
 
-AI ile kaynak önerisi: Filtrelenen sunucuların metrik bilgileri AI'a gönderilerek, onlar için ideal vCPU ve memory önerileri alınacak.
+    $reader.Close()
+    $cmd.Dispose()
 
-Bu yapıyla birlikte hem projenin AI yönünü aktif kullanmış olacağız hem de otomasyona açık, açıklanabilir ve sürdürülebilir bir sistem kurmuş olacağız.
+    $data | Out-GridView -Title "Oracle Tablo Verileri"
 
-Vakit bulduğunda üzerinden birlikte geçmek isterim. Görüş ve önerilerin benim için önemli olur.
+}
+catch [Oracle.ManagedDataAccess.Client.OracleException] {
+    Write-Error "Oracle hatası oluştu: $($_.Exception.Message)"
+}
+catch {
+    Write-Error "Beklenmeyen bir hata oluştu: $($_.Exception.Message)"
+}
+finally {
+    if ($conn.State -eq 'Open') {
+        $conn.Close()
+        Write-Host "Veritabanı bağlantısı kapatıldı."
+    }
+}
