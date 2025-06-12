@@ -1,3 +1,86 @@
-( (1 - mem|usage_average / 100) * ( ln(config|memory + 1) / ln(524288 + 1) ) ) * 100
+$excelApp = New-Object -ComObject Excel.Application
+$excelApp.Visible = $false
 
-( (1 - cpu|usage_average / 100) * ( ln(config|numvcpus + 1) / ln(64 + 1) ) ) * 100
+$folderPath = "F:\Serhat\RvTools_Inventory\Reports"
+$csvFilePath = "\\pgarwebwin01\WinWin\Windows VM Networks\vNetworks-"+(Get-Date -Format ddMMyyyy-HHmmss)+".csv"
+
+$vcenters = @("ptekvcs01", "apgartstvcs201", "apgaraavcs801", "apgarvcsdt01")
+
+$allData = @()
+
+
+function GetLatestExcelFile {
+    param (
+        [string]$keyword,
+        [string]$folderPath
+    )
+
+    $allFiles = Get-ChildItem -Path $folderPath -Filter "*.xlsx"
+
+    # vcenter'ı içeren dosyaları filtrele
+    $filteredFiles = $allFiles | Where-Object { $_.Name -like "*$keyword*" }
+
+    # en son eklenen dosyayı al
+    $latestFile = $filteredFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+    return $latestFile
+}
+
+function ProcessExcelFile {
+    param (
+        $excelFile,
+        [string]$vcenter,
+        [System.Object]$excelApp
+    )
+
+    $workbook = $excelApp.Workbooks.Open($folderPath+"\"+$excelFile.Name)
+
+    # sayfayı al ve verileri oku
+    $worksheet = $workbook.Sheets.Item(6)
+    $usedRange = $worksheet.UsedRange
+    $rows = $usedRange.Rows
+
+    $fileData = @()
+
+    foreach ($row in $rows) {
+        if($row.Cells.Item(22).Text -notmatch "windows server"){
+            continue
+        }
+        $fileData += New-Object PSObject -property @{
+            "Sunucu Adı" = $row.Cells.Item(1).Text
+            "Subnet Bilgisi"= $row.Cells.Item(7).Text.Split('_')[-1] -replace '%2f','/'
+            "Mac Adresi" = $row.Cells.Item(11).Text
+            "IP Adresi"= $row.Cells.Item(13).Text -replace ',',' -'
+            "İşletim Sistemi" = $row.Cells.Item(22).Text
+            "Created Date"= ""
+            vCenter = $vcenter  
+        }
+    }
+    $workbook.Close($false)
+    return $fileData
+}
+
+
+#
+foreach ($vcenter in $vcenters) {
+    $latestFile = GetLatestExcelFile -folderPath $folderPath -keyword $vcenter
+
+    if ($latestFile) {
+        "Dosya bulundu $($latestFile)"
+        try {
+            $fileData = ProcessExcelFile -vcenter $vcenter -excelFile $latestFile -excelApp $excelApp
+            $allData += $fileData
+        } catch {
+            Write-Warning "Hata oluştu dosyada '$($latestFile.Name)': $_"
+        }
+    }
+    else{
+        "Dosya bulunamadı $vcenter"
+    }
+}
+
+$allData | Select-Object "Sunucu Adı","IP Adresi","Subnet Bilgisi","Mac Adresi","İşletim Sistemi","Created Date","vCenter"| Export-Csv -Path $csvFilePath -NoTypeInformation 
+
+
+$excelApp.Quit()
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelApp) | Out-Null
