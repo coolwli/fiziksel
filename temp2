@@ -1,121 +1,131 @@
+# Excel uygulamasını başlat
 $excelApp = New-Object -ComObject Excel.Application
 $excelApp.Visible = $false
 
+# Klasör ve çıktı yolu tanımlamaları
 $folderPath = "F:\Serhat\RvTools_Inventory\Reports"
-$csvFilePath = "\\pgarwebwin01\WinWin\Windows VM Networks\vNetworks-"+(Get-Date -Format ddMMyyyyy-HHmmss)+".csv"
+$timestamp = Get-Date -Format "ddMMyyyy-HHmmss"
+$csvFilePath = "\\pgarwebwin01\WinWin\Windows VM Networks\vNetworks-$timestamp.csv"
 
+# vCenter sunucular listesi
 $vcenters = @("ptekvcs01", "apgartstvcs201", "apgaraavcs801", "apgarvcsdt01")
 
+# Tüm verilerin toplanacağı dizi
 $allData = @()
 
-function GetLatestExcelFile {
+# En güncel Excel dosyasını döndüren fonksiyon
+function Get-LatestExcelFile {
     param (
-        [string]$keyword,
-        [string]$folderPath
+        [string]$Keyword,
+        [string]$FolderPath
     )
 
-    $allFiles = Get-ChildItem -Path $folderPath -Filter "*.xlsx"
-
-    # vcenter'ı içeren dosyaları filtrele
-    $filteredFiles = $allFiles | Where-Object { $_.Name -like "*$keyword*" }
-
-    # en son eklenen dosyayı al
-    $latestFile = $filteredFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-
-    return $latestFile
+    $allFiles = Get-ChildItem -Path $FolderPath -Filter "*.xlsx"
+    $filteredFiles = $allFiles | Where-Object { $_.Name -like "*$Keyword*" }
+    return $filteredFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
 
-function ProcessExcelFile {
+# Belirtilen Excel dosyasından verileri çıkaran fonksiyon
+function Process-ExcelFile {
     param (
-        $excelFile,
-        [string]$vcenter,
-        [System.Object]$excelApp
+        [System.IO.FileInfo]$ExcelFile,
+        [string]$vCenter,
+        [System.__ComObject]$ExcelApp
     )
 
-    $workbook = $excelApp.Workbooks.Open($folderPath+"\"+$excelFile.Name)
-
-    # sayfayı al ve verileri oku
+    $workbook = $ExcelApp.Workbooks.Open("$folderPath\$($ExcelFile.Name)")
     $worksheet = $workbook.Sheets.Item(6)
-    $usedRange = $worksheet.UsedRange
-    $rows = $usedRange.Rows
+    $rows = $worksheet.UsedRange.Rows
 
     $fileData = @()
 
     foreach ($row in $rows) {
-        if($row.Cells.Item(22).Text -notmatch "windows server"){
+        if ($row.Cells.Item(22).Text -notmatch "windows server") {
             continue
         }
-        $fileData += New-Object PSObject -property @{
-            "Sunucu Adı" = $row.Cells.Item(1).Text
-            "Subnet Bilgisi"= $row.Cells.Item(7).Text.Split('_')[-1] -replace '%2f','/'
-            "Mac Adresi" = $row.Cells.Item(11).Text
-            "IP Adresi"= $row.Cells.Item(13).Text -replace ',',' -'
-            "İşletim Sistemi" = $row.Cells.Item(22).Text
-            "Created Date"= ""
-            vCenter = $vcenter  
+
+        $fileData += [PSCustomObject]@{
+            "Sunucu Adı"     = $row.Cells.Item(1).Text
+            "Subnet Bilgisi" = $row.Cells.Item(7).Text.Split('_')[-1] -replace '%2f','/'
+            "Mac Adresi"     = $row.Cells.Item(11).Text
+            "IP Adresi"      = $row.Cells.Item(13).Text -replace ',', ' -'
+            "İşletim Sistemi"= $row.Cells.Item(22).Text
+            "Created Date"   = ""
+            "vCenter"        = $vCenter
         }
     }
+
     $workbook.Close($false)
     return $fileData
 }
 
-## Created Date'i Excel'e Yazma Fonksiyonu
-
-function UpdateExcelCreatedDate {
+# Created Date bilgilerini eşleyen fonksiyon
+function Update-CreatedDateInData {
     param (
-        [array]$dataToUpdate, # ProcessExcelFile'dan dönen $allData
-        [string]$excelFile, 
-        [System.Object]$excelApp
+        [array]$DataToUpdate,
+        [System.IO.FileInfo]$ExcelFile,
+        [System.__ComObject]$ExcelApp
     )
 
-    $workbook = $excelApp.Workbooks.Open($folderPath+"\"+$excelFile.Name)
+    $workbook = $ExcelApp.Workbooks.Open("$folderPath\$($ExcelFile.Name)")
+    $worksheet = $workbook.Sheets.Item(1)
 
-    $worksheet = $workbook.Sheets.Item(1) # İlk sayfa
+    $usedRange = $worksheet.UsedRange
+    $rowCount = $usedRange.Rows.Count
 
-    $lastRow = $worksheet.UsedRange.Rows.Count
-    $serverNameColumn = 1 # Sunucu adının bulunduğu sütun (örneğin A sütunu)
-    $createdDateColumn = 10 # Created Date'in oldugu sütun (10. sütun)
+    $serverNameColumn = 1   # A sütunu
+    $createdDateColumn = 10 # J sütunu
 
-    foreach ($item in $dataToUpdate) {
+    # Excel içeriğini bir hash tablosuna al
+    $excelDataMap = @{}
+    for ($row = 1; $row -le $rowCount; $row++) {
+        $serverName = $worksheet.Cells.Item($row, $serverNameColumn).Text
+        $createdDate = $worksheet.Cells.Item($row, $createdDateColumn).Value2
+
+        if (![string]::IsNullOrWhiteSpace($serverName)) {
+            $excelDataMap[$serverName] = $createdDate
+        }
+    }
+
+    # Her satırı güncelle
+    foreach ($item in $DataToUpdate) {
         $serverName = $item."Sunucu Adı"
-
-        # Sunucu adını bulmak için arama yap
-        $foundCell = $worksheet.Cells.Find($serverName, $null, -4163, 1) # xlValues, xlWhole
-
-        if ($foundCell) {
-            $row = $foundCell.Row
-            # 10. sütuna Created Date'i yaz
-            $item."Created Date" = $worksheet.Cells.Item($row, $createdDateColumn).Value 
+        if ($excelDataMap.ContainsKey($serverName)) {
+            $item."Created Date" = $excelDataMap[$serverName]
         } else {
             Write-Warning "Excel'de '$serverName' sunucusu bulunamadı."
         }
     }
 
-    $workbook.Save()
     $workbook.Close($false)
 }
 
-#
+# Ana döngü
 foreach ($vcenter in $vcenters) {
-    $latestFile = GetLatestExcelFile -folderPath $folderPath -keyword $vcenter
+    $latestFile = Get-LatestExcelFile -Keyword $vcenter -FolderPath $folderPath
 
     if ($latestFile) {
-        "Dosya bulundu $($latestFile)"
+        Write-Output "Dosya bulundu: $($latestFile.Name)"
+
         try {
-            $fileData = ProcessExcelFile -vcenter $vcenter -excelFile $latestFile -excelApp $excelApp
-            UpdateExcelCreatedDate -dataToUpdate $fileData -excelFile $latestFile -excelApp $excelApp
+            $fileData = Process-ExcelFile -ExcelFile $latestFile -vCenter $vcenter -ExcelApp $excelApp
+            Update-CreatedDateInData -DataToUpdate $fileData -ExcelFile $latestFile -ExcelApp $excelApp
 
             $allData += $fileData
         } catch {
-            Write-Warning "Hata oluştu dosyada '$($latestFile.Name)': $_"
+            Write-Warning "Hata oluştu '$($latestFile.Name)' dosyasında: $_"
         }
-    }
-    else{
-        "Dosya bulunamadı $vcenter"
+    } else {
+        Write-Warning "Dosya bulunamadı: $vcenter"
     }
 }
 
-$allData | Select-Object "Sunucu Adı","IP Adresi","Subnet Bilgisi","Mac Adresi","İşletim Sistemi","Created Date","vCenter"| Export-Csv -Path $csvFilePath -NoTypeInformation 
+# CSV olarak dışa aktar
+$allData | Select-Object "Sunucu Adı","IP Adresi","Subnet Bilgisi","Mac Adresi","İşletim Sistemi","Created Date","vCenter" | 
+Export-Csv -Path $csvFilePath -NoTypeInformation -Encoding UTF8
 
+# Excel uygulamasını kapat ve COM nesnesini temizle
 $excelApp.Quit()
 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelApp) | Out-Null
+[GC]::Collect()
+[GC]::WaitForPendingFinalizers()
