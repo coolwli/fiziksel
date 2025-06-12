@@ -2,12 +2,11 @@ $excelApp = New-Object -ComObject Excel.Application
 $excelApp.Visible = $false
 
 $folderPath = "F:\Serhat\RvTools_Inventory\Reports"
-$csvFilePath = "\\pgarwebwin01\WinWin\Windows VM Networks\vNetworks-"+(Get-Date -Format ddMMyyyy-HHmmss)+".csv"
+$csvFilePath = "\\pgarwebwin01\WinWin\Windows VM Networks\vNetworks-"+(Get-Date -Format ddMMyyyyy-HHmmss)+".csv"
 
 $vcenters = @("ptekvcs01", "apgartstvcs201", "apgaraavcs801", "apgarvcsdt01")
 
 $allData = @()
-
 
 function GetLatestExcelFile {
     param (
@@ -60,6 +59,52 @@ function ProcessExcelFile {
     return $fileData
 }
 
+---
+## Created Date'i Excel'e Yazma Fonksiyonu
+---
+
+Bu fonksiyon, toplanan verideki "Created Date" bilgisini, belirtilen Excel dosyasının ilk sayfasındaki sunucu adına göre bulup 10. sütuna yazar.
+
+```powershell
+function UpdateExcelCreatedDate {
+    param (
+        [array]$dataToUpdate, # ProcessExcelFile'dan dönen $allData
+        [string]$excelFilePath, # Güncellenecek Excel dosyasının tam yolu (bu genellikle CSV'ye yazılan dosya değil, ilk Excel raporu olabilir)
+        [System.Object]$excelApp
+    )
+
+    if (-not (Test-Path $excelFilePath)) {
+        Write-Warning "Güncellenecek Excel dosyası bulunamadı: $excelFilePath"
+        return
+    }
+
+    $workbook = $excelApp.Workbooks.Open($excelFilePath)
+    $worksheet = $workbook.Sheets.Item(1) # İlk sayfa
+
+    $lastRow = $worksheet.UsedRange.Rows.Count
+    $serverNameColumn = 1 # Sunucu adının bulunduğu sütun (örneğin A sütunu)
+    $createdDateColumn = 10 # Created Date'in yazılacağı sütun (10. sütun)
+
+    foreach ($item in $dataToUpdate) {
+        $serverName = $item."Sunucu Adı"
+        $createdDate = (Get-Date).ToString("dd.MM.yyyy HH:mm:ss") # Mevcut tarihi "Created Date" olarak kullanıyoruz
+
+        # Sunucu adını bulmak için arama yap
+        $foundCell = $worksheet.Cells.Find($serverName, $null, -4163, 1) # xlValues, xlWhole
+
+        if ($foundCell) {
+            $row = $foundCell.Row
+            # 10. sütuna Created Date'i yaz
+            $worksheet.Cells.Item($row, $createdDateColumn).Value = $createdDate
+            Write-Host "Sunucu '$serverName' için Created Date güncellendi."
+        } else {
+            Write-Warning "Excel'de '$serverName' sunucusu bulunamadı."
+        }
+    }
+
+    $workbook.Save()
+    $workbook.Close($false)
+}
 
 #
 foreach ($vcenter in $vcenters) {
@@ -81,6 +126,26 @@ foreach ($vcenter in $vcenters) {
 
 $allData | Select-Object "Sunucu Adı","IP Adresi","Subnet Bilgisi","Mac Adresi","İşletim Sistemi","Created Date","vCenter"| Export-Csv -Path $csvFilePath -NoTypeInformation 
 
+# Created Date'i Excel'e yazmak için fonksiyonu çağır
+# Hangi Excel dosyasını güncelleyeceğinizi belirlemeniz önemli.
+# Eğer ana rapor dosyanız (RvTools çıktısı) güncellenecekse, bu yolu belirtmelisiniz.
+# Örnek olarak, ilk vCenter'dan bulunan en son dosyayı hedef alıyoruz.
+# Eğer farklı bir Excel dosyasını güncellemeniz gerekiyorsa, $excelToUpdatePath değişkenini ona göre ayarlayın.
+
+$excelToUpdatePath = ""
+if ($vcenters.Count -gt 0) {
+    $firstVcenterLatestFile = GetLatestExcelFile -folderPath $folderPath -keyword $vcenters[0]
+    if ($firstVcenterLatestFile) {
+        $excelToUpdatePath = $folderPath + "\" + $firstVcenterLatestFile.Name
+    }
+}
+
+if ($excelToUpdatePath) {
+    Write-Host "Excel dosyasındaki Created Date'leri güncelleniyor: $excelToUpdatePath"
+    UpdateExcelCreatedDate -dataToUpdate $allData -excelFilePath $excelToUpdatePath -excelApp $excelApp
+} else {
+    Write-Warning "Created Date'i güncelleyecek bir Excel dosyası belirlenemedi."
+}
 
 $excelApp.Quit()
 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelApp) | Out-Null
