@@ -1,1 +1,3 @@
+$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
 
+$reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat[0]
