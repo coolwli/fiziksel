@@ -1,3 +1,60 @@
+# API'den veri alma (mevcut kodunuz)
 $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
 
-$reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat[0]
+# Aranacak stat isimlerini belirtin (tam eşleşme için)
+$arananStatlar = @(
+    "cpu.usage.average",
+    "mem.usage.average",
+    "disk.usage.average",
+    "net.usage.average"
+    # Buraya tam stat key isimlerini ekleyin
+)
+
+# Filtrelenmiş statları tutacak veri yapısı
+$filtrelenmisStatlar = @()
+
+# Tüm statları kontrol et
+foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
+    # Tam eşleşme kontrolü
+    if ($arananStatlar -contains $stat.statKey) {
+        $filtrelenmisStatlar += [PSCustomObject]@{
+            StatKey = $stat.statKey
+            Value = $stat.value
+        }
+    }
+}
+
+# AI API için JSON formatında hazırla
+$resource_stats = @()
+
+foreach ($stat in $filtrelenmisStatlar) {
+    $resource_stats += @{
+        metric_name = $stat.StatKey
+        value = $stat.Value
+    }
+}
+
+# JSON formatına çevir
+$jsonPayload = $resource_stats | ConvertTo-Json -Depth 3
+
+# AI API için prompt hazırla
+$aiPrompt = @"
+Lütfen aşağıdaki sistem performans metriklerini analiz edin ve genel sistem durumu hakkında değerlendirme yapın:
+
+Analiz edilecek veriler:
+$jsonPayload
+
+Lütfen aşağıdaki konularda değerlendirme yapın:
+1. Genel sistem performans durumu
+2. Kritik seviyedeki metrikler varsa uyarılar
+3. Performans iyileştirme önerileri
+4. Dikkat edilmesi gereken trendler
+
+Yanıtınızı yapılandırılmış ve anlaşılır bir formatta verin.
+"@
+
+Write-Host "AI API için hazırlanmış JSON:" -ForegroundColor Green
+Write-Host $jsonPayload
+
+Write-Host "`nAI API için hazırlanmış prompt:" -ForegroundColor Yellow
+Write-Host $aiPrompt
