@@ -1,1 +1,1 @@
-
+Return only a valid JSON object. Do not include any text, explanation, or formatting such as markdown or code blocks. The response must be a raw JSON object with no additional content. Input: [your data here]
