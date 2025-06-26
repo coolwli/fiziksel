@@ -27,58 +27,61 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
     
     # Prompt'u oluştur
     $prompt = @"
-        You are a VMware expert. Your task is to analyze CPU and memory usage metrics of virtual machines (VMs) and suggest optimizations.
+        You are a senior VMware infrastructure architect with expertise in virtualization resource optimization. Your task is to analyze virtual machine performance metrics and provide data-driven recommendations for CPU and memory rightsizing.
 
-        ---
+        ## Analysis Context
+        - **Time Period**: 3-month historical performance data
+        - **Objective**: Identify overprovisioned resources while maintaining performance SLA
+        - **Risk Tolerance**: Conservative approach - prioritize stability over aggressive savings
 
-        **Input Format (JSON):**  
-        Each VM has the following fields:
+        ## Input Data Structure
+        Each VM record contains:
+        - `VM_ID`: Virtual machine identifier
+        - `Current_CPU`: Currently allocated vCPUs (integer)
+        - `CPU_Usage`: Historical CPU utilization metrics
+          - `avg`: Average CPU usage over 3 months (%)
+          - `p95`: 95th percentile CPU usage (%)
+          - `p99`: 99th percentile CPU usage (%)
+        - `Current_Memory`: Currently allocated memory in GB (integer)
+        - `Memory_Usage`: Historical memory utilization metrics
+          - `avg`: Average memory consumption (%)
+          - `p95`: 95th percentile memory usage (%)
+          - `p99`: 99th percentile memory usage
 
-        - `VM_Name`: string – The hostname of the virtual machine  
-        - `Current_CPU`: number – The number of currently allocated vCPUs  
-        - `CPU_Usage`: object – Historical CPU usage statistics over the past 3 months:
-        - `avg`: average CPU usage (%)  
-        - `p95`: 95th percentile CPU usage (%)  
-        - `p99`: 99th percentile CPU usage (%)  
-
-        - `Current_Memory`: number – The amount of currently allocated memory (in GB)  
-        - `Memory_Usage`: object – Historical memory usage statistics over the past 3 months:
-        - `avg`: average memory usage (GB)  
-        - `p95`: 95th percentile memory usage (GB)  
-        - `p99`: 99th percentile memory usage (GB) 
-
-        Data is provided as:  
-        json
+        **Input JSON Data:**
         $batchJson
-        
 
-        ---
-        **What You Need to Do:**
+        ## Reclaim Score Methodology
 
-        1. **Reclaim Score Calculation (0–100)**
-        - Give a `Reclaim_Score_CPU` and `Reclaim_Score_Memory` for each VM
-        - High score = overprovisioned (i.e., resource waste)
-        - Be realistic; Develop a professional formula with these metrics and calculate a corresponding score.
+        Calculate a **Reclaim Score (0-100)** for both CPU and memory where higher scores indicate greater overprovisioning and reclaim potential - develop a professional scoring algorithm based on the utilization patterns in the historical data.
 
-        2. **Suggest Optimized Resources:**
-        - **CPU:**
-            - If score is high, suggest a lower but realistic `Suggested_CPU`
-            - Minimum: 2 vCPU (always even)
-            - Must not be less than 50% of `Current_CPU`
+        ## Optimization Guidelines
 
-        - **Memory:**
-            - If score is high, suggest a reduced `Suggested_Memory` (GB)
-            - Minimum: 4 GB (always even)
-            - Must not be less than 50% of `Current_Memory`
+        ### CPU Rightsizing Rules:
+        1. **Minimum Configuration**: Never suggest less than 2 vCPUs
+        2. **Safety Margin**: Maintain 50% minimum of current allocation
+        3. **Even Numbers**: Always suggest even vCPU counts
 
-        ⚠️ Be cautious — avoid aggressive downsizing that could hurt performance
+        ### Memory Rightsizing Rules:
+        1. **Minimum Configuration**: Never suggest less than 4 GB
+        2. **Safety Margin**: Maintain 50% minimum of current allocation
+        3. **Even Numbers**: Always suggest even GB amounts
 
-        ---
+        ## Required Output Format
 
-        **Output Format (JSON array):**  
-        Convert the table results into JSON format without anything!
-        Each VM's output should include: VM Name, Current CPU, Reclaim Score CPU, Suggested CPU, Current Memory, Reclaim Score Memory, Suggested Memory
-        
+        Return ONLY a valid JSON array for my script with the following structure for each VM:
+
+        [
+          {
+            "VM ID": "hostname",
+            "Current CPU": integer,
+            "Reclaim Score CPU": integer (0-100),
+            "Suggested CPU": integer (even, ≥2, ≥50% of current),
+            "Current Memory": integer,
+            "Reclaim Score Memory": integer (0-100),
+            "Suggested Memory": integer (even, ≥4, ≥50% of current)
+          }
+        ]   
 "@
     
     # JSON body oluştur
@@ -109,23 +112,20 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
     try {
         $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
         $answer = $response.choices[0].message.content
-        if ($answer -like '*`*') {
-            $answer = $answer -replace '[`]', ''
-        }
-
+        
         # çıktıya diğer sütunları ekle
         $batchHash = @{}
         foreach ($row in $batch) {
-            $batchHash[$row.'Name'] = $row
+            $batchHash[$row.'ID'] = $row
         }
         $answerjson = $answer | ConvertFrom-Json
         foreach ($apiResult in $answerjson) {
-            $vmName = $apiResult.'VM Name'
+            $vmName = $apiResult.'VM ID'
             $original = $batchHash[$vmName]
 
             # Ek sütunları ekle(web sayfası için)
-            $apiResult | Add-Member -NotePropertyName "Summary|Parent vCenter" -NotePropertyValue $original.'Summary|Parent vCenter'
-            $apiResult | Add-Member -NotePropertyName "Summary|UUID" -NotePropertyValue $original.'Summary|UUID'
+            $apiResult | Add-Member -NotePropertyName "Parent vCenter" -NotePropertyValue $original.'Parent vCenter'
+            $apiResult | Add-Member -NotePropertyName "Name" -NotePropertyValue $original.'Name'
 
             $allResults += $apiResult
         }
@@ -139,7 +139,7 @@ for ($i = 0; $i -lt $data.Count; $i += $batchSize) {
 $mergedResults = @()
 foreach ($result in $allResults) {
     $obj = New-Object PSObject
-    $obj | Add-Member -NotePropertyName "VM Name" -NotePropertyValue $result.'VM Name'
+    $obj | Add-Member -NotePropertyName "VM Name" -NotePropertyValue $result.'Name'
     $obj | Add-Member -NotePropertyName "Current CPU" -NotePropertyValue $result.'Current CPU'
     $obj | Add-Member -NotePropertyName "Reclaim Score CPU" -NotePropertyValue $result.'Reclaim Score CPU'
     $obj | Add-Member -NotePropertyName "Suggested CPU" -NotePropertyValue $result.'Suggested CPU'
@@ -147,7 +147,7 @@ foreach ($result in $allResults) {
     $obj | Add-Member -NotePropertyName "Reclaim Score Memory" -NotePropertyValue $result.'Reclaim Score Memory'
     $obj | Add-Member -NotePropertyName "Suggested Memory" -NotePropertyValue $result.'Suggested Memory'
     $obj | Add-Member -NotePropertyName "Summary|Parent vCenter" -NotePropertyValue $result.'Summary|Parent vCenter'
-    $obj | Add-Member -NotePropertyName "Summary|UUID" -NotePropertyValue $result.'Summary|UUID'
+    $obj | Add-Member -NotePropertyName "Summary|UUID" -NotePropertyValue $result.'ID'
     $mergedResults += $obj
 }
 
