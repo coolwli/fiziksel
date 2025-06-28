@@ -95,11 +95,14 @@ namespace cpuMonitor
                     }
                 }
 
+                var alarmData = new List<Dictionary<string, object>>();
+                alarmData = await FetchDatabaseTableDataAsync();
+
                 if (allData == null)
                 {
                     DisplayError(ErrorMessage);
                 }
-                RegisterClientScript(allData);
+                RegisterClientScript(allData, alarmData);
 
             }
             catch (Exception ex)
@@ -464,6 +467,44 @@ namespace cpuMonitor
             }
         }
 
+        private async Task<List<Dictionary<string, object>>> FetchDatabaseTableDataAsync()
+        {
+            var tableData = new List<Dictionary<string, object>>();
+
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    const string query = "SELECT * FROM VMCpuAlerts WHERE LastEmailSent >= DATEADD(DAY, -7, GETDATE())";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        await connection.OpenAsync();
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var row = new Dictionary<string, object>();
+                                
+                                row["VMName"] = reader.IsDBNull("VMName") ? string.Empty : reader.GetString("VMName");
+                                row["vCenterName"] = reader.IsDBNull("vCenterName") ? string.Empty : reader.GetString("vCenterName");
+                                row["CpuPercentage"] = reader.IsDBNull("CpuPercentage") ? 0 : reader.GetDecimal("CpuPercentage");
+                                row["LastEmailSent"] = reader.IsDBNull("LastEmailSent") ? DateTime.MinValue : reader.GetDateTime("LastEmailSent");
+                                row["NeverSentEmail"] = reader.IsDBNull("NeverSentEmail") ? false : reader.GetBoolean("NeverSentEmail");
+
+                                tableData.Add(row);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+
+            return tableData;
+        }
         #endregion
 
         #region CSV Export
@@ -531,11 +572,12 @@ namespace cpuMonitor
 
         #region Helper Methods
 
-        private void RegisterClientScript(List<Dictionary<string, object>> data)
+        private void RegisterClientScript(List<Dictionary<string, object>> tableData, List<Dictionary<string, object>> alarmData)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-            var json = js.Serialize(data);
-            var script = $"<script>baseData = {json}; initializeTable(); </script>";
+            var tableJson = js.Serialize(tableData);
+            var alarmJson = js.Serialize(alarmData);
+            var script = $"<script>baseData = {tableJson}; alarmData = {alarmJson}; initializeTable(); </script>";
             ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
         }
 
