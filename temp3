@@ -1,8 +1,7 @@
 CREATE TABLE VMCpuAlerts (
-            ID int IDENTITY(1,1) PRIMARY KEY,
-            VMName nvarchar(255) NOT NULL,
-            CpuPercentage decimal(5,2),
-            vCenterName nvarchar(255),
-            LastEmailSent datetime,
-
-        )
+    VMName nvarchar(255) NOT NULL,
+    CpuPercentage decimal(5,2),
+    vCenterName nvarchar(255),
+    LastEmailSent datetime,
+    NeverSentEmail bit DEFAULT 0
+);
