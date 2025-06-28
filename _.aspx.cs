@@ -11,41 +11,60 @@ using System.Threading.Tasks;
 using System.Web.Configuration;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
-using System.ComponentModel;
 
-namespace CpuMonitor
+namespace cpuMonitor
 {
-    public partial class Default : System.Web.UI.Page
+    public partial class _default : System.Web.UI.Page
     {
         #region Constants and Fields
-        
+
         private static readonly TimeSpan TokenLifetime = TimeSpan.FromHours(3);
         private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         private const string OpsNamespace = "http://webservice.vmware.com/vRealizeOpsMgr/1.0/";
         private const string ErrorMessage = "An error occurred. Please try again later.";
-        
+
         private readonly string _username;
         private readonly string _password;
         private readonly string _connectionString;
 
+
+        private readonly Dictionary<string, List<string>> vropsServerViews = new Dictionary<string, List<string>>
+        {
+            {
+                "https://ptekvrops01.fw.garanti.com.tr",
+                new List<string>
+                {
+                    "/suite-api/internal/views/fe1d2eb3-c8c6-4f90-8e8d-fcb0f475c203/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true&pageSize=10000",
+                    "/suite-api/internal/views/037e5f68-2dbd-4628-81fc-e359f01dee86/data/export?resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+                }
+            },
+            {
+                "https://apgaravrops801.fw.garanti.com.tr",
+                new List<string>
+                {
+                    "/suite-api/internal/views/fe1d2eb3-c8c6-4f90-8e8d-fcb0f475c203/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true&pageSize=10000",
+                    "/suite-api/internal/views/037e5f68-2dbd-4628-81fc-e359f01dee86/data/export?resourceId=951a9b2c-696e-49b0-8c02-038297022f32&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+                }
+            }
+        };
         #endregion
 
         #region Constructor and Initialization
 
-        public Default()
+        public _default()
         {
             _username = WebConfigurationManager.AppSettings["VropsUsername"];
             _password = WebConfigurationManager.AppSettings["VropsPassword"];
-            _connectionString = WebConfigurationManager.ConnectionStrings["CloudUnited"]?.ConnectionString 
+            _connectionString = WebConfigurationManager.ConnectionStrings["CloudUnited"]?.ConnectionString
                 ?? @"Data Source=TEKSCR1\SQLEXPRESS;Initial Catalog=CloudUnited;Integrated Security=True";
         }
 
-        static Default()
+        static _default()
         {
             // Only disable certificate validation in development
-            #if DEBUG
+#if DEBUG
             ServicePointManager.ServerCertificateValidationCallback = (message, cert, chain, sslPolicyErrors) => true;
-            #endif
+#endif
         }
 
         #endregion
@@ -62,11 +81,26 @@ namespace CpuMonitor
                     return;
                 }
 
-                var data = await CheckTokenAndFetchDataAsync("https://ptekvrops01.fw.garanti.com.tr", "pendik");
-                if (data == null)
+                var allData = new List<Dictionary<string, object>>();
+
+                foreach (var serverEntry in vropsServerViews)
+                {
+                    var vropsServer = serverEntry.Key;
+                    var tokenType = vropsServer.Contains("ptekvrops01") ? "pendik" : "ankara";
+
+                    var serverData = await CheckTokenAndFetchDataAsync(vropsServer, tokenType);
+                    if (serverData != null)
+                    {
+                        allData.AddRange(serverData);
+                    }
+                }
+
+                if (allData == null)
                 {
                     DisplayError(ErrorMessage);
                 }
+                RegisterClientScript(allData);
+
             }
             catch (Exception ex)
             {
@@ -75,7 +109,7 @@ namespace CpuMonitor
             }
         }
 
-        protected void HiddenButton_Click(object sender, EventArgs e)
+        protected void hiddenButton_Click(object sender, EventArgs e)
         {
             try
             {
@@ -92,7 +126,7 @@ namespace CpuMonitor
 
         #region Token Management
 
-        private async Task<string> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
+        private async Task<List<Dictionary<string, object>>> CheckTokenAndFetchDataAsync(string vropsServer, string tokenType)
         {
             try
             {
@@ -103,10 +137,10 @@ namespace CpuMonitor
                     var newToken = await AcquireTokenAsync(vropsServer);
                     if (newToken != null)
                     {
-                        var newTokenInfo = new TokenInfo 
-                        { 
-                            Token = newToken, 
-                            ExpiryDate = DateTime.Now.Add(TokenLifetime) 
+                        var newTokenInfo = new TokenInfo
+                        {
+                            Token = newToken,
+                            ExpiryDate = DateTime.Now.Add(TokenLifetime)
                         };
                         await StoreTokenInfoToDatabaseAsync(tokenType, newTokenInfo);
                         return await GetDataAsync(vropsServer, newToken);
@@ -115,10 +149,10 @@ namespace CpuMonitor
                 }
 
                 // Extend token lifetime
-                var extendedTokenInfo = new TokenInfo 
-                { 
-                    Token = tokenInfo.Token, 
-                    ExpiryDate = DateTime.Now.Add(TokenLifetime) 
+                var extendedTokenInfo = new TokenInfo
+                {
+                    Token = tokenInfo.Token,
+                    ExpiryDate = DateTime.Now.Add(TokenLifetime)
                 };
                 await StoreTokenInfoToDatabaseAsync(tokenType, extendedTokenInfo);
                 return await GetDataAsync(vropsServer, tokenInfo.Token);
@@ -177,7 +211,7 @@ namespace CpuMonitor
 
         #region Data Retrieval
 
-        private async Task<string> GetDataAsync(string vropsServer, string token)
+        private async Task<List<Dictionary<string, object>>> GetDataAsync(string vropsServer, string token)
         {
             try
             {
@@ -189,9 +223,7 @@ namespace CpuMonitor
                     return null;
                 }
 
-                var enrichedData = EnrichVmDataWithHostInfo(vmData, hostData);
-                RegisterClientScript(enrichedData);
-                return "1";
+                return EnrichVmDataWithHostInfo(vmData, hostData);
             }
             catch (Exception ex)
             {
@@ -202,8 +234,9 @@ namespace CpuMonitor
 
         private async Task<List<VmInfo>> FetchVmDataAsync(string vropsServer, string token)
         {
-            var vmsUrl = $"{vropsServer}/suite-api/internal/views/fe1d2eb3-c8c6-4f90-8e8d-fcb0f475c203/data/export?pageSize=10000&resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
-            
+            var viewUrl = vropsServerViews[vropsServer][0];
+            var vmsUrl = vropsServer+viewUrl;
+
             using (var request = new HttpRequestMessage(HttpMethod.Get, vmsUrl))
             {
                 request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
@@ -224,8 +257,9 @@ namespace CpuMonitor
 
         private async Task<Dictionary<string, decimal>> FetchHostDataAsync(string vropsServer, string token)
         {
-            var hostsUrl = $"{vropsServer}/suite-api/internal/views/037e5f68-2dbd-4628-81fc-e359f01dee86/data/export?resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true";
-            
+            var viewUrl = vropsServerViews[vropsServer][1];
+            var hostsUrl = vropsServer + viewUrl;
+
             using (var request = new HttpRequestMessage(HttpMethod.Get, hostsUrl))
             {
                 request.Headers.Add("Authorization", $"vRealizeOpsToken {token}");
@@ -260,8 +294,10 @@ namespace CpuMonitor
                 {
                     foreach (var elements in view.Value)
                     {
+                        
                         foreach (var rows in elements["rows"])
                         {
+                            
                             foreach (var row in rows)
                             {
                                 var vm = new VmInfo
@@ -269,7 +305,8 @@ namespace CpuMonitor
                                     Name = row.Value["objId"]?.ToString(),
                                     Host = row.Value["1"]?.ToString(),
                                     Cluster = row.Value["2"]?.ToString(),
-                                    Cpu = ParseDecimal(row.Value["3"]?.ToString())
+                                    vCenter = row.Value["3"]?.ToString(),
+                                    Cpu = ParseDecimal(row.Value["4"]?.ToString())
                                 };
                                 vmList.Add(vm);
                             }
@@ -304,7 +341,7 @@ namespace CpuMonitor
                             {
                                 var hostName = row.Value["objId"]?.ToString();
                                 var hostCpu = ParseDecimal(row.Value["1"]?.ToString());
-                                
+
                                 if (!string.IsNullOrEmpty(hostName))
                                 {
                                     hostMapping[hostName] = hostCpu;
@@ -334,6 +371,7 @@ namespace CpuMonitor
                     ["name"] = vm.Name ?? string.Empty,
                     ["host"] = vm.Host ?? string.Empty,
                     ["cluster"] = vm.Cluster ?? string.Empty,
+                    ["vCenter"] = vm.vCenter ?? string.Empty,
                     ["cpu"] = vm.Cpu
                 };
 
@@ -345,8 +383,8 @@ namespace CpuMonitor
                 }
                 else
                 {
-                    vmDict["host_cpu"] = null;
-                    vmDict["prc"] = null;
+                    vmDict["host_cpu"] = 1;
+                    vmDict["prc"] = 1;
                 }
 
                 enrichedData.Add(vmDict);
@@ -378,10 +416,8 @@ namespace CpuMonitor
                             if (await reader.ReadAsync())
                             {
                                 tokenInfo.Token = reader["Token"] as string;
-                                if (!reader.IsDBNull("ExpiryDate"))
-                                {
-                                    tokenInfo.ExpiryDate = reader.GetDateTime("ExpiryDate");
-                                }
+                                tokenInfo.ExpiryDate = reader.GetDateTime(reader.GetOrdinal("ExpiryDate"));
+
                             }
                         }
                     }
@@ -452,10 +488,10 @@ namespace CpuMonitor
             }
 
             var csv = GenerateCsv(tableData);
-            
+
             Response.Clear();
             Response.ContentType = "text/csv";
-            Response.AddHeader("Content-Disposition", $"attachment;filename=vmpedia_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+            Response.AddHeader("Content-Disposition", $"attachment;filename=cpu_monitor_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
             Response.Write(csv);
             Response.End();
         }
@@ -464,13 +500,13 @@ namespace CpuMonitor
         {
             var columnNames = new[] { "Name", "Host", "Cluster", "CPU", "Host CPU", "Percentage" };
             var columnKeys = new[] { "name", "host", "cluster", "cpu", "host_cpu", "prc" };
-            
+
             var csv = new StringBuilder();
             csv.AppendLine(string.Join(",", columnNames));
 
             foreach (var row in data)
             {
-                var values = columnKeys.Select(key => 
+                var values = columnKeys.Select(key =>
                     EscapeCsvValue(row.ContainsKey(key) ? row[key]?.ToString() : string.Empty));
                 csv.AppendLine(string.Join(",", values));
             }
@@ -519,13 +555,13 @@ namespace CpuMonitor
         private void LogError(Exception ex)
         {
             // Implement proper logging here (e.g., NLog, Serilog, or System.Diagnostics)
-            System.Diagnostics.Debug.WriteLine($"Error: {ex}");
+            Response.Write($"Error: {ex}");
             // In production, log to file or database
         }
 
         private void LogError(string message)
         {
-            System.Diagnostics.Debug.WriteLine($"Error: {message}");
+            Response.Write($"Error: {message}");
         }
 
         #endregion
@@ -544,6 +580,7 @@ namespace CpuMonitor
         public string Name { get; set; }
         public string Host { get; set; }
         public string Cluster { get; set; }
+        public string vCenter { get; set; }
         public decimal Cpu { get; set; }
     }
 
