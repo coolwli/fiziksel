@@ -5,6 +5,11 @@ $from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
 $to = "GTAgileCloudUnited@garantibbva.com.tr"
 $subject = "CPU Usage on Host Check"
 
+# Veritabanı bağlantı parametreleri (kendi ortamınıza göre düzenleyin)
+$server = "YourSQLServerName"
+$database = "YourDatabaseName"
+$connectionString = "Server=$server;Database=$database;Integrated Security=True;"
+
 
 ## Ignore SSL Certificates
 add-type @"
@@ -144,6 +149,84 @@ function Filter-Vms {
     
 }
 
+function Check-Database{
+    param(
+        [array]$filteredData
+    )
+    $checkedData = @()
+
+ try {
+        # SQL Server connection
+        $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+        $connection.Open()
+        
+        foreach ($vm in $filteredData) {
+            # VM'in veritabanında olup olmadığını kontrol et
+            $checkQuery = "SELECT LastEmailSent FROM VMCpuAlerts WHERE VMName = @VMName"
+            
+            $checkCommand = New-Object System.Data.SqlClient.SqlCommand($checkQuery, $connection)
+            $checkCommand.Parameters.AddWithValue("@VMName", $vm.Name)
+            
+            $reader = $checkCommand.ExecuteReader()
+            
+            $vmExists = $false
+            $lastEmailSent = $null
+            
+            if ($reader.Read()) {
+                $vmExists = $true
+                $lastEmailSent = if ($reader["LastEmailSent"] -eq [DBNull]::Value) { $null } else { $reader["LastEmailSent"] }
+            }
+            $reader.Close()
+            
+            $currentDate = Get-Date
+            if ($vmExists) {  
+                # Son email tarihinden bir hafta geçmiş mi kontrol et
+                $daysSinceLastEmail = ($currentDate - $lastEmailSent).Days
+                if ($daysSinceLastEmail -ge 7) {
+                    $updateQuery = @"
+                    UPDATE VMCpuAlerts 
+                    SET LastEmailSent = @CurrentDate,
+                        CpuPercentage = @CpuPercentage
+                    WHERE VMName = @VMName
+"@
+                    $updateCommand = New-Object System.Data.SqlClient.SqlCommand($updateQuery, $connection)
+                    $updateCommand.Parameters.AddWithValue("@CurrentDate", $currentDate)
+                    $updateCommand.Parameters.AddWithValue("@CpuPercentage", $vm.Percentage)
+                    $updateCommand.Parameters.AddWithValue("@VMName", $vm.Name)
+                    $updateCommand.ExecuteNonQuery()
+                    $checkedData += $vm
+
+                }
+            } 
+            else {
+                $insertQuery = @"
+                INSERT INTO VMCpuAlerts (VMName, CpuPercentage, vCenterName, LastEmailSent)
+                VALUES (@VMName, @CpuPercentage, @vCenterName, @LastEmailSent)
+"@
+
+                $insertCommand = New-Object System.Data.SqlClient.SqlCommand($insertQuery, $connection)
+                $insertCommand.Parameters.AddWithValue("@VMName", $vm.Name)
+                $insertCommand.Parameters.AddWithValue("@CpuPercentage", $vm.Percentage)
+                $insertCommand.Parameters.AddWithValue("@vCenterName", $vm.vCenter)
+                $insertCommand.Parameters.AddWithValue("@LastEmailSent", $currentDate)
+                $insertCommand.ExecuteNonQuery()
+                $checkedData += $vm
+
+            }
+        }
+        $connection.Close()
+        Write-Host "Toplam $($checkedData.Count) VM için email gönderilecek."
+        
+    } catch {
+        Write-Error "Veritabanı işlemi sırasında hata oluştu: $($_.Exception.Message)"
+        # Hata durumunda tüm VM'leri gönder (güvenlik için)
+        $checkedData = $filteredData
+    }
+    
+
+    return $checkedData
+}
+
 # Email gönderme fonksiyonu
 function Send-Email($subject, $body, $to) {
     $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
@@ -183,6 +266,11 @@ if ($hostData.Count -eq 0) {
 $enrichedData = Merge-VmWithHostData -VmData $vmData -HostData $hostData
 
 [array]$filteredData = Filter-Vms -enrichedData $enrichedData
+
+# Step 4: Check database and filter data
+$filteredData = Check-Database -filteredData $filteredData
+
+
  
 # Email içeriğini oluştur
 if ($filteredData.length -gt 0) {
@@ -228,5 +316,3 @@ if ($filteredData.length -gt 0) {
     # Email gönder
     Send-Email -subject $subject -body $body -to $to
 }
-
-
