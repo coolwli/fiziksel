@@ -1,1 +1,232 @@
+# SMTP Ayarları
+$SMTPHost = "smtpappv1.fw.garanti.com.tr"
+$SMTPPort = 25
+$from = "automation@CloudUnited <noreply@garantibbva.com.tr>"
+$to = "GTAgileCloudUnited@garantibbva.com.tr"
+$subject = "CPU Usage on Host Check"
+
+
+## Ignore SSL Certificates
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
+        }
+    }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+
+function Get-VmData {
+    param(
+        [string]$url,
+        [string]$token
+    )
+    
+    try {  
+        $headers = @{
+        "Content-Type" = "application/json"
+            'Authorization' = "vRealizeOpsToken $token"
+        }
+        
+        $response = Invoke-RestMethod -Uri $url -Method GET -Headers $headers -ContentType "application/json"
+        
+        $vmList = @()
+
+        foreach ($row in $response.viewsData.rows) {
+            $vmData = $row.cells
+                            
+            $vm = [PSCustomObject]@{
+                Name = if ($vmData.objId) { $vmData.objId.ToString() } else { "" }
+                Host = if ($vmData."1") { $vmData."1".ToString() } else { "" }
+                Cluster = if ($vmData."2") { $vmData."2".ToString() } else { "" }
+                vCenter = if ($vmData."3") { $vmData."3".ToString() } else { "" }
+                Cpu = if ($vmData."4") { [decimal]($vmData."4".ToString()) } else { 0 }
+            }
+                            
+            $vmList += $vm
+        }
+        return $vmList
+    }
+    catch {
+        Write-Error "Failed to fetch VM data: $($_.Exception.Message)"
+        return @()
+    }
+}
+
+# Function to fetch Host data
+function Get-HostData {
+    param(
+        [string]$url,
+        [string]$token
+    )
+    
+    try {
+        $headers = @{
+            'Authorization' = "vRealizeOpsToken $token"
+        }
+        
+        $response = Invoke-RestMethod -Uri $url -Method GET -Headers $headers -ContentType "application/json"
+        
+        $hostMapping = @{}
+        
+        foreach ($row in $response.viewsData.rows) {
+            $hostData = $row.cells
+                            
+            $hostName = if ($hostData.objId) { $hostData.objId.ToString() } else { "" }
+            $hostCpu = if ($hostData."1") { [decimal]($hostData."1".ToString()) } else { 0 }
+                            
+            if ($hostName -and $hostName -ne "") {
+                $hostMapping[$hostName] = $hostCpu
+            }
+        }
+        return $hostMapping
+    }
+    catch {
+        Write-Error "Failed to fetch Host data: $($_.Exception.Message)"
+        return @{}
+    }
+}
+
+# Function to enrich VM data with host information
+function Merge-VmWithHostData {
+    param(
+        [array]$VmData,
+        [hashtable]$HostData
+    )
+    
+    
+    $enrichedData = @()
+    
+    foreach ($vm in $VmData) {
+        $enrichedVm = [PSCustomObject]@{
+            Name = $vm.Name
+            Host = $vm.Host
+            Cluster = $vm.Cluster
+            vCenter = $vm.vCenter
+            'Cpu(Ghz)' = [Math]::Round($vm.Cpu,2)
+            'HostCpu(Ghz)' = $null
+            Percentage = $null
+        }
+        
+        if ($vm.Host -and $HostData.ContainsKey($vm.Host)) {
+            $hostCpu = $HostData[$vm.Host]
+            $enrichedVm.'HostCpu(Ghz)' = [Math]::Round($hostCpu,2)
+            
+            if ($hostCpu -gt 0) {
+                $enrichedVm.Percentage = [Math]::Round(($vm.Cpu / $hostCpu) * 100, 2)
+            } else {
+                $enrichedVm.Percentage = 0
+            }
+        }
+        
+        $enrichedData += $enrichedVm
+    }
+    
+    return $enrichedData
+}
+
+function Filter-Vms {
+    param(
+        [array]$enrichedData
+    )
+
+    $filteredData = @()
+    foreach ($vm in $enrichedData) {
+        if($vm.Percentage -gt 50){
+            $filteredData += $vm
+        }
+    }
+    return $filteredData
+    
+}
+
+# Email gönderme fonksiyonu
+function Send-Email($subject, $body, $to) {
+    $SMTPClient = New-Object Net.Mail.SmtpClient($SMTPHost, $SMTPPort)
+    $message = New-Object Net.Mail.MailMessage($from, $to, $subject, $body)
+    $message.IsBodyHtml = $true
+
+    # Email gönderimi
+    $SMTPClient.Send($message)
+    $message.Dispose()
+    $SMTPClient.Dispose()
+}
+
+$token=(F:\Ali\powershell\getVropsToken.ps1 -tokenType "pendik")
+
+if($token -eq $null){
+    return "token is null"
+}
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
+
+$pendikVmUrl="https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/fe1d2eb3-c8c6-4f90-8e8d-fcb0f475c203/data/export?resourceId=00330e14-5263-4728-8273-a135ae4d22fa&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true&pageSize=10000"
+$pendikHostUrl="https://ptekvrops01.fw.garanti.com.tr/suite-api/internal/views/037e5f68-2dbd-4628-81fc-e359f01dee86/data/export?resourceId=98141705-743b-4083-87cf-4f8f6cedcaa3&traversalSpec=vSphere Hosts and Clusters-VMWARE-vSphere World&_ack=true"
+
+$vmData = Get-VmData -url $pendikVmUrl -token $token
+if ($vmData.Count -eq 0) {
+    throw "No VM data retrieved"
+}
+    
+# Step 3: Fetch Host data
+$hostData = Get-HostData -url $pendikHostUrl -token $token
+if ($hostData.Count -eq 0) {
+    Write-Warning "No Host data retrieved - continuing with VM data only"
+}
+    
+$enrichedData = Merge-VmWithHostData -VmData $vmData -HostData $hostData
+
+[array]$filteredData = Filter-Vms -enrichedData $enrichedData
+ 
+# Email içeriğini oluştur
+if ($filteredData.length -gt 0) {
+    $htmlTable = $filteredData | Select-Object Name, Host, Cluster, vCenter, 'Cpu(Ghz)', 'HostCpu(Ghz)', Percentage | ConvertTo-Html -As Table -PreContent "<h4>Yapilan taramalarda Host uzerinde yuksek oranla CPU(Ghz) kullanan VM'ler bulunmuştur:</h4>"
+    $body = @"
+<html>
+<head>
+    <style>
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h4 {
+            color: #333;
+            text-align: left;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    $htmlTable
+</body>
+</html>
+"@
+    # Email gönder
+    Send-Email -subject $subject -body $body -to $to
+}
+
 
