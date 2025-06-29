@@ -96,14 +96,13 @@ namespace cpuMonitor
                     }
                 }
 
-                var alarmData = new List<Dictionary<string, object>>();
-                alarmData = await FetchDatabaseTableDataAsync();
-
+                // Always load alarm data (both on initial load and postbacks)
+                var alarmData = await FetchDatabaseTableDataAsync();
                 
                 RegisterClientScript(allData);
+                
+                // Generate alarm controls on every page load to maintain ViewState
                 GenerateAlarmControls(alarmData);
-
-
 
             }
             catch (Exception ex)
@@ -608,52 +607,128 @@ namespace cpuMonitor
 
         private void GenerateAlarmControls(List<Dictionary<string, object>> alarmData)
         {
+            // Clear previous controls
+            phAlarms.Controls.Clear();
+            
             int index = 0;
             foreach (var item in alarmData)
             {
-                var container = new Panel();
-                container.CssClass = "alarm";
-
-                // VM Name
-                var vmLabel = new Literal();
-                vmLabel.Text = $"<span class='vm-name'>{item["VMName"]}</span>";
-                container.Controls.Add(vmLabel);
-
-                // vCenter
-                var vcLabel = new Literal();
-                vcLabel.Text = $"<span class='vCenter'>{item["vCenterName"]}</span>";
-                container.Controls.Add(vcLabel);
-
-                // Percentage
-                var percLabel = new Literal();
-                percLabel.Text = $"<span class='percentage'>{item["CpuPercentage"]}</span>";
-                container.Controls.Add(percLabel);
-
-                // DropDownList
+                // Create table row
+                var tableRow = new HtmlGenericControl("tr");
+                
+                // VM Name cell
+                var vmNameCell = new HtmlGenericControl("td");
+                vmNameCell.InnerText = item["VMName"]?.ToString() ?? "";
+                tableRow.Controls.Add(vmNameCell);
+                
+                // vCenter cell
+                var vCenterCell = new HtmlGenericControl("td");
+                vCenterCell.InnerText = item["vCenterName"]?.ToString() ?? "";
+                tableRow.Controls.Add(vCenterCell);
+                
+                // CPU Percentage cell
+                var cpuCell = new HtmlGenericControl("td");
+                cpuCell.InnerText = $"{item["CpuPercentage"]}%";
+                tableRow.Controls.Add(cpuCell);
+                
+                // Action cell with dropdown
+                var actionCell = new HtmlGenericControl("td");
                 var ddl = new DropDownList();
                 ddl.ID = $"durumddl_{index}";
+                ddl.CssClass = "alarm-dropdown";
                 ddl.AutoPostBack = true;
                 ddl.SelectedIndexChanged += durumddl_SelectedIndexChanged;
-                ddl.SelectedValue = item["NeverSentEmail"].ToString() == "1" ? "1" : "0";
-
-                ddl.Items.Add(new ListItem("1 Hafa Boyunca Uyarma", "1"));
+                
+                // Add default option
+                ddl.Items.Add(new ListItem("Seçiniz...", "0"));
+                ddl.Items.Add(new ListItem("1 Hafta Boyunca Uyarma", "1"));
                 ddl.Items.Add(new ListItem("Bu Sunucuyu Asla Uyarma", "2"));
                 ddl.Items.Add(new ListItem("Kaydı Sil (Yeniden Uyarabilir)", "3"));
-
-                container.Controls.Add(ddl);
-
-                phAlarms.Controls.Add(container);
-
+                
+                // Set selected value based on NeverSentEmail status
+                string neverSentEmail = item["NeverSentEmail"]?.ToString() ?? "0";
+                if (neverSentEmail == "1")
+                {
+                    ddl.SelectedValue = "2"; // Bu Sunucuyu Asla Uyarma
+                }
+                else
+                {
+                    ddl.SelectedValue = "0"; // Default selection
+                }
+                
+                // Store VM info in dropdown attributes for later use
+                ddl.Attributes["data-vmname"] = item["VMName"]?.ToString() ?? "";
+                
+                actionCell.Controls.Add(ddl);
+                tableRow.Controls.Add(actionCell);
+                
+                phAlarms.Controls.Add(tableRow);
                 index++;
             }
-
+            
+            // Update the UpdatePanel
+            alarms.Update();
         }
 
         protected void durumddl_SelectedIndexChanged(object sender, EventArgs e)
         {
-            DropDownList ddl = sender as DropDownList;
-            string selectedValue = ddl.SelectedValue;
-            Response.Write($"</br></br></br></br></br></br>Selected value: {selectedValue}");
+            try
+            {
+                DropDownList ddl = sender as DropDownList;
+                if (ddl != null)
+                {
+                    string selectedValue = ddl.SelectedValue;
+                    string vmName = ddl.Attributes["data-vmname"];
+                    
+                    // Log the action for debugging
+                    string message = $"VM: {vmName}, Action: {selectedValue}";
+                    Response.Write($"<script>console.log('{message}');</script>");
+                    
+                    // Handle the selected action
+                    switch (selectedValue)
+                    {
+                        case "1":
+                            // 1 Hafta Boyunca Uyarma
+                            HandleAlarmAction(vmName, "warn_week");
+                            break;
+                        case "2":
+                            // Bu Sunucuyu Asla Uyarma
+                            HandleAlarmAction(vmName, "never_warn");
+                            break;
+                        case "3":
+                            // Kaydı Sil
+                            HandleAlarmAction(vmName, "delete_record");
+                            break;
+                    }
+
+                    RefreshAlarmData();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+                Response.Write($"<script>alert('Hata oluştu: {ex.Message}');</script>");
+            }
+        }
+        
+        private void HandleAlarmAction(string vmName, string vCenter, string action)
+        {
+            // TODO: Implement database update logic based on action
+            // This is where you would update your database
+            Response.Write($"<script>alert('İşlem başarılı: {action} - {vmName}');</script>");
+        }
+        
+        private async void RefreshAlarmData()
+        {
+            try
+            {
+                var alarmData = await FetchDatabaseTableDataAsync();
+                GenerateAlarmControls(alarmData);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
         }
 
         #endregion
