@@ -98,11 +98,13 @@ namespace cpuMonitor
                 var alarmData = new List<Dictionary<string, object>>();
                 alarmData = await FetchDatabaseTableDataAsync();
 
-                if (allData == null)
+                if (allData == null || alarmData == null)
                 {
-                    DisplayError(ErrorMessage);
+                    DisplayError("Failed to retrieve data from vROps or database.");
+                    return;
                 }
-                RegisterClientScript(allData, alarmData);
+                RegisterClientScript(allData);
+                GenerateAlarmControls(alarmData);
 
             }
             catch (Exception ex)
@@ -475,7 +477,7 @@ namespace cpuMonitor
             {
                 using (var connection = new SqlConnection(_connectionString))
                 {
-                    const string query = "SELECT * FROM VMCpuAlerts WHERE LastEmailSent >= DATEADD(DAY, -7, GETDATE())";
+                    const string query = "SELECT * FROM VMCpuAlerts WHERE LastEmailSent >= DATEADD(DAY, -7, GETDATE()) OR (NeverSentEmail = 1 AND LastEmailSent > DATEADD(DAY, 90, GETDATE()))";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -489,7 +491,6 @@ namespace cpuMonitor
                                 row["VMName"] = reader.IsDBNull("VMName") ? string.Empty : reader.GetString("VMName");
                                 row["vCenterName"] = reader.IsDBNull("vCenterName") ? string.Empty : reader.GetString("vCenterName");
                                 row["CpuPercentage"] = reader.IsDBNull("CpuPercentage") ? 0 : reader.GetDecimal("CpuPercentage");
-                                row["LastEmailSent"] = reader.IsDBNull("LastEmailSent") ? DateTime.MinValue : reader.GetDateTime("LastEmailSent");
                                 row["NeverSentEmail"] = reader.IsDBNull("NeverSentEmail") ? false : reader.GetBoolean("NeverSentEmail");
 
                                 tableData.Add(row);
@@ -572,12 +573,11 @@ namespace cpuMonitor
 
         #region Helper Methods
 
-        private void RegisterClientScript(List<Dictionary<string, object>> tableData, List<Dictionary<string, object>> alarmData)
+        private void RegisterClientScript(List<Dictionary<string, object>> tableData)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
             var tableJson = js.Serialize(tableData);
-            var alarmJson = js.Serialize(alarmData);
-            var script = $"<script>baseData = {tableJson}; alarmData = {alarmJson}; initializeTable(); </script>";
+            var script = $"<script>baseData = {tableJson}; initializeTable(); </script>";
             ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
         }
 
@@ -607,6 +607,55 @@ namespace cpuMonitor
         }
 
         #endregion
+    
+        private void GenerateAlarmControls(List<Dictionary<string, object>> alarmData)
+        {
+            int index = 0;
+            foreach (var item in alarmData)
+            {
+                var container = new System.Web.UI.WebControls.Panel();
+                container.CssClass = "alarm";
+
+                // VM Name
+                var vmLabel = new Literal();
+                vmLabel.Text = $"<span class='vm-name'>{item["VMName"]}</span>";
+                container.Controls.Add(vmLabel);
+
+                // vCenter
+                var vcLabel = new Literal();
+                vcLabel.Text = $"<span class='vCenter'>{item["vCenter"]}</span>";
+                container.Controls.Add(vcLabel);
+
+                // Percentage
+                var percLabel = new Literal();
+                percLabel.Text = $"<span class='percentage'>{item["Percentage"]}</span>";
+                container.Controls.Add(percLabel);
+
+                // DropDownList
+                var ddl = new DropDownList();
+                ddl.ID = $"durumddl_{index}";
+                ddl.AutoPostBack = true;
+                ddl.SelectedIndexChanged += durumddl_SelectedIndexChanged;
+                ddl.SelectedValue = item["NeverSentEmail"].ToString() == "1" ? "1" : "0";
+
+                ddl.Items.Add(new ListItem("1 Hafa Boyunca Uyarma", "1"));
+                ddl.Items.Add(new ListItem("Bu Sunucuyu Asla Uyarma", "2"));
+                ddl.Items.Add(new ListItem("Kaydı Sil (Yeniden Uyarabilir)", "3"));
+
+                container.Controls.Add(ddl);
+
+                phAlarms.Controls.Add(container);
+
+                index++;
+            }
+        }
+
+        protected void durumddl_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            DropDownList ddl = sender as DropDownList;
+            string selectedValue = ddl.SelectedValue;
+            Response.Write($"Selected value: {selectedValue}");
+        }
     }
 
     #region Data Models
