@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Web.Configuration;
 using System.Collections.Generic;
 using System.Web.Script.Serialization;
+using System.Web.UI.WebControls;
 
 namespace cpuMonitor
 {
@@ -98,13 +99,11 @@ namespace cpuMonitor
                 var alarmData = new List<Dictionary<string, object>>();
                 alarmData = await FetchDatabaseTableDataAsync();
 
-                if (allData == null || alarmData == null)
-                {
-                    DisplayError("Failed to retrieve data from vROps or database.");
-                    return;
-                }
+                
                 RegisterClientScript(allData);
                 GenerateAlarmControls(alarmData);
+
+
 
             }
             catch (Exception ex)
@@ -477,7 +476,7 @@ namespace cpuMonitor
             {
                 using (var connection = new SqlConnection(_connectionString))
                 {
-                    const string query = "SELECT * FROM VMCpuAlerts WHERE LastEmailSent >= DATEADD(DAY, -7, GETDATE()) OR (NeverSentEmail = 1 AND LastEmailSent > DATEADD(DAY, 90, GETDATE()))";
+                    const string query = "SELECT * FROM VMCpuAlerts WHERE LastEmailSent < DATEADD(DAY, -7, GETDATE()) OR (NeverSentEmail = 1 AND LastEmailSent > DATEADD(DAY, 90, GETDATE()))";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -487,11 +486,11 @@ namespace cpuMonitor
                             while (await reader.ReadAsync())
                             {
                                 var row = new Dictionary<string, object>();
-                                
-                                row["VMName"] = reader.IsDBNull("VMName") ? string.Empty : reader.GetString("VMName");
-                                row["vCenterName"] = reader.IsDBNull("vCenterName") ? string.Empty : reader.GetString("vCenterName");
-                                row["CpuPercentage"] = reader.IsDBNull("CpuPercentage") ? 0 : reader.GetDecimal("CpuPercentage");
-                                row["NeverSentEmail"] = reader.IsDBNull("NeverSentEmail") ? false : reader.GetBoolean("NeverSentEmail");
+
+                                row["VMName"] = reader["VMName"] as string;
+                                row["vCenterName"] = reader["vCenterName"] as string;
+                                row["CpuPercentage"] =reader["CpuPercentage"];
+                                row["NeverSentEmail"] = reader["NeverSentEmail"];
 
                                 tableData.Add(row);
                             }
@@ -506,6 +505,7 @@ namespace cpuMonitor
 
             return tableData;
         }
+
         #endregion
 
         #region CSV Export
@@ -573,11 +573,11 @@ namespace cpuMonitor
 
         #region Helper Methods
 
-        private void RegisterClientScript(List<Dictionary<string, object>> tableData)
+        private void RegisterClientScript(List<Dictionary<string, object>> data)
         {
             var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-            var tableJson = js.Serialize(tableData);
-            var script = $"<script>baseData = {tableJson}; initializeTable(); </script>";
+            var json = js.Serialize(data);
+            var script = $"<script>baseData = {json}; initializeTable(); </script>";
             ClientScript.RegisterStartupScript(GetType(), "initializeData", script);
         }
 
@@ -606,14 +606,12 @@ namespace cpuMonitor
             Response.Write($"Error: {message}");
         }
 
-        #endregion
-    
         private void GenerateAlarmControls(List<Dictionary<string, object>> alarmData)
         {
             int index = 0;
             foreach (var item in alarmData)
             {
-                var container = new System.Web.UI.WebControls.Panel();
+                var container = new Panel();
                 container.CssClass = "alarm";
 
                 // VM Name
@@ -623,12 +621,12 @@ namespace cpuMonitor
 
                 // vCenter
                 var vcLabel = new Literal();
-                vcLabel.Text = $"<span class='vCenter'>{item["vCenter"]}</span>";
+                vcLabel.Text = $"<span class='vCenter'>{item["vCenterName"]}</span>";
                 container.Controls.Add(vcLabel);
 
                 // Percentage
                 var percLabel = new Literal();
-                percLabel.Text = $"<span class='percentage'>{item["Percentage"]}</span>";
+                percLabel.Text = $"<span class='percentage'>{item["CpuPercentage"]}</span>";
                 container.Controls.Add(percLabel);
 
                 // DropDownList
@@ -648,14 +646,17 @@ namespace cpuMonitor
 
                 index++;
             }
+
         }
 
         protected void durumddl_SelectedIndexChanged(object sender, EventArgs e)
         {
             DropDownList ddl = sender as DropDownList;
             string selectedValue = ddl.SelectedValue;
-            Response.Write($"Selected value: {selectedValue}");
+            Response.Write($"</br></br></br></br></br></br>Selected value: {selectedValue}");
         }
+
+        #endregion
     }
 
     #region Data Models
