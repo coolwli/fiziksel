@@ -1,175 +1,91 @@
-# API'den veri alma (mevcut kodunuz)
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
-
-# Metrikleri kategorilere ayır
-$metrikKategorileri = @{
-    "CPU_Metrikleri" = @(
-        "cpu.usage.average",
-        "cpu.usage.maximum",
-        "cpu.ready.summation",
-        "cpu.costop.summation",
-        "cpu.demand.average"
-    )
-    "Bellek_Metrikleri" = @(
-        "mem.usage.average",
-        "mem.usage.maximum",
-        "mem.consumed.average",
-        "mem.active.average",
-        "mem.swapused.average"
-    )
-    "Disk_Metrikleri" = @(
-        "disk.usage.average",
-        "disk.read.average",
-        "disk.write.average",
-        "virtualDisk.read.average",
-        "virtualDisk.write.average",
-        "disk.deviceLatency.average"
-    )
-    "Network_Metrikleri" = @(
-        "net.usage.average",
-        "net.received.average",
-        "net.transmitted.average",
-        "net.packetsRx.summation",
-        "net.packetsTx.summation",
-        "net.droppedRx.summation",
-        "net.droppedTx.summation"
-    )
-    "Performans_Metrikleri" = @(
-        "sys.uptime.latest",
-        "power.power.average",
-        "rescpu.actav1.latest",
-        "rescpu.maxlimited.latest"
-    )
-}
-
-# Her kategori için ayrı veri yapısı
-$kategorilereAyrilmisMetrikler = @{}
-
-# Kategorileri başlat
-foreach ($kategori in $metrikKategorileri.Keys) {
-    $kategorilereAyrilmisMetrikler[$kategori] = @()
-}
-
-# Tüm statları kontrol et ve kategorilere ayır
-foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
-    foreach ($kategoriAdi in $metrikKategorileri.Keys) {
-        if ($metrikKategorileri[$kategoriAdi] -contains $stat.statKey) {
-            $kategorilereAyrilmisMetrikler[$kategoriAdi] += [PSCustomObject]@{
-                StatKey = $stat.statKey
-                Value = $stat.value
-                Unit = $stat.unit
-                Instance = $stat.instance
-            }
-            break
-        }
-    }
-}
+$jsonPath="C:\Users\AliCanda\Documents\calismalar\kategorilereAyrilmisMetrikler.json"
+$apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB" # Azure OpenAI API anahtarınızı buraya ekleyin
+$endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-4.1-bulutaltyapi/chat/completions?api-version=2025-01-01-preview" # Endpoint URL'nizi buraya ekleyin
+ 
+$kategorilereAyrilmisMetrikler = Get-Content $jsonPath | ConvertFrom-Json
 
 # AI API fonksiyonu (bu kısım sizin AI API'nize göre ayarlanmalı)
 function Send-ToAIAnalysis {
     param(
         [string]$kategoriAdi,
-        [array]$metrikler,
-        [string]$ozelPrompt = ""
+        [array]$metrikler
     )
     
     # JSON formatına çevir
-    $jsonPayload = $metrikler | ConvertTo-Json -Depth 3
-    
-    # Kategori özel prompt'ları
+    $jsonPayload = $metrikler | ConvertTo-Json
+
+    # Category-specific prompts
     $kategoriPromptlari = @{
-        "CPU_Metrikleri" = "CPU kullanımı, işlemci yükü, ready time ve demand değerlerini analiz edin. Yüksek CPU kullanımı, bottleneck'ler ve performans sorunlarını değerlendirin."
-        "Bellek_Metrikleri" = "Bellek kullanımı, active memory, consumed memory ve swap kullanımını analiz edin. Bellek sızıntıları ve yetersiz bellek durumlarını değerlendirin."
-        "Disk_Metrikleri" = "Disk I/O performansı, read/write latency ve throughput değerlerini analiz edin. Disk bottleneck'lerini ve performans sorunlarını değerlendirin."
-        "Network_Metrikleri" = "Ağ trafiği, paket kayıpları ve network utilization değerlerini analiz edin. Ağ performans sorunlarını ve anomalileri değerlendirin."
-        "Performans_Metrikleri" = "Sistem uptime, güç tüketimi ve resource limiting durumlarını analiz edin. Genel sistem sağlığını değerlendirin."
+        "CPU_Metrics" = "Analyze CPU usage, including utilization trends, bottlenecks, and potential overcommitment issues."
+        "Memory_Metrics" = "Evaluate memory usage, including active memory, consumed memory, and swap usage. Identify memory leaks and insufficient memory conditions."
+        "Disk_Metrics" = "Analyze disk I/O performance, including read/write latency and throughput. Assess disk bottlenecks and performance issues."
+        "Network_Metrics" = "Analyze network traffic, packet loss, and network utilization. Evaluate network performance issues and anomalies."
+        "Performance_Metrics" = "Assess system uptime, power consumption, and resource limiting conditions. Provide an overall evaluation of system health."
     }
     
     $aiPrompt = @"
-$($kategoriPromptlari[$kategoriAdi])
+        $($kategoriPromptlari[$kategoriAdi])
 
-Analiz edilecek $kategoriAdi verileri:
-$jsonPayload
+        $kategoriAdi datas to analyze:
+        $jsonPayload
 
-Lütfen aşağıdaki konularda değerlendirme yapın:
-1. Bu kategori için mevcut durum analizi
-2. Kritik seviyedeki metrikler ve uyarılar
-3. Bu kategori özel iyileştirme önerileri
-4. Dikkat edilmesi gereken anomaliler
-5. 1-10 arası sağlık skoru
+        You are provided with the latest metrics of a VM at one-hour intervals. Analyze these expertly and provide technical insights.
+        Please evaluate the following points:
+        1. Current state analysis for this category
+        2. Critical metrics and warnings
+        3. Improvement suggestions specific to this category
+        4. Anomalies to watch out for
+        5. Health score on a scale of 1-10
 
-Yanıtınızı yapılandırılmış ve özet formatta verin.
-$ozelPrompt
+        Provide your response in a structured and summarized format.
 "@
 
     Write-Host "=== $kategoriAdi Analizi ===" -ForegroundColor Cyan
-    Write-Host "Metrik Sayısı: $($metrikler.Count)" -ForegroundColor Gray
-    Write-Host "JSON Verisi:" -ForegroundColor Green
-    Write-Host $jsonPayload
-    Write-Host "`nAI Prompt:" -ForegroundColor Yellow
-    Write-Host $aiPrompt
-    Write-Host "`n" + "="*50 + "`n"
-    
-    # Burada gerçek AI API çağrısı yapılacak
-    # $aiResponse = Invoke-AIAnalysis -Prompt $aiPrompt
-    # return $aiResponse
+    Write-Host "----------------------------------------------------------------------------------------"
+    # JSON body oluştur
+    $body = @{
+        messages = @(
+            @{
+                role = "system"
+                content =   "You are a cloud‑resources optimization assistant."           
+            },
+            @{
+                role = "user"
+                content = $aiPrompt
+            }
+        )
+        temperature = 0.7
+        max_tokens = 4000
+    } | ConvertTo-Json -Depth 10 -Compress
+
+    # HTTP başlıkları
+    $headers = @{
+        "Content-Type" = "application/json"
+        "api-key" = $apiKey
+    }
+
+    # API'ye gönder
+    try {
+        $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
+        $answer = $response.choices[0].message.content
+        Write-Host $answer -ForegroundColor Green
+    } catch {
+        Write-Host "Hata oluştu: $($_.Exception.Message)"
+    }
+
 }
 
 # Her kategori için ayrı analiz yap
 $analizSonuclari = @{}
 
-foreach ($kategoriAdi in $metrikKategorileri.Keys) {
-    if ($kategorilereAyrilmisMetrikler[$kategoriAdi].Count -gt 0) {
+foreach ($kategori in $kategorilereAyrilmisMetrikler.PSObject.Properties) {
+    if ($kategorilereAyrilmisMetrikler.($kategori.Name).Count -gt 0) {
+        $kategoriAdi = $kategori.Name
+        $metrikler = $kategori.Value
         Write-Host "Processing $kategoriAdi..." -ForegroundColor Magenta
-        $analizSonuclari[$kategoriAdi] = Send-ToAIAnalysis -kategoriAdi $kategoriAdi -metrikler $kategorilereAyrilmisMetrikler[$kategoriAdi]
+        $analizSonuclari[$kategoriAdi] = Send-ToAIAnalysis -kategoriAdi $kategoriAdi -metrikler $metrikler
     } else {
-        Write-Host "$kategoriAdi için veri bulunamadı." -ForegroundColor Red
+        Write-Host "$kategori.Name için veri bulunamadı." -ForegroundColor Red
     }
 }
 
-# Genel özet analizi için tüm kategorilerin özetini hazırla
-$genelOzet = @()
-foreach ($kategori in $kategorilereAyrilmisMetrikler.Keys) {
-    if ($kategorilereAyrilmisMetrikler[$kategori].Count -gt 0) {
-        $genelOzet += [PSCustomObject]@{
-            Kategori = $kategori
-            MetrikSayisi = $kategorilereAyrilmisMetrikler[$kategori].Count
-            OrnekMetrikler = ($kategorilereAyrilmisMetrikler[$kategori] | Select-Object -First 3 | ForEach-Object { "$($_.StatKey): $($_.Value)" }) -join ", "
-        }
-    }
-}
-
-# Genel özet analizi
-$genelOzetJson = $genelOzet | ConvertTo-Json -Depth 2
-$genelAnalizPrompt = @"
-Aşağıdaki sistem performans kategorilerinin genel özetini analiz edin ve sistem genelinde bir değerlendirme yapın:
-
-$genelOzetJson
-
-Lütfen aşağıdaki konularda genel bir değerlendirme yapın:
-1. Sistem geneli sağlık durumu (1-10 skala)
-2. En kritik kategori/kategoriler
-3. Öncelikli müdahale gereken alanlar
-4. Genel performans iyileştirme stratejisi
-5. Sistem geneli risk değerlendirmesi
-
-Yanıtınızı executive summary formatında verin.
-"@
-
-Write-Host "=== GENEL SİSTEM ANALİZİ ===" -ForegroundColor Red
-Write-Host "Özet Verisi:" -ForegroundColor Green
-Write-Host $genelOzetJson
-Write-Host "`nGenel Analiz Prompt:" -ForegroundColor Yellow
-Write-Host $genelAnalizPrompt
-
-# Sonuçları kaydet (opsiyonel)
-$sonucDosyasi = "system_analysis_$(Get-Date -Format 'yyyyMMdd_HHmmss').json"
-$tumSonuclar = @{
-    Timestamp = Get-Date
-    KategoriAnalizleri = $analizSonuclari
-    GenelOzet = $genelOzet
-    ToplamMetrikSayisi = ($kategorilereAyrilmisMetrikler.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
-}
-
-$tumSonuclar | ConvertTo-Json -Depth 4 | Out-File -FilePath $sonucDosyasi -Encoding UTF8
-Write-Host "Analiz sonuçları $sonucDosyasi dosyasına kaydedildi." -ForegroundColor Green
