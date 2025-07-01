@@ -12,8 +12,27 @@ add-type @"
 "@
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-$token=(F:\Ali\powershell\vrops\getVropsToken.ps1 -tokenType "pendik")
+# RESOURCE ID ARRAY - Buraya ID'lerinizi ekleyin
+$resourceIds = @(
+    "d5657a0c-d1e7-4659-95d4-88daa2530e68",
+    "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+)
 
+# TARIH AYARLARI - Normal tarih formatında girin
+$beginDate = "2025-01-24 10:00:00"  # YYYY-MM-DD HH:mm:ss
+$endDate = "2025-07-31 18:00:00"    # YYYY-MM-DD HH:mm:ss
+
+# Tarihleri Unix timestamp'e çevir
+function ConvertTo-UnixTimestamp {
+    param([string]$DateString)
+    $date = [DateTime]::ParseExact($DateString, "yyyy-MM-dd HH:mm:ss", $null)
+    return [DateTimeOffset]::new($date).ToUnixTimeMilliseconds()
+}
+
+$beginTimestamp = ConvertTo-UnixTimestamp -DateString $beginDate
+$endTimestamp = ConvertTo-UnixTimestamp -DateString $endDate
+
+$token=(F:\Ali\powershell\vrops\getVropsToken.ps1 -tokenType "pendik")
 if($token -eq $null){
     return "token is null"
 }
@@ -21,11 +40,6 @@ $headers = @{
     "Content-Type" = "application/json"
     "Authorization" = "vRealizeOpsToken $token"
 }
-
-
-$reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/d5657a0c-d1e7-4659-95d4-88daa2530e68/stats?&intervalType=HOURS&rollUpType=AVG&begin=1748083781000&end=1750762181000"
-
-$reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
 
 # Metrikleri kategorilere ayır
 $metrikKategorileri = @{
@@ -43,28 +57,39 @@ $metrikKategorileri = @{
     )
 }
 
-# Her kategori için ayrı veri yapısı
-$kategorilereAyrilmisMetrikler = @{}
+# Ana veri yapısı
+$allResourcesData = @{}
 
-# Kategorileri başlat
-foreach ($kategori in $metrikKategorileri.Keys) {
-    $kategorilereAyrilmisMetrikler[$kategori] = @()
-}
-
-# Tüm statları kontrol et ve kategorilere ayır
-foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
-    foreach ($kategoriAdi in $metrikKategorileri.Keys) {
-        if ($metrikKategorileri[$kategoriAdi] -contains $stat.statKey.key) {
-            $kategorilereAyrilmisMetrikler[$kategoriAdi] += [PSCustomObject]@{
-                StatKey = $stat.statKey.key
-                Value = $stat.data
+# Her resource ID için işlem yap
+foreach ($resourceId in $resourceIds) {
+    $reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/$resourceId/stats?&intervalType=HOURS&rollUpType=AVG&begin=$beginTimestamp&end=$endTimestamp"
+    $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    
+    # Her kategori için ayrı veri yapısı
+    $kategorilereAyrilmisMetrikler = @{}
+    # Kategorileri başlat
+    foreach ($kategori in $metrikKategorileri.Keys) {
+        $kategorilereAyrilmisMetrikler[$kategori] = @()
+    }
+    
+    # Tüm statları kontrol et ve kategorilere ayır
+    foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
+        foreach ($kategoriAdi in $metrikKategorileri.Keys) {
+            if ($metrikKategorileri[$kategoriAdi] -contains $stat.statKey.key) {
+                $kategorilereAyrilmisMetrikler[$kategoriAdi] += [PSCustomObject]@{
+                    StatKey = $stat.statKey.key
+                    Value = $stat.data
+                }
+                break
             }
-            break
         }
     }
+    
+    # Bu resource'un verilerini ana yapıya ekle
+    $allResourcesData[$resourceId] = $kategorilereAyrilmisMetrikler
 }
-$jsonOutput = $kategorilereAyrilmisMetrikler | ConvertTo-Json -Depth 10
+
+$jsonOutput = $allResourcesData | ConvertTo-Json -Depth 10
 $outputFilePath = "F:\Ali\kategorilereAyrilmisMetrikler.json"
 Set-Content -Path $outputFilePath -Value $jsonOutput -Encoding UTF8
-
 Write-Host "Metrics saved to $outputFilePath"
