@@ -1,1 +1,22 @@
-            string url = $"{vRopsServer}/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityInstanceUUID]={uuid}";
+$SCKSuri = 'http://jarviskscservices'
+$Searchuri = '/api/Scks/GetConfigurationsByType'
+
+$IPuri = '/api/Scks/GetConfigurationBy/'
+
+$headers = @{
+    Accept = 'application/json'
+    'Content-Type' = 'application/json'
+}
+
+$ServerTypeID = 503
+
+$IDApi = Invoke-RestMethod -Uri ($SCKSuri + $Searchuri + "?TypeNumber="+$ServerTypeID) -Method Get -Headers $headers
+
+
+foreach($item in $IDApi) {
+    $IPattr = Invoke-RestMethod -Uri ($SCKSuri + $IPuri + $item.configurationIDField) -Method Get -Headers $headers
+    $IPattr = $IPattr.bConfigurationAttributeRelationsField | where { $_.nameTextField -eq "IP" }
+    $IPattr = $IPattr.valueTextField
+    Write-Host $item.nameTextField 
+    Write-Host $IPattr -ForegroundColor Red
+}
