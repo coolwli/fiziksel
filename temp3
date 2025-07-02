@@ -1,64 +1,29 @@
-$SCKSuri = 'http://jarviskscservices'
-$Searchuri = '/api/Scks/GetConfigurationsByType'
-$IPuri = '/api/Scks/GetConfigurationBy/'
-$headers = @{
-    Accept = 'application/json'
-    'Content-Type' = 'application/json'
-}
-$ServerTypeID = 503
+cpu|percentage_of_vms_facing_cpu_ready
+cpu|usagemhz_average
+cpu|capacity_usagepct_average
+cpu|capacity_contentionPct
+cpu|demand|workload
+cpu|demandPct
+cpu|max_cpu_ready
 
-$IDApi = Invoke-RestMethod -Uri ($SCKSuri + $Searchuri + "?TypeNumber=" + $ServerTypeID) -Method Get -Headers $headers
+mem|swapoutRate_average
+mem|swapinRate_average
+mem|usage_average
+mem|demand|workload
 
-# Karşılaştırma sonuçlarını tutacak diziler
-$mismatchList = @()
-$totalCount = 0
-$matchCount = 0
+net:virtual|transmitted_average
+net|transmitted_average
+net:physical|received_average
+net:physical|transmitted_average
+net|usage_average
+net:virtual|received_average
+net:virtual|usage_average
+net:physical|usage_average
+net|received_average
+net:virtual|droppedPct
 
-foreach ($item in $IDApi) {
-    $totalCount++
-
-    # IP bilgisini al
-    $IPattr = Invoke-RestMethod -Uri ($SCKSuri + $IPuri + $item.configurationIDField) -Method Get -Headers $headers
-    $IPattr = $IPattr.bConfigurationAttributeRelationsField | Where-Object { $_.nameTextField -eq "IP" }
-    $ExpectedIP = $IPattr.valueTextField
-
-    $Hostname = $item.nameTextField
-
-    try {
-        # Test-Connection ile DNS üzerinden IP al
-        $PingResult = Test-Connection -ComputerName $Hostname -Count 1 -ErrorAction Stop
-        $ResolvedIP = $PingResult.IPV4Address.IPAddressToString
-
-        Write-Host "[$Hostname]" -NoNewline
-        if ($ResolvedIP -eq $ExpectedIP) {
-            Write-Host " => Eşleşti ($ResolvedIP)" -ForegroundColor Green
-            $matchCount++
-        } else {
-            Write-Host " => Uyuşmuyor! Beklenen: $ExpectedIP, Çözümlenen: $ResolvedIP" -ForegroundColor Yellow
-            $mismatchList += [PSCustomObject]@{
-                Hostname = $Hostname
-                ExpectedIP = $ExpectedIP
-                ResolvedIP = $ResolvedIP
-            }
-        }
-    } catch {
-        Write-Host "[$Hostname] => Ping Başarısız!" -ForegroundColor Red
-        $mismatchList += [PSCustomObject]@{
-            Hostname = $Hostname
-            ExpectedIP = $ExpectedIP
-            ResolvedIP = "Ping Hatası"
-        }
-    }
-}
-
-# Özet Bilgi
-Write-Host "`n--- Uyuşmayanlar ---" -ForegroundColor Cyan
-$mismatchList | Format-Table -AutoSize
-
-$MismatchCount = $mismatchList.Count
-$SuccessRate = [math]::Round(($matchCount / $totalCount) * 100, 2)
-
-Write-Host "`nToplam Sunucu: $totalCount"
-Write-Host "Eşleşen: $matchCount"
-Write-Host "Eşleşmeyen: $MismatchCount"
-Write-Host "Başarı Oranı: $SuccessRate%" -ForegroundColor Magenta
+disk|read_average
+datastore|read_average
+disk|write_average
+datastore|write_average
+disk|totalLatency_average
