@@ -1,39 +1,39 @@
-$aiPrompt = @"
-You are an expert infrastructure performance analyst specializing in virtualized environments, particularly VMware vSphere and vRealize Operations (vROps). Your role is to examine a focused set of metrics collected from a virtual machine (VM) over hourly intervals, and to produce meaningful, actionable insights.
+Below is long-term resource utilization data for a virtual machine (VM).
+The data has been collected via the vROps API at 1-hour intervals.
+Please analyze the data according to the following steps:
 
-You are analyzing the following performance category: **$kategoriAdi**
+General Trend and Utilization Analysis:
 
-Below is the dataset (JSON format), containing filtered and relevant time-series metrics:
-$jsonPayload
+Identify and interpret usage trends (e.g., increases, decreases, fluctuations).
 
-Your analysis must reflect deep technical understanding and offer practical value to system administrators and operations engineers. Structure your response under the following sections:
+Evaluate how resource utilization intensity has changed over time.
 
----
+Anomaly Detection:
 
-### 1. Executive Summary  
-- Brief overview of the VM's status in this category  
-- Any immediate concerns or confirmations of stability
+Detect any sudden spikes, drops, or unusual patterns in usage.
 
-### 2. Technical Assessment  
-- Detailed interpretation of the metrics  
-- Highlight any deviations from best practices or known baselines  
-- Discuss historical trends, patterns, and current behavior
+Indicate the specific time periods where anomalies are concentrated.
 
-### 3. Risk Indicators & Performance Bottlenecks  
-- List any anomalies, warning signs, or degradation symptoms  
-- Emphasize metrics nearing or breaching thresholds
+Capacity and Risk Analysis:
 
-### 4. Recommendations  
-- Actionable steps to improve, stabilize, or optimize the system  
-- Categorize by urgency: short-term fixes vs long-term improvements
+Identify periods of excessive or insufficient resource usage.
 
-### 5. Health Score (1–10)  
-- Assign a health score specific to this category  
-- Justify the score based on evidence from the data
+Based on long-term usage statistics, assess whether the current resource allocation is sufficient.
 
----
+Would you recommend reclaiming any underutilized resources?
 
-**Tone**: Technical, expert-level, direct.  
-**Output format**: Markdown or clearly structured plain text.  
-**Avoid generic advice** – base your response solely on the provided metrics.
-"@
+Forecasting (Optional):
+
+Based on the observed usage patterns, estimate the expected usage trend for the next week.
+
+Assess the risk of hitting critical threshold levels.
+
+Recommendations:
+
+Provide suggestions to increase, decrease, or reconfigure the current resource allocation.
+
+If necessary, outline proactive measures or actions that should be taken.
+
+
+
+Please summarize all findings in a single, detailed paragraph, including technical insights and justifications for each conclusion.
