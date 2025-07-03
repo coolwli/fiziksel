@@ -1,29 +1,56 @@
-cpu|percentage_of_vms_facing_cpu_ready
-cpu|usagemhz_average
-cpu|capacity_usagepct_average
-cpu|capacity_contentionPct
-cpu|demand|workload
-cpu|demandPct
-cpu|max_cpu_ready
+protected void hiddenButton_Click(object sender, EventArgs e)
+        {
+            string jsonData = hiddenField.Value;
 
-mem|swapoutRate_average
-mem|swapinRate_average
-mem|usage_average
-mem|demand|workload
+            if (string.IsNullOrEmpty(jsonData))
+            {
+                Response.Write("No data available.");
+                return;
+            }
 
-net:virtual|transmitted_average
-net|transmitted_average
-net:physical|received_average
-net:physical|transmitted_average
-net|usage_average
-net:virtual|received_average
-net:virtual|usage_average
-net:physical|usage_average
-net|received_average
-net:virtual|droppedPct
+            try
+            {
+                var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
 
-disk|read_average
-datastore|read_average
-disk|write_average
-datastore|write_average
-disk|totalLatency_average
+                if (tableData == null || tableData.Count == 0)
+                {
+                    Response.Write("No data available.");
+                    return;
+                }
+
+                var columnNames = new List<string> { "Name", "VCenter", "DataCenter", "Info", "CPU Usage %", "Memory Usage %", "Total CPU Core", "Total Memory GB", "VM per Host", "Count of Hosts", "Count of Datastores" };
+
+                var csv = new StringBuilder();
+                csv.AppendLine(string.Join(",", columnNames));
+
+                foreach (var row in tableData)
+                {
+                    var values = new List<string>
+                    {
+                        row["objId"]?.ToString(),
+                        row["1"]?.ToString(),
+                        row["2"]?.ToString(),
+                        row["3"]?.ToString(),
+                        row["7"]?.ToString(),
+                        row["8"]?.ToString(),
+                        row["9"]?.ToString(),
+                        row["10"]?.ToString(),
+                        row["4"]?.ToString(),
+                        row["5"]?.ToString(),
+                        row["6"]?.ToString()
+                    };
+
+                    csv.AppendLine(string.Join(",", values));
+                }
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("Content-Disposition", "attachment;filename=vmpedia.csv");
+                Response.Write(csv.ToString());
+            }
+            catch (Exception ex)
+            {
+                Response.Write($"An error occurred: {ex.ToString()}");
+            }
+        }
