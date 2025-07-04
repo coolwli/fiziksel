@@ -1,56 +1,37 @@
-protected void hiddenButton_Click(object sender, EventArgs e)
-        {
-            string jsonData = hiddenField.Value;
+// Başlıkları filteredData'nın ilk elemanının key'lerinden dinamik al
+const headers = Object.keys(filteredData[0]);
 
-            if (string.IsNullOrEmpty(jsonData))
-            {
-                Response.Write("No data available.");
-                return;
-            }
+// Başlık satırını oluştur
+const headerRow = headers.map(header => {
+    if (typeof header === 'string' && (header.includes(',') || header.includes('"') || header.includes('\n'))) {
+        return `"${header.replace(/"/g, '""')}"`;
+    }
+    return header;
+}).join(',');
 
-            try
-            {
-                var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-                var tableData = js.Deserialize<List<Dictionary<string, object>>>(jsonData);
-
-                if (tableData == null || tableData.Count == 0)
-                {
-                    Response.Write("No data available.");
-                    return;
-                }
-
-                var columnNames = new List<string> { "Name", "VCenter", "DataCenter", "Info", "CPU Usage %", "Memory Usage %", "Total CPU Core", "Total Memory GB", "VM per Host", "Count of Hosts", "Count of Datastores" };
-
-                var csv = new StringBuilder();
-                csv.AppendLine(string.Join(",", columnNames));
-
-                foreach (var row in tableData)
-                {
-                    var values = new List<string>
-                    {
-                        row["objId"]?.ToString(),
-                        row["1"]?.ToString(),
-                        row["2"]?.ToString(),
-                        row["3"]?.ToString(),
-                        row["7"]?.ToString(),
-                        row["8"]?.ToString(),
-                        row["9"]?.ToString(),
-                        row["10"]?.ToString(),
-                        row["4"]?.ToString(),
-                        row["5"]?.ToString(),
-                        row["6"]?.ToString()
-                    };
-
-                    csv.AppendLine(string.Join(",", values));
-                }
-
-                Response.Clear();
-                Response.ContentType = "text/csv";
-                Response.AddHeader("Content-Disposition", "attachment;filename=vmpedia.csv");
-                Response.Write(csv.ToString());
-            }
-            catch (Exception ex)
-            {
-                Response.Write($"An error occurred: {ex.ToString()}");
-            }
+// Veri satırlarını oluştur
+const dataRows = filteredData.map(row => 
+    Object.values(row).map(cell => {
+        if (typeof cell === 'string' && (cell.includes(',') || cell.includes('"') || cell.includes('\n'))) {
+            return `"${cell.replace(/"/g, '""')}"`;
         }
+        return cell;
+    }).join(',')
+).join('\n');
+
+// Başlık ve veriyi birleştir
+const csvContent = headerRow + '\n' + dataRows;
+
+const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    
+// İndirme linki oluştur
+const link = document.createElement('a');
+const url = URL.createObjectURL(blob);
+
+link.setAttribute('href', url);
+link.setAttribute('download', "deneme.csv");
+link.style.visibility = 'hidden';
+
+// Linki sayfaya ekle, tıkla ve kaldır
+document.body.appendChild(link);
+link.click();
