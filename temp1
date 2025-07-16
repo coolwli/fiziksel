@@ -29,15 +29,30 @@ function Send-ToAIAnalysis {
         $kategoriAdi datas to analyze:
         $jsonPayload
 
-        You are provided with the latest metrics of a VM at one-hour intervals. Analyze these expertly and provide technical insights.
-        Please evaluate the following points:
-        1. Current state analysis for this category
-        2. Critical metrics and warnings
-        3. Improvement suggestions specific to this category
-        4. Anomalies to watch out for
-        5. Health score on a scale of 1-10
+        Below is long-term resource utilization data for a virtual machine (VM).
+        The data has been collected via the vROps API at 1-hour intervals.
+        Please analyze the data according to the following steps:
 
-        Provide your response in a structured and summarized format.Respond in turkish please but dont use turkish characters.
+        General Trend and Utilization Analysis:
+            Identify and interpret usage trends (e.g., increases, decreases, fluctuations).
+            Evaluate how resource utilization intensity has changed over time.
+
+        Anomaly Detection:
+            Detect any sudden spikes, drops, or unusual patterns in usage.
+            Indicate the specific time periods where anomalies are concentrated.
+
+        Capacity and Risk Analysis:
+            Identify periods of excessive or insufficient resource usage.
+            Based on long-term usage statistics, assess whether the current resource allocation is sufficient.
+            Would you recommend reclaiming any underutilized resources?
+
+        Recommendations:
+            Provide suggestions to increase, decrease, or reconfigure the current resource allocation.
+            If necessary, outline proactive measures or actions that should be taken.
+
+
+        Please summarize all findings in a single, detailed paragraph, including technical insights and justifications for each conclusion.
+        Respond in turkish please. But dont use turkish characters.
 "@
 
     Write-Host "=== $kategoriAdi Analizi ===" -ForegroundColor Cyan
