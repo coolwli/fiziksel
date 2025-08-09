@@ -1,255 +1,366 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>VM Monitoring</title>
-        <style>
-            * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
+const MAX_PAGE = 10;
+let rowsPerPage = 20;
+let baseData = [];
+let currentPage = 1;
+let isAscending = true;
+let filteredData = [];
+let filename = "vmpedia.csv";
+
+
+function sortTableByColumn(columnIndex) {
+
+    filteredData.sort((rowA, rowB) => {
+        const columnName = columns[columnIndex].name;
+        let valueA = rowA[columnName].toString().trim();
+        let valueB = rowB[columnName].toString().trim();
+
+        if (sortableColumnTypes.numericColumns.includes(columnIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        if (sortableColumnTypes.dateColumns.includes(columnIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; 
+            valueB = (new Date(valueB)).getTime() || 0;
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        if (sortableColumnTypes.textwNumColumns.includes(columnIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return isAscending ? valueA - valueB : valueB - valueA;
+        }
+
+        return isAscending ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+    });
+}
+
+function dynamicSort(dataArray, colIndex) {
+    return dataArray.sort((a, b) => {
+        let valueA = a.toString().trim();
+        let valueB = b.toString().trim();
+
+        if (sortableColumnTypes.numericColumns.includes(colIndex)) {
+            valueA = isNaN(valueA) ? 0 : parseFloat(valueA);
+            valueB = isNaN(valueB) ? 0 : parseFloat(valueB);
+            return valueA - valueB;
+        }
+
+        if (sortableColumnTypes.dateColumns.includes(colIndex)) {
+            valueA = (new Date(valueA)).getTime() || 0; 
+            valueB = (new Date(valueB)).getTime() || 0; 
+            return valueA - valueB;
+        }
+
+        if (sortableColumnTypes.textwNumColumns.includes(colIndex)) {
+            valueA = valueA.split(" ")[0];
+            valueB = valueB.split(" ")[0];
+            return valueA - valueB;
+        }
+
+        return valueA.localeCompare(valueB);
+    });
+}
+
+
+function renderTablePage(pageNumber, data) {
+    const startIndex = (pageNumber - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedData = data.slice(startIndex, endIndex);
+
+    const tableBody = document.getElementById('tableBody');
+    tableBody.innerHTML = '';
+
+    if (paginatedData.length === 0) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = columns.length;
+        cell.textContent = "No data available";
+        row.appendChild(cell);
+        tableBody.appendChild(row);
+        return;
+    }
+
+    paginatedData.forEach(row => {
+        const tableRow = document.createElement('tr');
+        columns.forEach(column => {
+            if (column.dontShow) return;
+            const cell = document.createElement('td');
+            cell.textContent = row[column.name];
+            tableRow.appendChild(cell);
+        });
+        if (rowClick == true) {
+            tableRow.addEventListener('click', function () {
+                window.location.href = screenName + ".aspx" + "?id=" + row[idNum] + "&vc=" + row[vcNum];
+            });
+        }
+        tableBody.appendChild(tableRow);
+    });
+}
+
+function renderPaginationControls(data) {
+    const totalPages = Math.ceil(data.length / rowsPerPage);
+    const paginationContainer = document.getElementById('pagination');
+    paginationContainer.innerHTML = '';
+
+    let startPage = Math.max(1, currentPage - Math.floor(MAX_PAGE / 2));
+    let endPage = Math.min(totalPages, currentPage + Math.floor(MAX_PAGE / 2));
+
+    for (let i = startPage; i <= endPage; i++) {
+        const button = document.createElement('button');
+        button.textContent = i;
+        button.className = 'page-link';
+        if (i === currentPage) {
+            button.classList.add('active');
+        }
+        button.addEventListener('click', () => {
+            currentPage = i;
+            renderTablePage(currentPage, data);
+            renderPaginationControls(data);
+        });
+        paginationContainer.appendChild(button);
+    }
+}
+
+function createTableColumns() {
+    const tableHeader = document.getElementById('table-head');
+    tableHeader.innerHTML = '';
+
+    columns.forEach((column, index) => {
+        if (column.dontShow) return;
+
+        const headerCell = document.createElement('th');
+        headerCell.addEventListener('click', () => {
+            if (event.target.tagName !== 'TH') return;
+            sortTableByColumn(index);
+            currentPage = 1;
+            renderTablePage(currentPage, filteredData);
+            isAscending = !isAscending;
+        });
+
+        if (column.hasSearchBar || column.onlyTH) {
+            headerCell.innerHTML = column.label;
+            tableHeader.appendChild(headerCell);
+            return;
+        }
+
+        headerCell.classList.add('dropdown');
+        headerCell.innerHTML = `${column.label}<span class="dropdown-arrow">&#9660;</span>`;
+
+        const dropdownContent = document.createElement('div');
+        dropdownContent.classList.add('dropdown-content');
+
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search';
+        searchInput.addEventListener('keyup', () => filterCheckboxes(searchInput));
+
+        dropdownContent.appendChild(searchInput);
+
+        const selectAllContainer = document.createElement('div');
+        selectAllContainer.classList.add('select-all-div');
+        const selectAllCheckbox = document.createElement('input');
+        selectAllCheckbox.type = 'checkbox';
+        selectAllCheckbox.addEventListener('change', () => {
+            const checkboxes = dropdownContent.querySelectorAll('.checkboxes div:not([style*="display: none"]) input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = selectAllCheckbox.checked);
+            applyFilters(dropdownContent);
+        });
+        const selectAllLabel = document.createElement('label');
+        selectAllLabel.textContent = 'Select All';
+        selectAllContainer.appendChild(selectAllCheckbox);
+        selectAllContainer.appendChild(selectAllLabel);
+
+        dropdownContent.appendChild(selectAllContainer);
+
+        const checkboxesContainer = document.createElement('div');
+        checkboxesContainer.classList.add('checkboxes');
+        dropdownContent.appendChild(checkboxesContainer);
+
+        dropdownContent.appendChild(document.createElement('br'));
+        headerCell.appendChild(dropdownContent);
+        tableHeader.appendChild(headerCell);
+
+        generateCheckboxesForColumn(dropdownContent, index);
+    });
+}
+
+function filterCheckboxes(input) {
+    const checkboxes = input.parentElement.querySelectorAll(".checkboxes input[type='checkbox']");
+    checkboxes.forEach(checkbox => {
+        const label = checkbox.nextElementSibling;
+        if (label.textContent.toLowerCase().includes(input.value.toLowerCase())) {
+            checkbox.parentElement.style.display = '';
+        } else {
+            checkbox.parentElement.style.display = 'none';
+        }
+    });
+}
+
+function generateCheckboxesForColumn(dropdownContent, columnIndex) {
+    const checkboxesContainer = dropdownContent.querySelector('.checkboxes');
+
+    checkboxesContainer.querySelectorAll("div").forEach((div) => {
+        const checkbox = div.querySelector("input[type='checkbox']");
+        if (!checkbox.checked) {
+            div.remove();
+        }
+    });
+
+    const uniqueValues = getUniqueValues(columnIndex);
+
+    const fragment = document.createDocumentFragment();
+
+    uniqueValues.forEach(value => {
+        if (checkboxesContainer.querySelector(`input[value = '${value}']`)) return;
+
+        const checkboxContainer = document.createElement("div");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = value;
+        checkbox.addEventListener("change", () => applyFilters(dropdownContent));
+
+        const label = document.createElement("label");
+        label.textContent = value;
+
+        checkboxContainer.appendChild(checkbox);
+        checkboxContainer.appendChild(label);
+        checkboxContainer.appendChild(document.createElement("br"));
+
+        fragment.appendChild(checkboxContainer);
+    });
+
+    checkboxesContainer.appendChild(fragment);
+}
+
+function getUniqueValues(columnIndex) {
+    const uniqueValues = [...new Set(filteredData.map(row => row[columns[columnIndex].name].toString().trim()))];
+    return dynamicSort(uniqueValues, columnIndex);
+}
+
+
+
+function applyFilters(lastSelectedDropdown) {
+    const selectedFilters = Array.from(document.querySelectorAll("th")).map((column) => {
+        if (column.classList.contains("dropdown")) {
+            const checkboxesContainer = column.querySelector(".checkboxes");
+            if (checkboxesContainer) {
+                return Array.from(checkboxesContainer.querySelectorAll("input[type='checkbox']:checked"))
+                    .map(checkbox => checkbox.value);
             }
+        }
+        return [];
+    });
 
-            body {
-                font-family: Arial, sans-serif;
-                background: #f5f5f5;
+    filteredData = baseData.filter(row => {
+        return selectedFilters.every((values, columnIndex) => {
+            if (values.length === 0) return true;
+            const columnName = columns[columnIndex].name;
+            return values.includes(row[columnName].toString());
+        });
+    });
+
+    columns.forEach((column, index) => {
+        if (column.hasSearchBar || column.onlyTH || column.dontShow) return;
+
+        const headerCell = document.querySelectorAll("th")[index];
+        const dropdownContent = headerCell.querySelector(".dropdown-content");
+
+        if (dropdownContent !== lastSelectedDropdown || selectedFilters.flat().length === 0) {
+            generateCheckboxesForColumn(dropdownContent, index);
+        }
+    });
+
+    currentPage = 1;
+    renderTablePage(currentPage, filteredData);
+    renderPaginationControls(filteredData);
+    updateRowCounter(filteredData);
+}
+
+function updateRowCounter() {
+    document.getElementById('rowCounter').textContent = `${filteredData.length} Rows Listed..`;
+}
+
+function setRowsPerPage(selectedButton) {
+    const buttons = document.querySelector(".button-container").querySelectorAll('.button');
+    buttons.forEach(button => button.classList.remove('active'));
+    selectedButton.classList.add('active');
+    rowsPerPage = parseInt(selectedButton.textContent);
+    currentPage = 1;
+    renderPaginationControls(filteredData);
+    renderTablePage(currentPage, filteredData);
+}
+
+function initializeTable() {
+    filteredData = baseData;
+    createTableColumns();
+    createSearchInput();
+    applyFilters();
+    sortTableByColumn(0);
+    renderTablePage(currentPage, filteredData);
+
+
+}
+
+function createSearchInput() {
+    columns.forEach((column, index) => {
+        if (column.hasSearchBar) {
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = `Search ${column.label}`;
+            searchInput.addEventListener('input', () => applyFilters(null));
+            document.querySelector('.table-top').prepend(searchInput);
+        }
+    });
+}
+
+document.getElementById('reset-button').addEventListener('click', (event) => {
+    event.preventDefault();
+    document.querySelectorAll("input[type='checkbox']").forEach(checkbox => checkbox.checked = false);
+    document.querySelectorAll('.hall-button').forEach(button => { if (button.innerText !== "All Halls") button.classList.remove('active'); else button.classList.add('active'); });
+    document.querySelectorAll("input[type='text']").forEach(input => input.value = '');
+    filteredData = baseData;
+    currentPage = 1;
+    applyFilters();
+});
+
+function exportTableToCSV(filename) {
+    if (!filteredData.length) return;
+    const headers = Object.keys(filteredData[0]);
+    const headerRow = headers
+        .map((header) => {
+            if (typeof header === "string" && (header.includes(",") || header.includes('"') || header.includes("\n"))) {
+                return `"${header.replace(/"/g, '""')}"`;
             }
+            return header;
+        })
+        .join(",");
+    const dataRows = filteredData
+        .map((row) =>
+            Object.values(row)
+                .map((cell) => {
+                    if (typeof cell === "string" && (cell.includes(",") || cell.includes('"') || cell.includes("\n"))) {
+                        return `"${cell.replace(/"/g, '""')}"`;
+                    }
+                    return cell;
+                })
+                .join(",")
+        )
+        .join("\n");
+    const csvContent = headerRow + "\n" + dataRows;
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
 
-            .header {
-                background: #2c3e50;
-                color: white;
-                padding: 20px;
-                text-align: center;
-            }
-
-            .header h1 {
-                font-size: 24px;
-            }
-
-            .container {
-                max-width: 1000px;
-                margin: 20px auto;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                padding: 20px;
-            }
-
-            .buttons {
-                margin-bottom: 20px;
-            }
-
-            .btn {
-                background: #3498db;
-                color: white;
-                border: none;
-                padding: 10px 15px;
-                border-radius: 5px;
-                cursor: pointer;
-                margin-right: 10px;
-            }
-
-            .btn:hover {
-                background: #2980b9;
-            }
-
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 10px;
-            }
-
-            th,
-            td {
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-                position: relative;
-            }
-
-            th {
-                background: #f8f9fa;
-                font-weight: bold;
-                cursor: pointer;
-            }
-
-            th:hover {
-                background: #e9ecef;
-            }
-
-            tr:hover {
-                background: #f5f5f5;
-            }
-
-            th:hover .resize-handle {
-                display: block;
-                background: #ccc; /* isteğe bağlı: görünürlüğü artırmak için */
-            }
-
-            .resize-handle {
-                display: none;
-                position: absolute;
-                right: 0;
-                top: 50%;
-                transform: translateY(-50%);
-                height: 60%;
-                width: 3px;
-                background-color: rgba(0, 0, 0, 0.15);
-                border-radius: 2px;
-                cursor: col-resize;
-                transition: background-color 0.3s ease;
-            }
-
-            .filter-box {
-                position: absolute;
-                top: 100%;
-                left: 0;
-                background: white;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                padding: 10px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                display: none;
-                z-index: 100;
-                min-width: 200px;
-            }
-
-            th:hover .filter-box {
-                display: block;
-            }
-
-            .filter-input {
-                width: 100%;
-                padding: 5px;
-                border: 1px solid #ddd;
-                border-radius: 3px;
-                margin-bottom: 10px;
-            }
-
-            .filter-item {
-                margin: 5px 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>VM CPU Monitoring</h1>
-        </div>
-
-        <div class="container">
-            <table id="dataTable">
-                <thead>
-                    <tr>
-                        <th onclick="sortTable(0)">
-                            VM Name
-                            <div class="resize-handle"></div>
-                            <div class="filter-box">
-                                <input type="text" class="filter-input" placeholder="Filter..." />
-                                <div class="filter-item"><input type="checkbox" value="VM-01" /> VM-01</div>
-                                <div class="filter-item"><input type="checkbox" value="VM-02" /> VM-02</div>
-                                <div class="filter-item"><input type="checkbox" value="VM-03" /> VM-03</div>
-                            </div>
-                        </th>
-                        <th onclick="sortTable(1)">
-                            Host
-                            <div class="resize-handle"></div>
-                            <div class="filter-box">
-                                <input type="text" class="filter-input" placeholder="Filter..." />
-                                <div class="filter-item"><input type="checkbox" value="Host-01" /> Host-01</div>
-                                <div class="filter-item"><input type="checkbox" value="Host-02" /> Host-02</div>
-                            </div>
-                        </th>
-                        <th onclick="sortTable(2)">
-                            CPU Usage
-                            <div class="resize-handle"></div>
-                            <div class="filter-box">
-                                <input type="text" class="filter-input" placeholder="Filter..." />
-                                <div class="filter-item"><input type="checkbox" value="low" /> Low (0-30%)</div>
-                                <div class="filter-item"><input type="checkbox" value="medium" /> Medium (31-70%)</div>
-                                <div class="filter-item"><input type="checkbox" value="high" /> High (71-100%)</div>
-                            </div>
-                        </th>
-                        <th onclick="sortTable(3)">
-                            Status
-                            <div class="resize-handle"></div>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr>
-                        <td>VM-01</td>
-                        <td>Host-01</td>
-                        <td>25%</td>
-                        <td><span class="status online">online</span></td>
-                    </tr>
-                    <tr>
-                        <td>VM-02</td>
-                        <td>Host-02</td>
-                        <td>65%</td>
-                        <td><span class="status warning">warning</span></td>
-                    </tr>
-                    <tr>
-                        <td>VM-03</td>
-                        <td>Host-01</td>
-                        <td>85%</td>
-                        <td><span class="status online">online</span></td>
-                    </tr>
-                    <tr>
-                        <td>VM-04</td>
-                        <td>Host-02</td>
-                        <td>15%</td>
-                        <td><span class="status offline">offline</span></td>
-                    </tr>
-                    <tr>
-                        <td>VM-05</td>
-                        <td>Host-01</td>
-                        <td>45%</td>
-                        <td><span class="status online">online</span></td>
-                    </tr>
-                    <tr>
-                        <td>VM-06</td>
-                        <td>Host-02</td>
-                        <td>92%</td>
-                        <td><span class="status warning">warning</span></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <script>
-            // Sütun boyutlandırma
-            function makeResizable() {
-                var cols = document.querySelectorAll("th");
-
-                for (var i = 0; i < cols.length; i++) {
-                    var col = cols[i];
-                    var resizer = col.querySelector(".resize-handle");
-
-                    resizer.addEventListener("mousedown", function (e) {
-                        var startX = e.pageX;
-                        var startWidth = this.parentElement.offsetWidth;
-                        var col = this.parentElement;
-
-                        function doResize(e) {
-                            var newWidth = startWidth + (e.pageX - startX);
-                            if (newWidth > 50) {
-                                col.style.width = newWidth + "px";
-                            }
-                        }
-
-                        function stopResize() {
-                            document.removeEventListener("mousemove", doResize);
-                            document.removeEventListener("mouseup", stopResize);
-                        }
-
-                        document.addEventListener("mousemove", doResize);
-                        document.addEventListener("mouseup", stopResize);
-                    });
-                }
-            }
-
-            makeResizable();
-        </script>
-    </body>
-</html>
+document.getElementById("export-button").addEventListener("click", (event) => {
+    event.preventDefault();
+    exportTableToCSV("vmpedia.csv");
+});
