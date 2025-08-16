@@ -6,39 +6,39 @@ $vmMetrikleri = Get-Content $jsonPath | ConvertFrom-Json
 
 # Detailed prompts per metric category
 $kategoriPromptlari = @{
-    "CPU_Metrikleri" = @"
-This dataset contains key CPU-related performance metrics for virtual machines, including:
-- `cpu|usage_average`: the average CPU utilization percentage over time.
-- `cpu|demandPct`: the percentage of CPU resources requested by the VM.
-- `cpu|readyPct`: the percentage of time the VM is ready to execute but cannot get scheduled on a physical CPU.
-- `guest|cpu_queue`: the number of processes waiting in the CPU queue.
+    "cpu" = @"
+        This dataset contains key CPU-related performance metrics for virtual machines, including:
+        - `cpu|usage_average`: the average CPU utilization percentage over time.
+        - `cpu|demandPct`: the percentage of CPU resources requested by the VM.
+        - `cpu|readyPct`: the percentage of time the VM is ready to execute but cannot get scheduled on a physical CPU.
+        - `guest|cpu_queue`: the number of processes waiting in the CPU queue.
 
-High `readyPct` or `cpu_queue` values may indicate CPU contention or oversubscription. Analyze trends, peak usage, and saturation risks. Identify if vCPU overcommitment or under-allocation may be causing performance bottlenecks.
+        High `readyPct` or `cpu_queue` values may indicate CPU contention or oversubscription. Analyze trends, peak usage, and saturation risks. Identify if vCPU overcommitment or under-allocation may be causing performance bottlenecks.
 "@;
 
-    "Bellek_Metrikleri" = @"
-This dataset contains memory-related performance metrics for virtual machines, such as:
-- `mem|usage_average`: average memory utilization as a percentage.
-- `mem|swapoutRate_average` and `mem|swapinRate_average`: show the rate at which memory pages are swapped out/in, indicating memory pressure.
-- `mem|balloonPct`: percentage of memory reclaimed by the balloon driver, typically under host memory pressure.
+    "memory" = @"
+        This dataset contains memory-related performance metrics for virtual machines, such as:
+        - `mem|usage_average`: average memory utilization as a percentage.
+        - `mem|swapoutRate_average` and `mem|swapinRate_average`: show the rate at which memory pages are swapped out/in, indicating memory pressure.
+        - `mem|balloonPct`: percentage of memory reclaimed by the balloon driver, typically under host memory pressure.
 
-A healthy VM should show low or zero swap and ballooning activity. Analyze trends for memory saturation, excessive usage, and potential reclaim opportunities. Identify inefficient memory use, memory overcommitment, or misconfigured limits.
+        A healthy VM should show low or zero swap and ballooning activity. Analyze trends for memory saturation, excessive usage, and potential reclaim opportunities. Identify inefficient memory use, memory overcommitment, or misconfigured limits.
 "@;
 
-    "Disk_Metrikleri" = @"
-This dataset includes virtual disk I/O performance metrics, including:
-- `virtualDisk|read_average` and `virtualDisk|write_average`: average read and write Disk I/O operations in milliseconds.
-- `virtualDisk:Aggregate of all instances|totalLatency`: total latency across all disk instances.
+    "disk" = @"
+        This dataset includes virtual disk I/O performance metrics, including:
+        - `virtualDisk|read_average` and `virtualDisk|write_average`: average read and write Disk I/O operations in milliseconds.
+        - `virtualDisk:Aggregate of all instances|totalLatency`: total latency across all disk instances.
 
-Disk latency above 20–30 ms can impact application performance. Identify patterns of disk bottlenecks, I/O pressure, and usage peaks. Look for consistently high latencies or unusual spikes that could signal underlying storage issues.
+        Disk latency above 20–30 ms can impact application performance. Identify patterns of disk bottlenecks, I/O pressure, and usage peaks. Look for consistently high latencies or unusual spikes that could signal underlying storage issues.
 "@;
 
-    "Network_Metrikleri" = @"
-This dataset contains network performance data for virtual machines, including:
-- `net|transmitted_average` and `net|received_average`: average network throughput in KB/s.
-- `net:Aggregate of all instances|droppedPct`: percentage of packets dropped.
+    "network" = @"
+        This dataset contains network performance data for virtual machines, including:
+        - `net|transmitted_average` and `net|received_average`: average network throughput in KB/s.
+        - `net:Aggregate of all instances|droppedPct`: percentage of packets dropped.
 
-Packet drops, even at low rates, can indicate congestion or network misconfiguration. Analyze the balance of ingress and egress traffic. Detect abnormal patterns, such as traffic bursts, loss spikes, or sustained saturation levels.
+        Packet drops, even at low rates, can indicate congestion or network misconfiguration. Analyze the balance of ingress and egress traffic. Detect abnormal patterns, such as traffic bursts, loss spikes, or sustained saturation levels.
 "@;
 
 }
@@ -53,36 +53,28 @@ function Send-ToAIAnalysis {
     $jsonPayload = $metrikler | ConvertTo-Json -Depth 5
 
     $aiPrompt = @"
-$($kategoriPromptlari[$kategoriAdi])
+        Below is long-term resource usage data for a virtual machine (VM), collected at 1-hour intervals via the vROps API.
 
-Below is long-term resource utilization data for a virtual machine (VM).
-The data has been collected via the vROps API at 1-hour intervals.
+        Please analyze the data with expert-level insight:
 
-Please analyze the data according to the following steps:
+        Identify and interpret usage trends (increases, decreases, fluctuations).
 
-1. General Trend and Utilization Analysis:
-   - Identify and interpret usage trends (e.g., increases, decreases, fluctuations).
-   - Evaluate how resource utilization intensity has changed over time.
+        Detect changes in resource intensity and any anomalies.
 
-2. Anomaly Detection:
-   - Detect any sudden spikes, drops, or unusual patterns in usage.
-   - Indicate the specific time periods where anomalies are concentrated.
+        Highlight periods of underutilization or sudden shifts.
 
-3. Capacity and Risk Analysis:
-   - Identify periods of excessive or insufficient resource usage.
-   - Based on long-term usage statistics, assess whether the current resource allocation is sufficient.
-   - Would you recommend reclaiming any underutilized resources?
+        Assess whether current resource allocation is sufficient.
 
-4. Recommendations:
-   - Provide suggestions to increase, decrease, or reconfigure the current resource allocation.
-   - If necessary, outline proactive measures or actions that should be taken.
+        Provide recommendations on scaling, reduction, or reallocation if needed.
 
-Please summarize all findings in a single short (max 50 words), detailed paragraph, including just importing technical insights and justifications for each conclusion.
+        Suggest proactive measures or necessary actions.
+        $($kategoriPromptlari[$kategoriAdi])
+        $jsonPayload
 
-Respond in Turkish please. But do not use Turkish characters.
+        Summarize all findings in a concise paragraph of up to 50 words, including technical justifications.
 "@
 
-Write-Host "=== $kategoriAdi Analizi ===" -ForegroundColor Cyan
+    Write-Host "=== $kategoriAdi Analizi ===" -ForegroundColor Cyan
 
     $body = @{
         messages = @(
