@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="tr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Topology Ağacı – Geliştirilmiş</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                height: 100%;
+                margin: 0;
+                font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+            }
+            .wrap {
+                display: grid;
+                grid-template-rows: auto 1fr;
+                height: 100%;
+                padding: 12px;
+                gap: 10px;
+            }
+            .toolbar {
+                display: flex;
+                align-items: center;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                padding: 8px 12px;
+                border-radius: 14px;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+                gap: 10px;
+            }
+            .toolbar .title {
+                font-weight: 600;
+            }
+            .btn {
+                border: 1px solid #d1d5db;
+                background: #f1f5f9;
+                color: #1e293b;
+                padding: 6px 10px;
+                border-radius: 10px;
+                cursor: pointer;
+            }
+            .btn:hover {
+                background: #e2e8f0;
+            }
+            .field {
+                display: flex;
+                align-items: center;
+                border: 1px solid #d1d5db;
+                background: #f8fafc;
+                padding: 4px 8px;
+                border-radius: 8px;
+            }
+            .field input {
+                border: none;
+                background: transparent;
+                outline: none;
+                width: 150px;
+                font: inherit;
+            }
+            .stage {
+                position: relative;
+                background: #fff;
+                border: 1px solid #e5e7eb;
+                border-radius: 14px;
+                box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.02);
+                overflow: hidden;
+            }
+            svg {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+                cursor: grab;
+            }
+            .link {
+                fill: none;
+                stroke: #94a3b8;
+                stroke-width: 2;
+            }
+            .node rect {
+                fill: #ffffff;
+                stroke: #e2e8f0;
+                stroke-width: 1;
+                rx: 10;
+                ry: 10;
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
+                transition: stroke 0.2s;
+            }
+            .node:hover rect {
+                stroke: #3b82f6;
+            }
+            .label {
+                font-weight: 600;
+                font-size: 13px;
+                fill: #1e293b;
+            }
+
+            .match rect {
+                stroke: #10b981;
+                stroke-width: 2;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <div class="toolbar">
+                <div class="title">Topology Ağacı</div>
+                <button class="btn" id="fit">Fit</button>
+                <div style="flex: 1"></div>
+                <div class="field" style="position: relative">
+                    🔍<input id="search" placeholder="Ara..." autocomplete="off" />
+                    <div
+                        id="search-results"
+                        style="
+                            position: absolute;
+                            top: 110%;
+                            left: 0;
+                            right: 0;
+                            z-index: 10;
+                            background: #fff;
+                            border: 1px solid #e2e8f0;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                            display: none;
+                            max-height: 220px;
+                            overflow: auto;
+                        "
+                    ></div>
+                </div>
+            </div>
+            <div class="stage">
+                <svg id="svg">
+                    <g id="viewport" transform="translate(0,0) scale(1)">
+                        <g id="links"></g>
+                        <g id="nodes"></g>
+                    </g>
+                </svg>
+            </div>
+        </div>
+
+        <script>
+            const data = {
+                id: "root",
+                label: "garanti",
+                type: "gar",
+                children: [
+                    {
+                        id: "hpe",
+                        label: "hpe",
+                        type: "hpe",
+                        children: [
+                            {
+                                id: "dom1",
+                                label: "domain 1",
+                                type: "domain",
+                                children: [
+                                    {
+                                        id: "cls01",
+                                        label: "Closure 01",
+                                        type: "closure",
+                                        children: [
+                                            { id: "srv01", label: "Server 01", type: "server", children: [] },
+                                            { id: "srv02", label: "Server 02", type: "server", children: [] },
+                                        ],
+                                    },
+                                    { id: "cls02", label: "Closure 02", type: "closure", children: [] },
+                                    { id: "cls03", label: "Closure 03", type: "closure", children: [] },
+                                    { id: "cls04", label: "Closure 04", type: "closure", children: [] },
+                                    { id: "srv03", label: "Server 03", type: "server", children: [] },
+                                ],
+                            },
+                            {
+                                id: "dom2",
+                                label: "domain 2",
+                                type: "domain",
+                                children: [
+                                    { id: "cls06", label: "Closure 06", type: "closure", children: [] },
+                                    { id: "cls07", label: "Closure 07", type: "closure", children: [] },
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        id: "cisco",
+                        label: "cisco",
+                        type: "cisco",
+                        children: [
+                            {
+                                id: "dom3",
+                                label: "domain 3",
+                                type: "domain",
+                                children: [
+                                    { id: "cls08", label: "Closure 08", type: "closure", children: [] },
+                                    { id: "cls09", label: "Closure 09", type: "closure", children: [] },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            // PNG dosya eşlemesi (aynı klasörde)
+            const icons = {
+                gar: "./gar.jpeg",
+                hpe: "./hp.png",
+                cisco: "./cisco.png",
+                domain: "./domain.png",
+                closure: "./closure.png",
+                server: "./server.png",
+            };
+
+            // yeni: parent indeksleme ve odak düğümü
+            function indexParents(n, parent = null) {
+                n.parent = parent;
+                (n.children || []).forEach((c) => indexParents(c, n));
+            }
+            indexParents(data);
+
+            function getPath(n) {
+                const arr = [];
+                let cur = n;
+                while (cur) {
+                    arr.push(cur);
+                    cur = cur.parent;
+                }
+                return arr.reverse();
+            }
+
+            let focused = data; // tıklanan düğümün çocuklarını göster
+
+            let scale = 1,
+                offsetX = 0,
+                offsetY = 0;
+
+            function layout(root, maxDepth = 1) {
+                const nodes = [],
+                    links = [];
+                function walk(n, depth = 0, parent = null, order = 0) {
+                    n.depth = depth;
+                    n.order = order;
+                    nodes.push(n);
+                    if (parent) links.push({ source: parent, target: n });
+                    if (depth >= maxDepth) return;
+                    (n.children || []).forEach((c, i) => walk(c, depth + 1, n, i));
+                }
+                walk(root);
+                const levels = {};
+                nodes.forEach((n) => {
+                    if (!levels[n.depth]) levels[n.depth] = [];
+                    levels[n.depth].push(n);
+                });
+                const xGap = 180,
+                    yGap = 120;
+                Object.values(levels).forEach((arr) => {
+                    const offset = -((arr.length - 1) * xGap) / 2;
+                    arr.forEach((n, i) => {
+                        n.x = i * xGap + offset;
+                        n.y = n.depth * yGap;
+                    });
+                });
+                return { nodes, links };
+            }
+
+            function draw() {
+                const gLinks = document.getElementById("links");
+                const gNodes = document.getElementById("nodes");
+                gLinks.innerHTML = "";
+                gNodes.innerHTML = "";
+
+                const yGap = 120;
+                const xGap = 180;
+
+                // 1) Kökten odağa kadar yol
+                const path = getPath(focused);
+
+                // Yol düğümleri: dikey kolon, merkeze hizalı
+                path.forEach((n, i) => {
+                    n._x = -80; // 160px kartı merkezlemek için sol-X
+                    n._y = i * yGap;
+                });
+
+                // 2) Odak düğümün çocukları yatayda
+                const kids = focused.children || [];
+                const centerOffset = -((kids.length - 1) * xGap) / 2;
+                kids.forEach((c, i) => {
+                    c._x = i * xGap + centerOffset - 80; // sol-X
+                    c._y = path.length * yGap;
+                });
+
+                // 3) Bağlantılar: yol boyunca ve odak -> çocuklar
+                for (let i = 0; i < path.length - 1; i++) {
+                    const a = path[i],
+                        b = path[i + 1];
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", a._x + 80);
+                    line.setAttribute("y1", a._y + 60);
+                    line.setAttribute("x2", b._x + 80);
+                    line.setAttribute("y2", b._y);
+                    line.setAttribute("class", "link");
+                    gLinks.appendChild(line);
+                }
+                kids.forEach((c) => {
+                    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                    line.setAttribute("x1", focused._x + 80);
+                    line.setAttribute("y1", focused._y + 60);
+                    line.setAttribute("x2", c._x + 80);
+                    line.setAttribute("y2", c._y);
+                    line.setAttribute("class", "link");
+                    gLinks.appendChild(line);
+                });
+
+                // Rozet yardımcı: daraltılmış sayıları göster
+                function addBadge(g, text, title) {
+                    const bg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    bg.setAttribute("cx", 146);
+                    bg.setAttribute("cy", 14);
+                    bg.setAttribute("r", 11);
+                    bg.setAttribute("fill", "#e2e8f0");
+                    bg.setAttribute("stroke", "#94a3b8");
+                    bg.setAttribute("stroke-width", "1");
+                    g.appendChild(bg);
+
+                    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    t.setAttribute("x", 146);
+                    t.setAttribute("y", 18);
+                    t.setAttribute("font-size", "11");
+                    t.setAttribute("text-anchor", "middle");
+                    t.setAttribute("fill", "#334155");
+                    t.textContent = text;
+                    if (title) t.setAttribute("aria-label", title);
+                    g.appendChild(t);
+                }
+
+                function renderNode(n) {
+                    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                    g.setAttribute("class", "node");
+                    g.setAttribute("transform", `translate(${n._x},${n._y})`);
+                    g.dataset.label = n.label.toLowerCase();
+                    g.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        focused = n;
+                        draw();
+                    });
+
+                    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    rect.setAttribute("width", 160);
+                    rect.setAttribute("height", 60);
+                    g.appendChild(rect);
+
+                    const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+                    const src = icons[n.type] || icons.l3;
+                    img.setAttributeNS(null, "x", 5);
+                    img.setAttributeNS(null, "y", 5);
+                    img.setAttributeNS(null, "width", 48);
+                    img.setAttributeNS(null, "height", 48);
+                    img.setAttributeNS("http://www.w3.org/1999/xlink", "href", src);
+                    img.setAttributeNS(null, "href", src);
+                    img.setAttribute("preserveAspectRatio", "xMidYMid meet");
+                    g.appendChild(img);
+
+                    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    label.setAttribute("x", 65);
+                    label.setAttribute("y", 20);
+                    label.setAttribute("class", "label");
+                    label.textContent = n.label;
+                    g.appendChild(label);
+
+                    return g;
+                }
+
+                // Yol düğümleri: ebeveynler görünür, yol dışı kardeşler daraltılmış (rozet)
+                path.forEach((n, i) => {
+                    const g = renderNode(n);
+
+                    // Bu seviyede yol dışı kardeş sayısı
+                    const next = path[i + 1];
+                    const hiddenSiblings = (n.children || []).filter((c) => c !== next).length;
+                    if (hiddenSiblings > 0) {
+                        addBadge(g, `+${hiddenSiblings}`, `${hiddenSiblings} gizli çocuk`);
+                    }
+
+                    gNodes.appendChild(g);
+                });
+
+                // Odak çocukları: torunlar daraltılmış (rozet)
+                kids.forEach((c) => {
+                    const g = renderNode(c);
+                    const hidden = (c.children || []).length;
+                    if (hidden > 0) addBadge(g, `+${hidden}`, `${hidden} gizli çocuk`);
+                    gNodes.appendChild(g);
+                });
+            }
+
+            draw();
+
+            // Helper: tüm düğümleri düz liste olarak döndür
+            function flattenTree(node, arr = []) {
+                arr.push(node);
+                (node.children || []).forEach((child) => flattenTree(child, arr));
+                return arr;
+            }
+
+            // Search functionality with dropdown
+            const searchInput = document.getElementById("search");
+            const searchResults = document.getElementById("search-results");
+
+            searchInput.addEventListener("input", (e) => {
+                const keyword = e.target.value.toLowerCase().trim();
+                const nodes = document.querySelectorAll(".node");
+                // Highlight matches in tree
+                nodes.forEach((node) => {
+                    if (keyword.length >= 2 && node.dataset.label.includes(keyword)) {
+                        node.classList.add("match");
+                    } else {
+                        node.classList.remove("match");
+                    }
+                });
+
+                // Dropdown results
+                if (keyword.length < 2) {
+                    searchResults.style.display = "none";
+                    searchResults.innerHTML = "";
+                    return;
+                }
+                const allNodes = flattenTree(data).filter((n) => n.label && n.label.toLowerCase().includes(keyword));
+                if (allNodes.length === 0) {
+                    searchResults.innerHTML = '<div style="padding:8px;color:#64748b;">Eşleşme yok</div>';
+                    searchResults.style.display = "block";
+                    return;
+                }
+                searchResults.innerHTML = allNodes
+                    .map(
+                        (n) =>
+                            `<div class="search-item" data-id="${n.id}" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+                        <span style="color:#1e293b;font-weight:500">${n.label}</span>
+                        <span style="color:#64748b;font-size:12px;margin-left:8px;">(${n.type})</span>
+                    </div>`
+                    )
+                    .join("");
+                searchResults.style.display = "block";
+            });
+
+            // Tıklanınca ilgili düğüme focuslan
+            searchResults.addEventListener("mousedown", function (e) {
+                const item = e.target.closest(".search-item");
+                if (!item) return;
+                const id = item.dataset.id;
+                // Düğümü bul ve focusla
+                function findById(node, id) {
+                    if (node.id === id) return node;
+                    for (const c of node.children || []) {
+                        const found = findById(c, id);
+                        if (found) return found;
+                    }
+                    return null;
+                }
+                const node = findById(data, id);
+                if (node) {
+                    focused = node;
+                    draw();
+                    searchResults.style.display = "none";
+                }
+            });
+
+            // Arama kutusundan çıkınca dropdown'ı gizle
+            searchInput.addEventListener("blur", () => {
+                setTimeout(() => {
+                    searchResults.style.display = "none";
+                }, 120);
+            });
+
+            const viewport = document.getElementById("viewport");
+            const svg = document.getElementById("svg");
+
+            function applyTransform() {
+                viewport.setAttribute("transform", `translate(${offsetX},${offsetY}) scale(${scale})`);
+            }
+
+            document.getElementById("fit").addEventListener("click", () => {
+                scale = 1;
+                offsetX = svg.clientWidth / 2;
+                offsetY = 40;
+                applyTransform();
+            });
+
+            // Initial fit on load
+            window.addEventListener("load", () => {
+                document.getElementById("fit").click();
+                draw();
+            });
+
+            // Pan (dragging)
+            let isPanning = false;
+            let startX, startY;
+
+            svg.addEventListener("mousedown", (e) => {
+                isPanning = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                svg.style.cursor = "grabbing";
+            });
+
+            window.addEventListener("mouseup", () => {
+                isPanning = false;
+                svg.style.cursor = "grab";
+            });
+
+            window.addEventListener("mousemove", (e) => {
+                if (!isPanning) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                offsetX += dx;
+                offsetY += dy;
+                startX = e.clientX;
+                startY = e.clientY;
+                applyTransform();
+            });
+            // Mouse wheel zoom
+            svg.addEventListener(
+                "wheel",
+                function (e) {
+                    e.preventDefault();
+                    const zoomFactor = 1.1;
+                    if (e.deltaY < 0) {
+                        scale *= zoomFactor;
+                    } else {
+                        scale /= zoomFactor;
+                    }
+                    // İsteğe bağlı: zoom merkezi mouse konumuna göre ayarlanabilir
+                    applyTransform();
+                },
+                { passive: false }
+            );
+        </script>
+    </body>
+</html>
