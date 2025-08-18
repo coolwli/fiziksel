@@ -1,1 +1,443 @@
+let data = {};
+let focused;
+function buildTree(baseData) {
+    const root = {
+        id: "root",
+        label: "GARANTI",
+        type: "root",
+        children: [],
+        vendorMap: {}
+    };
 
+    baseData.forEach(item => {
+        // Vendor düğümü
+        if (!root.vendorMap[item.Vendor]) {
+            const vendorNode = {
+                id: item.Vendor,
+                label: item.Vendor,
+                type: item.Vendor.toLowerCase(),
+                children: [],
+                locationMap: {}
+            };
+            root.vendorMap[item.Vendor] = vendorNode;
+            root.children.push(vendorNode);
+        }
+        const vendorNode = root.vendorMap[item.Vendor];
+
+        // Location düğümü
+        if (!vendorNode.locationMap[item.Location]) {
+            const locationNode = {
+                id: item.Location,
+                label: item.Location,
+                type: item.Location.toLowerCase(),
+                children: [],
+                domainMap: {}
+            };
+            vendorNode.locationMap[item.Location] = locationNode;
+            vendorNode.children.push(locationNode);
+        }
+        const locationNode = vendorNode.locationMap[item.Location];
+
+        // Domain düğümü
+        if (!locationNode.domainMap[item.Domain]) {
+            const domainNode = {
+                id: item.Domain,
+                label: item.Domain,
+                type: "domain",
+                children: [],
+                chassisMap: {}
+            };
+            locationNode.domainMap[item.Domain] = domainNode;
+            locationNode.children.push(domainNode);
+        }
+        const domainNode = locationNode.domainMap[item.Domain];
+
+        // Chassis düğümü
+        if (!domainNode.chassisMap[item.Chassis]) {
+            const chassisNode = {
+                id: item.Chassis,
+                label: item.Chassis,
+                type: "chassis",
+                children: []
+            };
+            domainNode.chassisMap[item.Chassis] = chassisNode;
+            domainNode.children.push(chassisNode);
+        }
+        const chassisNode = domainNode.chassisMap[item.Chassis];
+
+        // Server düğümü
+        chassisNode.children.push({
+            id: item.Server,
+            label: item.Server,
+            type: "server",
+            children: []
+        });
+    });
+
+    // Geçici map'leri temizle
+    root.children.forEach(vendor => {
+        delete vendor.locationMap;
+        vendor.children.forEach(location => {
+            delete location.domainMap;
+            location.children.forEach(domain => {
+                delete domain.chassisMap;
+            });
+        });
+    });
+
+    delete root.vendorMap;
+    return root;
+}
+
+// PNG dosya eşlemesi (aynı klasörde)
+const icons = {
+    root: "./gar.jpeg",
+    ankara: "./ankara.png",
+    pendik: "./pendik.png",
+    hpe: "./hp.png",
+    cisco: "./cisco.png",
+    domain: "./domain.png",
+    chassis: "./closure.png",
+    server: "./server.png",
+};
+
+// yeni: parent indeksleme ve odak düğümü
+function indexParents(n, parent = null) {
+    n.parent = parent;
+    (n.children || []).forEach((c) => indexParents(c, n));
+}
+indexParents(data);
+
+function getPath(n) {
+    const arr = [];
+    let cur = n;
+    while (cur) {
+        arr.push(cur);
+        cur = cur.parent;
+    }
+    return arr.reverse();
+}
+
+
+let scale = 1,
+    offsetX = 0,
+    offsetY = 0;
+
+function layout(root, maxDepth = 1) {
+    const nodes = [],
+        links = [];
+
+    function walk(n, depth = 0, parent = null, order = 0) {
+        n.depth = depth;
+        n.order = order;
+        nodes.push(n);
+        if (parent) links.push({
+            source: parent,
+            target: n
+        });
+        if (depth >= maxDepth) return;
+        (n.children || []).forEach((c, i) => walk(c, depth + 1, n, i));
+    }
+    walk(root);
+    const levels = {};
+    nodes.forEach((n) => {
+        if (!levels[n.depth]) levels[n.depth] = [];
+        levels[n.depth].push(n);
+    });
+    const xGap = 180,
+        yGap = 120;
+    Object.values(levels).forEach((arr) => {
+        const offset = -((arr.length - 1) * xGap) / 2;
+        arr.forEach((n, i) => {
+            n.x = i * xGap + offset;
+            n.y = n.depth * yGap;
+        });
+    });
+    return {
+        nodes,
+        links
+    };
+}
+
+function draw() {
+    const gLinks = document.getElementById("links");
+    const gNodes = document.getElementById("nodes");
+    gLinks.innerHTML = "";
+    gNodes.innerHTML = "";
+
+    const yGap = 120;
+    const xGap = 320;
+
+    // 1) Kökten odağa kadar yol
+    const path = getPath(focused);
+
+    // Yol düğümleri: dikey kolon, merkeze hizalı
+    path.forEach((n, i) => {
+        n._x = -150; // 250px kartı merkezlemek için sol-X
+        n._y = i * yGap;
+    });
+
+    // 2) Odak düğümün çocukları yatayda
+    const kids = focused.children || [];
+    const centerOffset = -((kids.length - 1) * xGap) / 2;
+    kids.forEach((c, i) => {
+        c._x = i * xGap + centerOffset - 150; // sol-X
+        c._y = path.length * yGap;
+    });
+
+    // 3) Bağlantılar: yol boyunca ve odak -> çocuklar
+    for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i],
+            b = path[i + 1];
+        const
+            line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", a._x + 150);
+        line.setAttribute("y1", a._y + 60);
+        line.setAttribute("x2", b._x + 150);
+        line.setAttribute("y2", b._y);
+        line.setAttribute("class", "link");
+        gLinks.appendChild(line);
+    }
+    kids.forEach((c) => {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", focused._x + 150);
+        line.setAttribute("y1", focused._y + 60);
+        line.setAttribute("x2", c._x + 150);
+        line.setAttribute("y2", c._y);
+        line.setAttribute("class", "link");
+        gLinks.appendChild(line);
+    });
+
+    // Rozet yardımcı: daraltılmış sayıları göster
+    function addBadge(g, text, title) {
+        const bg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        bg.setAttribute("cx", 286); // 250-14
+        bg.setAttribute("cy", 14);
+        bg.setAttribute("r", 11);
+        bg.setAttribute("fill", "#e2e8f0");
+        bg.setAttribute("stroke", "#94a3b8");
+        bg.setAttribute("stroke-width", "1");
+        g.appendChild(bg);
+
+        const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        t.setAttribute("x", 286);
+        t.setAttribute("y", 18);
+        t.setAttribute("font-size", "11");
+        t.setAttribute("text-anchor", "middle");
+        t.setAttribute("fill", "#334155");
+        t.textContent = text;
+        if (title) t.setAttribute("aria-label", title);
+        g.appendChild(t);
+    }
+
+    function renderNode(n) {
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("class", "node");
+        g.setAttribute("transform", `translate(${n._x},${n._y})`);
+        console.log(n);
+        g.dataset.label = n.label;
+        g.addEventListener("click", (e) => {
+            e.stopPropagation();
+            focused = n;
+            draw();
+        });
+
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("width", 300);
+        rect.setAttribute("height", 60);
+        g.appendChild(rect);
+
+        const img = document.createElementNS("http://www.w3.org/2000/svg", "image");
+        const src = icons[n.type] ;
+        img.setAttributeNS(null, "x", 5);
+        img.setAttributeNS(null, "y", 5);
+        img.setAttributeNS(null, "width", 48);
+        img.setAttributeNS(null, "height", 48);
+        img.setAttributeNS("http://www.w3.org/1999/xlink", "href", src);
+        img.setAttributeNS(null, "href", src);
+        img.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        g.appendChild(img);
+
+        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        label.setAttribute("x", 65);
+        label.setAttribute("y", 20);
+        label.setAttribute("class", "label");
+        if (n.type === "server") {
+            label.setAttribute("font-size", "11"); // Küçük font
+        } else {
+            label.setAttribute("font-size", "14"); // Varsayılan font
+        }
+        label.textContent = n.label;
+        g.appendChild(label);
+
+        return g;
+    }
+
+    // Yol düğümleri: ebeveynler görünür, yol dışı kardeşler daraltılmış (rozet)
+    path.forEach((n, i) => {
+        const g = renderNode(n);
+
+        // Bu seviyede yol dışı kardeş sayısı
+        const next = path[i + 1];
+        const hiddenSiblings = (n.children || []).filter((c) => c !== next).length;
+        if (hiddenSiblings > 0) {
+            addBadge(g, `+${hiddenSiblings}`, `${hiddenSiblings} gizli çocuk`);
+        }
+
+        gNodes.appendChild(g);
+    });
+
+    // Odak çocukları: torunlar daraltılmış (rozet)
+    kids.forEach((c) => {
+        const g = renderNode(c);
+        const hidden = (c.children || []).length;
+        if (hidden > 0) addBadge(g, `+${hidden}`, `${hidden} gizli çocuk`);
+        gNodes.appendChild(g);
+    });
+}
+
+
+// Helper: tüm düğümleri düz liste olarak döndür
+function flattenTree(node, arr = []) {
+    arr.push(node);
+    (node.children || []).forEach((child) => flattenTree(child, arr));
+    return arr;
+}
+
+// Search functionality with dropdown
+const searchInput = document.getElementById("search");
+const searchResults = document.getElementById("search-results");
+
+searchInput.addEventListener("input", (e) => {
+    const keyword = e.target.value.toLowerCase().trim();
+    const nodes = document.querySelectorAll(".node");
+    // Highlight matches in tree
+    nodes.forEach((node) => {
+        if (keyword.length >= 2 && node.dataset.label.includes(keyword)) {
+            node.classList.add("match");
+        } else {
+            node.classList.remove("match");
+        }
+    });
+
+    // Dropdown results
+    if (keyword.length < 2) {
+        searchResults.style.display = "none";
+        searchResults.innerHTML = "";
+        return;
+    }
+    const allNodes = flattenTree(data).filter((n) => n.label && n.label.toLowerCase().includes(
+        keyword));
+    if (allNodes.length === 0) {
+        searchResults.innerHTML = '<div style="padding:8px;color:#64748b;">Eşleşme yok</div>';
+        searchResults.style.display = "block";
+        return;
+    }
+    searchResults.innerHTML = allNodes
+        .map(
+            (n) =>
+                `<div class="search-item" data-id="${n.id}" style="padding:8px;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+    <span style="color:#1e293b;font-weight:500">${n.label}</span>
+    <span style="color:#64748b;font-size:12px;margin-left:8px;">(${n.type})</span>
+</div>`
+        )
+        .join("");
+    searchResults.style.display = "block";
+});
+
+// Tıklanınca ilgili düğüme focuslan
+searchResults.addEventListener("mousedown", function (e) {
+    const item = e.target.closest(".search-item");
+    if (!item) return;
+    const id = item.dataset.id;
+    // Düğümü bul ve focusla
+    function findById(node, id) {
+        if (node.id === id) return node;
+        for (const c of node.children || []) {
+            const found = findById(c, id);
+            if (found) return found;
+        }
+        return null;
+    }
+    const node = findById(data, id);
+    if (node) {
+        focused = node;
+        draw();
+        searchResults.style.display = "none";
+    }
+});
+
+// Arama kutusundan çıkınca dropdown'ı gizle
+searchInput.addEventListener("blur", () => {
+    setTimeout(() => {
+        searchResults.style.display = "none";
+    }, 120);
+});
+
+const viewport = document.getElementById("viewport");
+const svg = document.getElementById("svg");
+
+function applyTransform() {
+    viewport.setAttribute("transform", `translate(${offsetX},${offsetY}) scale(${scale})`);
+}
+
+document.getElementById("fit").addEventListener("click", () => {
+    event.preventDefault();
+    scale = 1;
+    offsetX = svg.clientWidth / 2;
+    offsetY = 40;
+    applyTransform();
+});
+
+// Pan (dragging)
+let isPanning = false;
+let startX, startY;
+
+svg.addEventListener("mousedown", (e) => {
+    isPanning = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    svg.style.cursor = "grabbing";
+});
+
+window.addEventListener("mouseup", () => {
+    isPanning = false;
+    svg.style.cursor = "grab";
+});
+
+window.addEventListener("mousemove", (e) => {
+    if (!isPanning) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    offsetX += dx;
+    offsetY += dy;
+    startX = e.clientX;
+    startY = e.clientY;
+    applyTransform();
+});
+
+// Mouse wheel zoom
+svg.addEventListener(
+    "wheel",
+    function (e) {
+        e.preventDefault();
+        const zoomFactor = 1.1;
+        if (e.deltaY < 0) {
+            scale *= zoomFactor;
+        } else {
+            scale /= zoomFactor;
+        }
+        // İsteğe bağlı: zoom merkezi mouse konumuna göre ayarlanabilir
+        applyTransform();
+    }, {
+        passive: false
+    }
+);
+
+function initialize() {
+    data = buildTree(baseData);
+    indexParents(data);
+    focused= data; 
+    document.getElementById('fit').click();
+    draw();
+}
