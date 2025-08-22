@@ -1,37 +1,108 @@
-Aşağıda, vROps API ile 1 saatlik aralıklarla toplanmış bir sanal makineye (VM) ait uzun vadeli kaynak kullanım verileri yer almaktadır.
+## Ignore SSL Certificates
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
+        }
+    }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
 
-Lütfen aşağıdaki analizleri uzman bakışıyla yapınız:
 
-Kullanım eğilimlerini (artış, azalma, dalgalanma) yorumlayın.
 
-Kaynak yoğunluğundaki değişimleri ve olası anormallikleri tespit edin.
+$names=@("GBELKT05","GBELKT20","GBJBOT03")
 
-Yetersiz kullanım veya ani değişim görülen dönemleri belirtin.
+$token=(F:\Ali\powershell\vrops\Get_vROPS_Token.ps1 -tokenType "pendik")
+if($token -eq $null){
+    return "token is null"
+}
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
 
-Mevcut kaynak tahsisinin yeterliliğini değerlendirin.
+$resources = @()
+foreach($name in $names){
+    $reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityName]=$($name)"
 
-Gerekiyorsa kaynak artırımı, azaltımı veya yeniden düzenlemeye yönelik öneriler sunun.
+    $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    $resources+="$name, $($reportsResponse.resources.resource.identifier)"
 
-Proaktif önlemler ve alınması gereken aksiyonları belirtin.
+}
 
-Tüm bulgularınızı, teknik gerekçeleriyle birlikte maksimum 50 kelimelik kısa bir paragrafta özetleyin.
+$endDate = Get-Date
+$beginDate = $endDate.AddMonths(-1)
 
-#####
+$epoch = Get-Date "1970-01-01 00:00:00Z"
 
-Below is long-term resource usage data for a virtual machine (VM), collected at 1-hour intervals via the vROps API.
+$beginTimestamp = [math]::Round(($beginDate.ToUniversalTime() - $epoch).TotalMilliseconds)
+$endTimestamp = [math]::Round(($endDate.ToUniversalTime() - $epoch).TotalMilliseconds)
 
-Please analyze the data with expert-level insight:
 
-Identify and interpret usage trends (increases, decreases, fluctuations).
+$metrikKategorileri = @{
+    "cpu" = @(
+        "cpu|usage_average",
+        "cpu|demandPct",
+        "cpu|readyPct",
+        "cpu|usagemhz_average",
+        "guest|cpu_queue"
 
-Detect changes in resource intensity and any anomalies.
+    )
+    "memory" = @(
+        "mem|swapoutRate_average",
+        "mem|swapinRate_average",
+        "mem|usage_average",
+        "mem|balloonPct"
+    )
+    "disk" = @(
+        "virtualDisk|read_average",
+        "virtualDisk|write_average",
+        "virtualDisk:Aggregate of all instances|totalLatency"
+    )
+    "network" = @(
+        "net|transmitted_average",
+        "net|received_average",
+        "net:Aggregate of all instances|droppedPct"
+    )
+}
 
-Highlight periods of underutilization or sudden shifts.
 
-Assess whether current resource allocation is sufficient.
+$allResourcesData = @{}
 
-Provide recommendations on scaling, reduction, or reallocation if needed.
+foreach ($resource in $resources) {
+    $resourceId=($resource -split ',')[1].Trim()
+    $reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/$resourceId/stats?&intervalType=MINUTES&intervalQuantifier=20&rollUpType=AVG&begin=$beginTimestamp&end=$endTimestamp"
+    $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    
+    # Her kategori için ayrı veri yapısı
+    $kategorilereAyrilmisMetrikler = @{}
+    # Kategorileri başlat
+    foreach ($kategori in $metrikKategorileri.Keys) {
+        $kategorilereAyrilmisMetrikler[$kategori] = @()
+    }
+    
+    # Tüm statları kontrol et ve kategorilere ayır
+    foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
+        foreach ($kategoriAdi in $metrikKategorileri.Keys) {
+            if ($metrikKategorileri[$kategoriAdi] -contains $stat.statKey.key) {
+                $kategorilereAyrilmisMetrikler[$kategoriAdi] += [PSCustomObject]@{
+                    StatKey = $stat.statKey.key
+                    Value = $stat.data
+                }
+                break
+            }
+        }
+    }
+    
+    # Bu resource'un verilerini ana yapıya ekle
+    $allResourcesData[($resource -split ',')[0].Trim()] = $kategorilereAyrilmisMetrikler
+}
 
-Suggest proactive measures or necessary actions.
-
-Summarize all findings in a concise paragraph of up to 50 words, including technical justifications.
+$jsonOutput = $allResourcesData | ConvertTo-Json -Depth 10
+$outputFilePath = "F:\Ali\VMsMetrics.json"
+Set-Content -Path $outputFilePath -Value $jsonOutput -Encoding UTF8
+Write-Host "Metrics saved to $outputFilePath"
