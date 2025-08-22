@@ -1,161 +1,3 @@
-function Get-Percentile {
-    param([double[]]$Values, [double]$Percentile)
-    if ($Values.Count -eq 0) { return 0 }
-
-    $sorted = $Values | Sort-Object
-    $index = [math]::Ceiling(($Percentile / 100.0) * $sorted.Count) - 1
-    $index = [math]::Max(0, [math]::Min($index, $sorted.Count - 1))
-    return $sorted[$index]
-}
-
-function Get-StandardDeviation {
-    param([double[]]$Values)
-    if ($Values.Count -le 1) { return 0 }
-
-    $mean = ($Values | Measure-Object -Average).Average
-    $sumSquaredDiffs = ($Values | ForEach-Object { [math]::Pow($_ - $mean, 2) } | Measure-Object -Sum).Sum
-    return [math]::Sqrt($sumSquaredDiffs / ($Values.Count - 1))
-}
-
-function Get-TrendAnalysis {
-    param([double[]]$Values)
-    if ($Values.Count -lt 2) { 
-        return @{ slope = 0; r2 = 0; trend = "insufficient_data" }
-    }
-
-    $n = $Values.Count
-    $x = 1..$n
-    $y = $Values
-
-    $meanX = ($x | Measure-Object -Average).Average
-    $meanY = ($y | Measure-Object -Average).Average
-
-    $numerator = 0
-    $denominatorX = 0
-    $denominatorY = 0
-
-    for ($i = 0; $i -lt $n; $i++) {
-        $diffX = $x[$i] - $meanX
-        $diffY = $y[$i] - $meanY
-        $numerator += $diffX * $diffY
-        $denominatorX += $diffX * $diffX
-        $denominatorY += $diffY * $diffY
-    }
-
-    if ($denominatorX -eq 0) {
-        return @{ slope = 0; r2 = 0; trend = "no_trend" }
-    }
-
-    $slope = $numerator / $denominatorX
-    $r2 = if ($denominatorY -eq 0) { 0 } else { [math]::Pow($numerator, 2) / ($denominatorX * $denominatorY) }
-
-    $trend = if ($slope -gt 0.01 -and $r2 -gt 0.1) { "increasing" } 
-             elseif ($slope -lt -0.01 -and $r2 -gt 0.1) { "decreasing" } 
-             else { "stable" }
-
-    return @{
-        slope = [math]::Round($slope, 4)
-        r2 = [math]::Round($r2, 3)
-        trend = $trend
-    }
-}
-
-function Get-ThresholdAnalysis {
-    param([double[]]$Values)
-
-    if ($Values.Count -eq 0) {
-        return @{}
-    }
-
-    $p70 = Get-Percentile -Values $Values -Percentile 70
-    $p85 = Get-Percentile -Values $Values -Percentile 85
-    $p95 = Get-Percentile -Values $Values -Percentile 95
-
-    $percentileThresholds = @{
-        "p70" = $p70
-        "p85" = $p85
-        "p95" = $p95
-    }
-
-    $results = @{}
-
-    foreach ($label in $percentileThresholds.Keys) {
-        $thresholdValue = $percentileThresholds[$label]
-        $timeAbove = 0
-        $longestRun = 0
-        $currentRun = 0
-
-        foreach ($value in $Values) {
-            if ($value -gt $thresholdValue) {
-                $timeAbove++
-                $currentRun++
-                if ($currentRun -gt $longestRun) {
-                    $longestRun = $currentRun
-                }
-            } else {
-                $currentRun = 0
-            }
-        }
-
-        $results["time_above_$label"] = $timeAbove
-        $results["longest_run_$label"] = $longestRun
-    }
-
-    return $results
-}
-
-function Get-AnomalyDetection {
-    param([double[]]$Values)
-    if ($Values.Count -eq 0) { 
-        return @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
-    }
-
-    $stats = $Values | Measure-Object -Average -Maximum -Minimum
-    $mean = $stats.Average
-    $std = Get-StandardDeviation -Values $Values
-    $max = $stats.Maximum
-
-    $anomalies = $Values | Where-Object { [math]::Abs($_ - $mean) -gt (2 * $std) }
-
-    $p95 = Get-Percentile -Values $Values -Percentile 95
-    $peakThreshold = [math]::Max($p95, $mean + (1.5 * $std))
-    $peaks = $Values | Where-Object { $_ -gt $peakThreshold }
-
-    return @{
-        peak_count = $peaks.Count
-        anomaly_count = $anomalies.Count
-        max_peak_value = [math]::Round($max, 2)
-    }
-}
-
-function Get-MetricUnit {
-    param([string]$MetricKey)
-
-    $unitMap = @{
-        "usage_average" = "percent"
-        "demandPct" = "percent"
-        "readyPct" = "percent"
-        "balloonPct" = "percent"
-        "droppedPct" = "percent"
-        "usagemhz_average" = "mhz"
-        "cpu_queue" = "count"
-        "read_average" = "ms"
-        "write_average" = "ms"
-        "totalLatency" = "ms"
-        "transmitted_average" = "kbps"
-        "received_average" = "kbps"
-        "swapoutRate_average" = "kbps"
-        "swapinRate_average" = "kbps"
-    }
-
-    foreach ($key in $unitMap.Keys) {
-        if ($MetricKey -like "*$key*") {
-            return $unitMap[$key]
-        }
-    }
-    return "unknown"
-}
-
 function Summarize-MetricData {
     param([double[]]$Values, [string]$Category, [string]$MetricKey)
 
@@ -163,36 +5,81 @@ function Summarize-MetricData {
         return @{
             unit = Get-MetricUnit -MetricKey $MetricKey
             samples = 0
-            stats = @{ mean = 0; max = 0; p95 = 0; p99 = 0; std = 0 }
-            trend = @{ slope = 0; r2 = 0; trend = "no_data" }
-            pressure = @{}
-            anomalies = @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
+            statistical_summary = @{
+                mean = 0
+                max = 0
+                percentile_95 = 0
+                percentile_99 = 0
+                standard_deviation = 0
+            }
+            trend_analysis = @{
+                trend_slope = 0
+                trend_r_squared = 0
+                trend_direction = "no_data"
+            }
+            threshold_pressure_analysis = @{}
+            anomaly_detection = @{
+                high_value_peak_count = 0
+                total_anomaly_count = 0
+                max_peak_value = 0
+            }
         }
     }
 
-    $stats = $Values | Measure-Object -Average -Maximum -Minimum
+    # Basic statistics
+    $stats = $Values | Measure-Object -Average -Maximum
     $mean = [math]::Round($stats.Average, 2)
     $max = [math]::Round($stats.Maximum, 2)
     $p95 = [math]::Round((Get-Percentile -Values $Values -Percentile 95), 2)
     $p99 = [math]::Round((Get-Percentile -Values $Values -Percentile 99), 2)
     $std = [math]::Round((Get-StandardDeviation -Values $Values), 2)
 
+    # Trend analysis
     $trend = Get-TrendAnalysis -Values $Values
-    $pressure = Get-ThresholdAnalysis -Values $Values
+
+    # Thresholds based on percentiles
+    $percentileThresholds = @{
+        "p70" = Get-Percentile -Values $Values -Percentile 70
+        "p85" = Get-Percentile -Values $Values -Percentile 85
+        "p95" = Get-Percentile -Values $Values -Percentile 95
+    }
+    $pressureRaw = Get-ThresholdAnalysis -Values $Values -Thresholds $percentileThresholds
+
+    # Rename keys for readability
+    $pressure = @{}
+    foreach ($key in $pressureRaw.Keys) {
+        if ($key -like "time_above_p*") {
+            $newKey = "samples_above_percentile_$($key.Substring(12))"
+            $pressure[$newKey] = $pressureRaw[$key]
+        } elseif ($key -like "longest_run_p*") {
+            $newKey = "longest_streak_above_percentile_$($key.Substring(14))"
+            $pressure[$newKey] = $pressureRaw[$key]
+        }
+    }
+
+    # Anomaly detection
     $anomalies = Get-AnomalyDetection -Values $Values
 
     return @{
         unit = Get-MetricUnit -MetricKey $MetricKey
         samples = $Values.Count
-        stats = @{
+        statistical_summary = @{
             mean = $mean
             max = $max
-            p95 = $p95
-            p99 = $p99
-            std = $std
+            percentile_95 = $p95
+            percentile_99 = $p99
+            standard_deviation = $std
         }
-        trend = $trend
-        pressure = $pressure
-        anomalies = $anomalies
+        trend_analysis = @{
+            trend_slope = $trend.slope
+            trend_r_squared = $trend.r2
+            trend_direction = $trend.trend
+        }
+        threshold_pressure_analysis = $pressure
+        anomaly_detection = @{
+            high_value_peak_count = $anomalies.peak_count
+            total_anomaly_count = $anomalies.anomaly_count
+            max_peak_value = $anomalies.max_peak_value
+        }
     }
 }
