@@ -1,458 +1,198 @@
-<!DOCTYPE html>
-<html lang="en">
+function Get-Percentile {
+    param([double[]]$Values, [double]$Percentile)
+    if ($Values.Count -eq 0) { return 0 }
 
-<head>
-    <meta charset="UTF-8">
-    <title>VM Metrics Analyzer</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            margin: 0;
-            background: linear-gradient(120deg, #e0e7ff 0%, #f8fafc 100%);
-            min-height: 100vh;
-        }
+    $sorted = $Values | Sort-Object
+    $index = [math]::Ceiling(($Percentile / 100.0) * $sorted.Count) - 1
+    $index = [math]::Max(0, [math]::Min($index, $sorted.Count - 1))
+    return $sorted[$index]
+}
 
-        .container {
-            max-width: 1500px;
-            margin: 3em auto;
-            background: #fff;
-            border-radius: 18px;
-            box-shadow: 0 4px 24px 0 rgba(80, 120, 200, 0.10);
-            padding: 2.5em 2.5em 2em 2.5em;
-        }
+function Get-StandardDeviation {
+    param([double[]]$Values)
+    if ($Values.Count -le 1) { return 0 }
 
-        .form-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1.5em;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 2em;
-        }
+    $mean = ($Values | Measure-Object -Average).Average
+    $sumSquaredDiffs = ($Values | ForEach-Object { [math]::Pow($_ - $mean, 2) } | Measure-Object -Sum).Sum
+    return [math]::Sqrt($sumSquaredDiffs / ($Values.Count - 1))
+}
 
-        .form-row input[type="file"] {
-            flex: 1 1 220px;
-            min-width: 180px;
-            margin: 0;
-        }
+function Get-TrendAnalysis {
+    param([double[]]$Values)
+    if ($Values.Count -lt 2) { 
+        return @{ slope = 0; r2 = 0; trend = "insufficient_data" }
+    }
 
-        .form-row button {
-            flex: 0 0 auto;
-        }
+    $n = $Values.Count
+    $x = 1..$n
+    $y = $Values
 
-        .results-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            margin-top: 2em;
-        }
+    $meanX = ($x | Measure-Object -Average).Average
+    $meanY = ($y | Measure-Object -Average).Average
 
-        .vm-card {
-            background: #f8fafc;
-            border-radius: 12px;
-            box-shadow: 0 1px 6px 0 rgba(30, 107, 184, 0.06);
-            padding: 1.2em 1.1em 1.1em 1.1em;
-            margin-bottom: 0.5em;
-        }
+    $numerator = 0
+    $denominatorX = 0
+    $denominatorY = 0
 
-        .vm-title {
-            color: #1e3a8a;
-            font-size: 1.15em;
-            font-weight: 700;
-            margin-bottom: 0.7em;
-            letter-spacing: 0.5px;
-        }
+    for ($i = 0; $i -lt $n; $i++) {
+        $diffX = $x[$i] - $meanX
+        $diffY = $y[$i] - $meanY
+        $numerator += $diffX * $diffY
+        $denominatorX += $diffX * $diffX
+        $denominatorY += $diffY * $diffY
+    }
 
-        .category-box {
-            background: #e0e7ef;
-            border-radius: 7px;
-            padding: 0.7em 0.9em;
-            margin-bottom: 0.6em;
-            box-shadow: 0 1px 2px 0 rgba(30, 107, 184, 0.03);
-        }
+    if ($denominatorX -eq 0) {
+        return @{ slope = 0; r2 = 0; trend = "no_trend" }
+    }
 
-        .category-title {
-            color: #2563eb;
-            font-weight: 600;
-            font-size: 1em;
-            margin-bottom: 0.2em;
-            display: inline-block;
-        }
+    $slope = $numerator / $denominatorX
+    $r2 = if ($denominatorY -eq 0) { 0 } else { [math]::Pow($numerator, 2) / ($denominatorX * $denominatorY) }
 
-        .category-content {
-            color: #334155;
-            font-size: 0.98em;
-            margin-top: 0.2em;
-        }
+    $trend = if ($slope -gt 0.01 -and $r2 -gt 0.1) { "increasing" } 
+             elseif ($slope -lt -0.01 -and $r2 -gt 0.1) { "decreasing" } 
+             else { "stable" }
 
-        .category-error {
-            color: #dc2626;
-            font-weight: 500;
-        }
+    return @{
+        slope = [math]::Round($slope, 4)
+        r2 = [math]::Round($r2, 3)
+        trend = $trend
+    }
+}
 
-        h1 {
-            text-align: center;
-            color: #1e3a8a;
-            letter-spacing: 1px;
-            margin-bottom: 1.5em;
-        }
+function Get-ThresholdAnalysis {
+    param([double[]]$Values)
 
-        input[type="file"] {
-            display: block;
-            margin: 0 auto 1em auto;
-        }
+    if ($Values.Count -eq 0) {
+        return @{}
+    }
 
-        button {
-            background: linear-gradient(90deg, #4e9af1, #1e6bb8);
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 0.7em 2.2em;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 2px 8px 0 rgba(30, 107, 184, 0.08);
-            transition: background 0.2s, transform 0.1s;
-            margin-bottom: 1.5em;
-        }
+    $p70 = Get-Percentile -Values $Values -Percentile 70
+    $p85 = Get-Percentile -Values $Values -Percentile 85
+    $p95 = Get-Percentile -Values $Values -Percentile 95
 
-        button:hover {
-            background: linear-gradient(90deg, #1e6bb8, #4e9af1);
-            transform: translateY(-2px) scale(1.03);
-        }
+    $percentileThresholds = @{
+        "p70" = $p70
+        "p85" = $p85
+        "p95" = $p95
+    }
 
-        .result,
-        .results-grid,
-        .vm-card,
-        .category-box {
-            box-sizing: border-box;
-        }
+    $results = @{}
 
-        textarea {
-            width: 100%;
-            height: 180px;
-            border-radius: 7px;
-            border: 1px solid #cbd5e1;
-            background: #f8fafc;
-            font-size: 1em;
-            margin-top: 0.7em;
-            padding: 0.7em;
-            resize: vertical;
-        }
+    foreach ($label in $percentileThresholds.Keys) {
+        $thresholdValue = $percentileThresholds[$label]
+        $timeAbove = 0
+        $longestRun = 0
+        $currentRun = 0
 
-        a {
-            color: #2563eb;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        #progressBarContainer {
-            margin-top: 1em;
-            width: 100%;
-            background: #e0e7ef;
-            border-radius: 8px;
-            overflow: hidden;
-            height: 24px;
-            box-shadow: 0 1px 4px 0 rgba(30, 107, 184, 0.04);
-        }
-
-        #progressBar {
-            height: 100%;
-            width: 0;
-            background: linear-gradient(90deg, #4e9af1, #1e6bb8);
-            transition: width 0.4s;
-        }
-
-        #spinner {
-            display: none;
-            margin-top: 1em;
-            text-align: center;
-        }
-
-        .spinner {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.6rem;
-            font-weight: 600;
-            color: #1e40af;
-        }
-
-        .spinner-circle {
-            width: 26px;
-            height: 26px;
-            border: 4px solid #e6eefc;
-            border-top-color: #1e6bb8;
-            border-radius: 50%;
-            animation: spin 0.9s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                padding: 1em 0.5em;
-            }
-
-            h1 {
-                font-size: 1.3em;
-            }
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container">
-        <h1>VM Metrics Analyzer</h1>
-        <div class="form-row">
-            <input type="file" id="jsonFile" accept=".json">
-            <button onclick="analyze()">Analiz Et</button>
-        </div>
-        <div id="progressBarContainer" style="display:none;">
-            <div id="progressBar"></div>
-        </div>
-        <div id="spinner" class="spinner" style="display:none;">
-            <div class="spinner-circle" aria-hidden="true"></div>
-            <div class="spinner-text">Analiz ediliyor</div>
-        </div>
-        <div class="results-grid" id="result"></div>
-        <div id="downloadArea"></div>
-    </div>
-    <script>
-        const kategoriPromptlari = {
-            cpu: `This dataset contains key CPU-related performance metrics for virtual machines, including:
-                - cpu|usage_average: the average CPU utilization percentage over time.
-                - cpu|demandPct: the percentage of CPU resources requested by the VM.
-                - cpu|readyPct: the percentage of time the VM is ready to execute but cannot get scheduled on a physical CPU.
-                - guest|cpu_queue: the number of processes waiting in the CPU queue.
-
-                High readyPct or cpu_queue values may indicate CPU contention or oversubscription. Analyze trends, peak usage, and saturation risks. Identify if vCPU overcommitment or under-allocation may be causing performance bottlenecks.
-                `,
-            memory: `This dataset contains memory-related performance metrics for virtual machines, such as:
-                    - mem|usage_average: average memory utilization as a percentage.
-                    - mem|swapoutRate_average and mem|swapinRate_average: show the rate at which memory pages are swapped out/in, indicating memory pressure.
-                    - mem|balloonPct: percentage of memory reclaimed by the balloon driver, typically under host memory pressure.
-
-                    A healthy VM should show low or zero swap and ballooning activity. Analyze trends for memory saturation, excessive usage, and potential reclaim opportunities. Identify inefficient memory use, memory overcommitment, or misconfigured limits.
-                    `,
-            disk: `This dataset includes virtual disk I/O performance metrics, including:
-                    - virtualDisk|read_average and virtualDisk|write_average: average read and write Disk I/O operations in milliseconds.
-                    - virtualDisk:Aggregate of all instances|totalLatency: total latency across all disk instances.
-
-                    Disk latency above 20–30 ms can impact application performance. Identify patterns of disk bottlenecks, I/O pressure, and usage peaks. Look for consistently high latencies or unusual spikes that could signal underlying storage issues.
-                    `,
-            network: `This dataset contains network performance data for virtual machines, including:
-                    - net|transmitted_average and net|received_average: average network throughput in KB/s.
-                    - net:Aggregate of all instances|droppedPct: percentage of packets dropped.
-
-                    Packet drops, even at low rates, can indicate congestion or network misconfiguration. Analyze the balance of ingress and egress traffic. Detect abnormal patterns, such as traffic bursts, loss spikes, or sustained saturation levels.
-                    `
-        };
-
-        const endpoint =
-            "https://openai-swe-bulutaltyapi.openai.azure.com/openai/deployments/gpt-5-nano/chat/completions?api-version=2025-01-01-preview";
-        const apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB";
-
-        async function analyze() {
-            const fileInput = document.getElementById('jsonFile');
-            if (!fileInput.files.length) {
-                alert('Please select a JSON file.');
-                return;
-            }
-            const file = fileInput.files[0];
-            const text = await file.text();
-            let vmMetrikleri;
-            try {
-                vmMetrikleri = JSON.parse(text);
-            } catch (e) {
-                alert('Invalid JSON file.');
-                return;
-            }
-
-            const analizSonuclari = {};
-            const resultDiv = document.getElementById('result');
-            const downloadArea = document.getElementById('downloadArea');
-
-            // Animasyon ve ilerleme için değişkenler
-            const progressBarContainer = document.getElementById('progressBarContainer');
-            const progressBar = document.getElementById('progressBar');
-            const spinner = document.getElementById('spinner');
-            resultDiv.innerHTML = '';
-            downloadArea.innerHTML = '';
-            progressBarContainer.style.display = 'block';
-            spinner.style.display = 'block';
-
-            // VM ve kategori sayısını hesapla
-            let total = 0;
-            for (const vmAdi in vmMetrikleri) {
-                const kategorilereAyrilmisMetrikler = vmMetrikleri[vmAdi];
-                for (const kategoriAdi in kategorilereAyrilmisMetrikler) {
-                    const metrikler = kategorilereAyrilmisMetrikler[kategoriAdi];
-                    if (Array.isArray(metrikler) && metrikler.length > 0) total++;
+        foreach ($value in $Values) {
+            if ($value -gt $thresholdValue) {
+                $timeAbove++
+                $currentRun++
+                if ($currentRun -gt $longestRun) {
+                    $longestRun = $currentRun
                 }
-            }
-            let done = 0;
-
-            // VM cards will be created when each VM begins processing (so only current VM appears)
-            const vmCards = {};
-
-            // Ardışık API çağrıları için sırayla işle
-            for (const vmAdi in vmMetrikleri) {
-                // create card only when this VM's turn comes
-                analizSonuclari[vmAdi] = {};
-                const vmCard = document.createElement('div');
-                vmCard.className = 'vm-card';
-                const vmTitle = document.createElement('div');
-                vmTitle.className = 'vm-title';
-                vmTitle.textContent = vmAdi;
-                vmCard.appendChild(vmTitle);
-
-                // Only show VM title now; category boxes will be created as results arrive
-
-                const kategorilereAyrilmisMetrikler = vmMetrikleri[vmAdi];
-                vmCards[vmAdi] = {
-                    card: vmCard
-                };
-
-                // append card to result area now that VM processing begins
-                resultDiv.appendChild(vmCard);
-                const kategoriPromises = [];
-                const vmResultsForCategories = {};
-                for (const kategoriAdi in kategorilereAyrilmisMetrikler) {
-                    const metrikler = kategorilereAyrilmisMetrikler[kategoriAdi];
-                    if (Array.isArray(metrikler) && metrikler.length > 0) {
-                        // process category and create its box when result arrives
-                        const aiPrompt = `
-                            Below is long-term resource usage data for a virtual machine (VM), collected at 1-hour intervals via the vROps API.
-
-                            Please analyze the data with expert-level insight:
-
-                            Identify and interpret usage trends (increases, decreases, fluctuations).
-
-                            Detect changes in resource intensity and any anomalies.
-
-                            Highlight periods of underutilization or sudden shifts.
-
-                            Assess whether current resource allocation is sufficient.
-
-                            Provide recommendations on scaling, reduction, or reallocation if needed.
-
-                            Suggest proactive measures or necessary actions.
-                            ${kategoriPromptlari[kategoriAdi] || ""}
-                            ${JSON.stringify(metrikler)}
-
-                            Be fast and Summarize all findings concisely in a paragraph of up to 50 words providing technical justifications in Turkish.
-                        `;
-
-                        kategoriPromises.push(
-                            (async () => {
-                                try {
-                                    const answer = await sendToAI(aiPrompt);
-                                    // create category box now that result arrived
-                                    const categoryBox = document.createElement('div');
-                                    categoryBox.className = 'category-box';
-                                    const categoryTitle = document.createElement('div');
-                                    categoryTitle.className = 'category-title';
-                                    categoryTitle.textContent = kategoriAdi == "cpu" ? "CPU" :
-                                        kategoriAdi == "memory" ? "Memory" :
-                                        kategoriAdi == "disk" ? "Disk" :
-                                        kategoriAdi == "network" ? "Network" : kategoriAdi;
-                                    categoryBox.appendChild(categoryTitle);
-                                    const categoryContent = document.createElement('div');
-                                    categoryContent.className = 'category-content';
-                                    categoryContent.innerHTML = answer;
-                                    categoryBox.appendChild(categoryContent);
-                                    vmCard.appendChild(categoryBox);
-
-                                    vmResultsForCategories[kategoriAdi] = answer;
-                                    analizSonuclari[vmAdi][kategoriAdi] = answer;
-                                } catch (err) {
-                                    const categoryBox = document.createElement('div');
-                                    categoryBox.className = 'category-box';
-                                    const categoryTitle = document.createElement('div');
-                                    categoryTitle.className = 'category-title';
-                                    categoryTitle.textContent = kategoriAdi;
-                                    categoryBox.appendChild(categoryTitle);
-                                    const categoryContent = document.createElement('div');
-                                    categoryContent.className = 'category-content';
-                                    categoryContent.innerHTML =
-                                        `<span class='category-error'>Hata: ${err.message}</span>`;
-                                    categoryBox.appendChild(categoryContent);
-                                    vmCard.appendChild(categoryBox);
-
-                                    vmResultsForCategories[kategoriAdi] =
-                                        `<span class='category-error'>Hata: ${err.message}</span>`;
-                                    analizSonuclari[vmAdi][kategoriAdi] = "Error: " + err.message;
-                                }
-                                done++;
-                                progressBar.style.width = ((done / total) * 100).toFixed(1) + '%';
-                                if (done === total) {
-                                    progressBar.style.width = '100%';
-                                    spinner.style.display = 'none';
-                                    setTimeout(() => {
-                                        progressBarContainer.style.display = 'none';
-                                    }, 1200);
-                                    // Sonuçları indirilebilir JSON olarak sun
-                                    const outputJson = JSON.stringify(analizSonuclari, null, 2);
-                                    downloadArea.innerHTML = `<br><b>Sonuçları İndir:</b><br>
-                                        <a href="data:application/json;charset=utf-8,${encodeURIComponent(outputJson)}" download="VMsMetricsOutput.json">JSON İndir</a>
-                                        <br><br>
-                                        <textarea readonly style='margin-top:0.7em;'>${outputJson}</textarea>
-                                    `;
-                                }
-                            })()
-                        );
-                    }
-                }
-                // Kategoriler paralel for this VM; wait for them to finish
-                await Promise.all(kategoriPromises);
-
-                // VM tamamlandığında durum yaz
-                const statusText = document.createElement('div');
-                statusText.className = 'category-content';
-                statusText.style.marginTop = '0.6em';
-                statusText.innerHTML = `<span style='color:#059669;font-weight:600;'>Tamamlandı</span>`;
-                vmCard.appendChild(statusText);
+            } else {
+                $currentRun = 0
             }
         }
 
-        async function sendToAI(prompt) {
-            const body = JSON.stringify({
-                messages: [{
-                        role: "system",
-                        content: "You are a VMWare Infrastructure cloud-resources optimization expert."
-                    },
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ],
-                max_completion_tokens: 4000
-            });
-            const response = await fetch(endpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "api-key": apiKey
-                },
-                body
-            });
-            if (!response.ok) {
-                throw new Error(await response.text());
-            }
-            const data = await response.json();
-            return data.choices[0].message.content;
-        }
-        // no global dot animation; spinner visuals handled via CSS
-    </script>
-</body>
+        $results["time_above_$label"] = $timeAbove
+        $results["longest_run_$label"] = $longestRun
+    }
 
-</html>
+    return $results
+}
+
+function Get-AnomalyDetection {
+    param([double[]]$Values)
+    if ($Values.Count -eq 0) { 
+        return @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
+    }
+
+    $stats = $Values | Measure-Object -Average -Maximum -Minimum
+    $mean = $stats.Average
+    $std = Get-StandardDeviation -Values $Values
+    $max = $stats.Maximum
+
+    $anomalies = $Values | Where-Object { [math]::Abs($_ - $mean) -gt (2 * $std) }
+
+    $p95 = Get-Percentile -Values $Values -Percentile 95
+    $peakThreshold = [math]::Max($p95, $mean + (1.5 * $std))
+    $peaks = $Values | Where-Object { $_ -gt $peakThreshold }
+
+    return @{
+        peak_count = $peaks.Count
+        anomaly_count = $anomalies.Count
+        max_peak_value = [math]::Round($max, 2)
+    }
+}
+
+function Get-MetricUnit {
+    param([string]$MetricKey)
+
+    $unitMap = @{
+        "usage_average" = "percent"
+        "demandPct" = "percent"
+        "readyPct" = "percent"
+        "balloonPct" = "percent"
+        "droppedPct" = "percent"
+        "usagemhz_average" = "mhz"
+        "cpu_queue" = "count"
+        "read_average" = "ms"
+        "write_average" = "ms"
+        "totalLatency" = "ms"
+        "transmitted_average" = "kbps"
+        "received_average" = "kbps"
+        "swapoutRate_average" = "kbps"
+        "swapinRate_average" = "kbps"
+    }
+
+    foreach ($key in $unitMap.Keys) {
+        if ($MetricKey -like "*$key*") {
+            return $unitMap[$key]
+        }
+    }
+    return "unknown"
+}
+
+function Summarize-MetricData {
+    param([double[]]$Values, [string]$Category, [string]$MetricKey)
+
+    if ($Values.Count -eq 0) {
+        return @{
+            unit = Get-MetricUnit -MetricKey $MetricKey
+            samples = 0
+            stats = @{ mean = 0; max = 0; p95 = 0; p99 = 0; std = 0 }
+            trend = @{ slope = 0; r2 = 0; trend = "no_data" }
+            pressure = @{}
+            anomalies = @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
+        }
+    }
+
+    $stats = $Values | Measure-Object -Average -Maximum -Minimum
+    $mean = [math]::Round($stats.Average, 2)
+    $max = [math]::Round($stats.Maximum, 2)
+    $p95 = [math]::Round((Get-Percentile -Values $Values -Percentile 95), 2)
+    $p99 = [math]::Round((Get-Percentile -Values $Values -Percentile 99), 2)
+    $std = [math]::Round((Get-StandardDeviation -Values $Values), 2)
+
+    $trend = Get-TrendAnalysis -Values $Values
+    $pressure = Get-ThresholdAnalysis -Values $Values
+    $anomalies = Get-AnomalyDetection -Values $Values
+
+    return @{
+        unit = Get-MetricUnit -MetricKey $MetricKey
+        samples = $Values.Count
+        stats = @{
+            mean = $mean
+            max = $max
+            p95 = $p95
+            p99 = $p99
+            std = $std
+        }
+        trend = $trend
+        pressure = $pressure
+        anomalies = $anomalies
+    }
+}
