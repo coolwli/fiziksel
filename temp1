@@ -1,139 +1,409 @@
-$jsonPath = "C:\Users\AliCanda\Documents\calismalar\ai\analyze\VMsMetrics.json"
-$apiKey = "8G7kTdsDJLqEVLuGFGHgBC2BxFx4AsQpkKMVQvxrrKd2R0Fc83GNJQQJ99BDACfhMk5XJ3w3AAABACOGVRgB"
-$endpoint = "https://openai-swe-bulutaltyapi.openai.azure.com/openai/responses?api-version=2025-04-01-preview"
+function Get-Percentile {
+    param([double[]]$Values, [double]$Percentile)
+    if ($Values.Count -eq 0) { return 0 }
 
-$vmMetrikleri = Get-Content $jsonPath | ConvertFrom-Json
-
-# Detailed prompts per metric category
-$kategoriPromptlari = @{
-    "CPU_Metrikleri" = @"
-This dataset contains key CPU-related performance metrics for virtual machines, including:
-- `cpu|usage_average`: the average CPU utilization percentage over time.
-- `cpu|demandPct`: the percentage of CPU resources requested by the VM.
-- `cpu|readyPct`: the percentage of time the VM is ready to execute but cannot get scheduled on a physical CPU.
-- `guest|cpu_queue`: the number of processes waiting in the CPU queue.
-
-High `readyPct` or `cpu_queue` values may indicate CPU contention or oversubscription. Analyze trends, peak usage, and saturation risks. Identify if vCPU overcommitment or under-allocation may be causing performance bottlenecks.
-"@;
-
-    "Bellek_Metrikleri" = @"
-This dataset contains memory-related performance metrics for virtual machines, such as:
-- `mem|usage_average`: average memory utilization as a percentage.
-- `mem|swapoutRate_average` and `mem|swapinRate_average`: show the rate at which memory pages are swapped out/in, indicating memory pressure.
-- `mem|balloonPct`: percentage of memory reclaimed by the balloon driver, typically under host memory pressure.
-
-A healthy VM should show low or zero swap and ballooning activity. Analyze trends for memory saturation, excessive usage, and potential reclaim opportunities. Identify inefficient memory use, memory overcommitment, or misconfigured limits.
-"@;
-
-    "Disk_Metrikleri" = @"
-This dataset includes virtual disk I/O performance metrics, including:
-- `virtualDisk|read_average` and `virtualDisk|write_average`: average read and write Disk I/O operations in milliseconds.
-- `virtualDisk:Aggregate of all instances|totalLatency`: total latency across all disk instances.
-
-Disk latency above 20–30 ms can impact application performance. Identify patterns of disk bottlenecks, I/O pressure, and usage peaks. Look for consistently high latencies or unusual spikes that could signal underlying storage issues.
-"@;
-
-    "Network_Metrikleri" = @"
-This dataset contains network performance data for virtual machines, including:
-- `net|transmitted_average` and `net|received_average`: average network throughput in KB/s.
-- `net:Aggregate of all instances|droppedPct`: percentage of packets dropped.
-
-Packet drops, even at low rates, can indicate congestion or network misconfiguration. Analyze the balance of ingress and egress traffic. Detect abnormal patterns, such as traffic bursts, loss spikes, or sustained saturation levels.
-"@;
-
+    $sorted = $Values | Sort-Object
+    $index = [math]::Ceiling(($Percentile / 100.0) * $sorted.Count) - 1
+    $index = [math]::Max(0, [math]::Min($index, $sorted.Count - 1))
+    return $sorted[$index]
 }
 
-# AI API wrapper function
-function Send-ToAIAnalysis {
-    param(
-        [string]$kategoriAdi,
-        [array]$metrikler
-    )
+function Get-StandardDeviation {
+    param([double[]]$Values)
+    if ($Values.Count -le 1) { return 0 }
 
-    $jsonPayload = $metrikler | ConvertTo-Json -Depth 5
+    $mean = ($Values | Measure-Object -Average).Average
+    $sumSquaredDiffs = ($Values | ForEach-Object { [math]::Pow($_ - $mean, 2) } | Measure-Object -Sum).Sum
+    return [math]::Sqrt($sumSquaredDiffs / ($Values.Count - 1))
+}
 
-    $aiPrompt = @"
-$($kategoriPromptlari[$kategoriAdi])
+function Get-TrendAnalysis {
+    param([double[]]$Values)
+    if ($Values.Count -lt 2) { 
+        return @{ slope = 0; r2 = 0; trend = "insufficient_data" }
+    }
 
-Below is long-term resource utilization data for a virtual machine (VM).
-The data has been collected via the vROps API at 1-hour intervals.
+    $n = $Values.Count
+    $x = 1..$n
+    $y = $Values
 
-Please analyze the data according to the following steps:
+    $meanX = ($x | Measure-Object -Average).Average
+    $meanY = ($y | Measure-Object -Average).Average
 
-1. General Trend and Utilization Analysis:
-   - Identify and interpret usage trends (e.g., increases, decreases, fluctuations).
-   - Evaluate how resource utilization intensity has changed over time.
+    $numerator = 0
+    $denominatorX = 0
+    $denominatorY = 0
 
-2. Anomaly Detection:
-   - Detect any sudden spikes, drops, or unusual patterns in usage.
-   - Indicate the specific time periods where anomalies are concentrated.
+    for ($i = 0; $i -lt $n; $i++) {
+        $diffX = $x[$i] - $meanX
+        $diffY = $y[$i] - $meanY
+        $numerator += $diffX * $diffY
+        $denominatorX += $diffX * $diffX
+        $denominatorY += $diffY * $diffY
+    }
 
-3. Capacity and Risk Analysis:
-   - Identify periods of excessive or insufficient resource usage.
-   - Based on long-term usage statistics, assess whether the current resource allocation is sufficient.
-   - Would you recommend reclaiming any underutilized resources?
+    if ($denominatorX -eq 0) {
+        return @{ slope = 0; r2 = 0; trend = "no_trend" }
+    }
 
-4. Recommendations:
-   - Provide suggestions to increase, decrease, or reconfigure the current resource allocation.
-   - If necessary, outline proactive measures or actions that should be taken.
+    $slope = $numerator / $denominatorX
+    $r2 = if ($denominatorY -eq 0) { 0 } else { [math]::Pow($numerator, 2) / ($denominatorX * $denominatorY) }
 
-Please summarize all findings in a single short (max 50 words), detailed paragraph, including just importing technical insights and justifications for each conclusion.
+    $trend = if ($slope -gt 0.01 -and $r2 -gt 0.1) { "increasing" } 
+             elseif ($slope -lt -0.01 -and $r2 -gt 0.1) { "decreasing" } 
+             else { "stable" }
 
-Respond in Turkish please. But do not use Turkish characters.
-"@
+    return @{
+        slope = [math]::Round($slope, 4)
+        r2 = [math]::Round($r2, 3)
+        trend = $trend
+    }
+}
 
-Write-Host "=== $kategoriAdi Analizi ===" -ForegroundColor Cyan
+function Get-ThresholdAnalysis {
+    param([double[]]$Values)
 
-    $body = @{
-        messages = @(
-            @{
-                role = "system"
-                content = "You are a VMWare Infrastructure cloud-resources optimization expert."
-            },
-            @{
-                role = "user"
-                content = $aiPrompt
+    if ($Values.Count -eq 0) {
+        return @{}
+    }
+
+    $p70 = Get-Percentile -Values $Values -Percentile 70
+    $p85 = Get-Percentile -Values $Values -Percentile 85
+    $p95 = Get-Percentile -Values $Values -Percentile 95
+
+    $percentileThresholds = @{
+        "p70" = $p70
+        "p85" = $p85
+        "p95" = $p95
+    }
+
+    $results = @{}
+
+    foreach ($label in $percentileThresholds.Keys) {
+        $thresholdValue = $percentileThresholds[$label]
+        $timeAbove = 0
+        $longestRun = 0
+        $currentRun = 0
+
+        foreach ($value in $Values) {
+            if ($value -gt $thresholdValue) {
+                $timeAbove++
+                $currentRun++
+                if ($currentRun -gt $longestRun) {
+                    $longestRun = $currentRun
+                }
+            } else {
+                $currentRun = 0
             }
-        )
-        temperature = 0.3
-        max_tokens = 4000
-    } | ConvertTo-Json -Depth 10 -Compress
+        }
 
-    $headers = @{
-        "Content-Type" = "application/json"
-        "api-key" = $apiKey
+        $results["time_above_$label"] = $timeAbove
+        $results["longest_run_$label"] = $longestRun
     }
 
-    try {
-        $response = Invoke-RestMethod -Uri $endpoint -Method Post -Headers $headers -Body $body
-        $answer = $response.choices[0].message.content
-        return $answer
-    } catch {
-        return "Error occurred: $($_.Exception.Message)"
+    return $results
+}
+
+function Get-AnomalyDetection {
+    param([double[]]$Values)
+    if ($Values.Count -eq 0) { 
+        return @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
+    }
+
+    $stats = $Values | Measure-Object -Average -Maximum -Minimum
+    $mean = $stats.Average
+    $std = Get-StandardDeviation -Values $Values
+    $max = $stats.Maximum
+
+    $anomalies = $Values | Where-Object { [math]::Abs($_ - $mean) -gt (2 * $std) }
+
+    $p95 = Get-Percentile -Values $Values -Percentile 95
+    $peakThreshold = [math]::Max($p95, $mean + (1.5 * $std))
+    $peaks = $Values | Where-Object { $_ -gt $peakThreshold }
+
+    return @{
+        peak_count = $peaks.Count
+        anomaly_count = $anomalies.Count
+        max_peak_value = [math]::Round($max, 2)
     }
 }
 
-# Main analysis loop
-$analizSonuclari = @{}
+function Get-MetricUnit {
+    param([string]$MetricKey)
 
-foreach ($vm in $vmMetrikleri.PSObject.Properties) {
-    $vmAdi = $vm.Name
-    $kategorilereAyrilmisMetrikler = $vm.Value
-    $analizSonuclari[$vmAdi] = @{}
-    Write-Host $vmAdi -ForegroundColor Red
-    foreach ($kategori in $kategorilereAyrilmisMetrikler.PSObject.Properties) {
-        if ($kategorilereAyrilmisMetrikler.($kategori.Name).Count -gt 0) {
-            $kategoriAdi = $kategori.Name
-            $metrikler = $kategori.Value
-            $analizSonuclari[$vmAdi][$kategoriAdi] = Send-ToAIAnalysis -kategoriAdi $kategoriAdi -metrikler $metrikler
-        } else {
-            Write-Host "No data found for $($kategori.Name)." -ForegroundColor Red
+    $unitMap = @{
+        "usage_average" = "percent"
+        "demandPct" = "percent"
+        "readyPct" = "percent"
+        "balloonPct" = "percent"
+        "droppedPct" = "percent"
+        "usagemhz_average" = "mhz"
+        "cpu_queue" = "count"
+        "read_average" = "ms"
+        "write_average" = "ms"
+        "totalLatency" = "ms"
+        "transmitted_average" = "kbps"
+        "received_average" = "kbps"
+        "swapoutRate_average" = "kbps"
+        "swapinRate_average" = "kbps"
+    }
+
+    foreach ($key in $unitMap.Keys) {
+        if ($MetricKey -like "*$key*") {
+            return $unitMap[$key]
+        }
+    }
+    return "unknown"
+}
+
+function Summarize-MetricData {
+    param([double[]]$Values, [string]$Category, [string]$MetricKey)
+
+    if ($Values.Count -eq 0) {
+        return @{
+            unit = Get-MetricUnit -MetricKey $MetricKey
+            samples = 0
+            statistical_summary = @{
+                mean = 0
+                max = 0
+                percentile_95 = 0
+                percentile_99 = 0
+                standard_deviation = 0
+            }
+            trend_analysis = @{
+                trend_slope = 0
+                trend_r_squared = 0
+                trend_direction = "no_data"
+            }
+            threshold_pressure_analysis = @{}
+            anomaly_detection = @{
+                high_value_peak_count = 0
+                total_anomaly_count = 0
+                max_peak_value = 0
+            }
+        }
+    }
+
+    # Basic statistics
+    $stats = $Values | Measure-Object -Average -Maximum
+    $mean = [math]::Round($stats.Average, 2)
+    $max = [math]::Round($stats.Maximum, 2)
+    $p95 = [math]::Round((Get-Percentile -Values $Values -Percentile 95), 2)
+    $p99 = [math]::Round((Get-Percentile -Values $Values -Percentile 99), 2)
+    $std = [math]::Round((Get-StandardDeviation -Values $Values), 2)
+
+    # Trend analysis
+    $trend = Get-TrendAnalysis -Values $Values
+
+    # Thresholds based on percentiles
+    $percentileThresholds = @{
+        "p70" = Get-Percentile -Values $Values -Percentile 70
+        "p85" = Get-Percentile -Values $Values -Percentile 85
+        "p95" = Get-Percentile -Values $Values -Percentile 95
+    }
+    $pressureRaw = Get-ThresholdAnalysis -Values $Values -Thresholds $percentileThresholds
+
+    # Rename keys for readability
+    $pressure = @{}
+    foreach ($key in $pressureRaw.Keys) {
+        if ($key -like "time_above_p*") {
+            $newKey = "samples_above_percentile_$($key.Substring(12))"
+            $pressure[$newKey] = $pressureRaw[$key]
+        } elseif ($key -like "longest_run_p*") {
+            $newKey = "longest_streak_above_percentile_$($key.Substring(14))"
+            $pressure[$newKey] = $pressureRaw[$key]
+        }
+    }
+
+    # Anomaly detection
+    $anomalies = Get-AnomalyDetection -Values $Values
+
+    return @{
+        unit = Get-MetricUnit -MetricKey $MetricKey
+        samples = $Values.Count
+        statistical_summary = @{
+            mean = $mean
+            max = $max
+            percentile_95 = $p95
+            percentile_99 = $p99
+            standard_deviation = $std
+        }
+        trend_analysis = @{
+            trend_slope = $trend.slope
+            trend_r_squared = $trend.r2
+            trend_direction = $trend.trend
+        }
+        threshold_pressure_analysis = $pressure
+        anomaly_detection = @{
+            high_value_peak_count = $anomalies.peak_count
+            total_anomaly_count = $anomalies.anomaly_count
+            max_peak_value = $anomalies.max_peak_value
         }
     }
 }
 
-# Save results
-$jsonOutput = $analizSonuclari | ConvertTo-Json -Depth 5
-$outputFilePath = "C:\Users\AliCanda\Documents\calismalar\ai\analyze\VMsMetricsOutput.json"
+## Ignore SSL Certificates
+add-type @"
+    using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(
+            ServicePoint srvPoint, X509Certificate certificate,
+            WebRequest request, int certificateProblem) {
+            return true;
+        }
+    }
+"@
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+
+# Your existing configuration
+$names=@("GBELKT05","GBELKT20","GBJBOT03")
+$token=(F:\Ali\powershell\vrops\Get_vROPS_Token.ps1 -tokenType "pendik")
+if($token -eq $null){
+    return "token is null"
+}
+
+$headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "vRealizeOpsToken $token"
+}
+
+$resources = @()
+foreach($name in $names){
+    $reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/adapterkinds/VMWARE/resourcekinds/virtualmachine/resources?identifiers[VMEntityName]=$($name)"
+    $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    $resources+="$name, $($reportsResponse.resources.resource.identifier)"
+}
+
+$endDate = Get-Date
+$beginDate = $endDate.AddMonths(-1)
+$epoch = Get-Date "1970-01-01 00:00:00Z"
+$beginTimestamp = [math]::Round(($beginDate.ToUniversalTime() - $epoch).TotalMilliseconds)
+$endTimestamp = [math]::Round(($endDate.ToUniversalTime() - $epoch).TotalMilliseconds)
+
+$metrikKategorileri = @{
+    "cpu" = @(
+        "cpu|usage_average",
+        "cpu|demandPct",
+        "cpu|readyPct",
+        "cpu|usagemhz_average",
+        "guest|cpu_queue"
+    )
+    "memory" = @(
+        "mem|swapoutRate_average",
+        "mem|swapinRate_average",
+        "mem|usage_average",
+        "mem|balloonPct"
+    )
+    "disk" = @(
+        "virtualDisk|read_average",
+        "virtualDisk|write_average",
+        "virtualDisk:Aggregate of all instances|totalLatency"
+    )
+    "network" = @(
+        "net|transmitted_average",
+        "net|received_average",
+        "net:Aggregate of all instances|droppedPct"
+    )
+}
+
+Write-Host "🚀 Starting VM Metrics Collection with Mathematical Analysis..." -ForegroundColor Green
+Write-Host "📅 Time Range: $beginDate to $endDate" -ForegroundColor Cyan
+
+$allResourcesData = @{}
+$processedCount = 0
+
+foreach ($resource in $resources) {
+    $processedCount++
+    $vmName = ($resource -split ',')[0].Trim()
+    $resourceId = ($resource -split ',')[1].Trim()
+    
+    Write-Host "📊 Processing VM: $vmName [$processedCount/$($resources.Count)]" -ForegroundColor Yellow
+    
+    $reportsUrl = "https://ptekvrops01.fw.garanti.com.tr/suite-api/api/resources/$resourceId/stats?&intervalType=MINUTES&intervalQuantifier=20&rollUpType=AVG&begin=$beginTimestamp&end=$endTimestamp"
+    $reportsResponse = Invoke-RestMethod -Method Get -Uri $reportsUrl -Headers $headers -ContentType "application/json"
+    
+    # Her kategori için ayrı veri yapısı (ENHANCED WITH MATHEMATICAL ANALYSIS)
+    $kategorilereAyrilmisMetrikler = @{}
+    
+    # Kategorileri başlat
+    foreach ($kategori in $metrikKategorileri.Keys) {
+        $kategorilereAyrilmisMetrikler[$kategori] = @{}
+    }
+    
+    # Tüm statları kontrol et ve kategorilere ayır
+    foreach ($stat in $reportsResponse.'stats-of-resources'.'stats-of-resource'.'stat-list'.stat) {
+        foreach ($kategoriAdi in $metrikKategorileri.Keys) {
+            if ($metrikKategorileri[$kategoriAdi] -contains $stat.statKey.key) {
+                
+                # Extract numeric values from stat data
+                $values = @()
+                if ($stat.data -and $stat.data.Count -gt 0) {
+                    foreach ($dataPoint in $stat.data) {
+                        if ($dataPoint.values -and $dataPoint.values.Count -gt 0) {
+                            foreach ($value in $dataPoint.values) {
+                                if ($value -ne $null -and $value -ne "" -and $value -ne "NaN") {
+                                    try {
+                                        $numValue = [double]$value
+                                        if (-not [double]::IsNaN($numValue) -and [double]::IsFinite($numValue)) {
+                                            $values += $numValue
+                                        }
+                                    } catch {
+                                        # Skip invalid values
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                # Clean metric name
+                $cleanMetricName = ($stat.statKey.key -split '\|')[-1] -replace ':', '_' -replace ' ', '_'
+                
+                # Apply mathematical analysis
+                if ($values.Count -gt 0) {
+                    Write-Host "  ✅ $cleanMetricName`: $($values.Count) samples" -ForegroundColor Green
+                    $summary = Summarize-MetricData -Values $values -Category $kategoriAdi -MetricKey $stat.statKey.key
+                    $kategorilereAyrilmisMetrikler[$kategoriAdi][$cleanMetricName] = $summary
+                } else {
+                    Write-Host "  ⚠️  $cleanMetricName`: No valid data" -ForegroundColor DarkYellow
+                    $kategorilereAyrilmisMetrikler[$kategoriAdi][$cleanMetricName] = @{
+                        unit = Get-MetricUnit -MetricKey $stat.statKey.key
+                        samples = 0
+                        stats = @{ mean = 0; max = 0; p95 = 0; p99 = 0; std = 0 }
+                        trend = @{ slope = 0; r2 = 0; trend = "no_data" }
+                        pressure = @{}
+                        anomalies = @{ peak_count = 0; anomaly_count = 0; max_peak_value = 0 }
+                    }
+                }
+                break
+            }
+        }
+    }
+    
+    # Bu resource'un verilerini ana yapıya ekle
+    $allResourcesData[$vmName] = $kategorilereAyrilmisMetrikler
+    Write-Host "✅ $vmName completed with mathematical analysis" -ForegroundColor Green
+}
+
+# Output JSON with mathematical summaries
+$jsonOutput = $allResourcesData | ConvertTo-Json -Depth 10
+$outputFilePath = "F:\Ali\VMsMetrics_Enhanced.json"
 Set-Content -Path $outputFilePath -Value $jsonOutput -Encoding UTF8
-Write-Host "Metrics saved to $outputFilePath"
+
+# Summary report
+Write-Host "`n🎉 Enhanced Metrics Collection Complete!" -ForegroundColor Green
+Write-Host "📊 Total VMs: $($allResourcesData.Keys.Count)" -ForegroundColor White
+Write-Host "📁 File Size: $([math]::Round((Get-Item $outputFilePath).Length / 1MB, 2)) MB" -ForegroundColor White
+Write-Host "💾 Output: $outputFilePath" -ForegroundColor White
+
+# Show sample of what was processed
+$totalMetrics = 0
+foreach ($vm in $allResourcesData.Values) {
+    foreach ($category in $vm.Values) {
+        $totalMetrics += $category.Keys.Count
+    }
+}
+Write-Host "📈 Total Analyzed Metrics: $totalMetrics" -ForegroundColor White
+Write-Host "🔍 Each metric includes: Stats, Trends, Pressure Analysis, Anomaly Detection" -ForegroundColor Cyan
+Write-Host "`n🔄 Ready to upload to VM Metrics Analyzer!" -ForegroundColor Green
